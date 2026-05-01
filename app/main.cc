@@ -1,0 +1,755 @@
+// app/main.cc ─────────────────────────────────────────────────────────────────
+// Papierkram desktop app — saucer::smartview bindings wired directly to
+// NLPEngine and ONNXAddon.  No bridge class or wrapper header.
+//
+// JSON envelope (every exposed function returns Promise<string>):
+//   ok  path  → { "ok": true,  "data": <payload> }
+//   err path  → { "ok": false, "error": "<message>" }
+//
+// Build (standalone from webviewapp/):
+//   cmake -S . -B build && cmake --build build --target papiere -j
+// ─────────────────────────────────────────────────────────────────────────────
+
+#include <coco/stray/stray.hpp>
+#include <nlohmann/json.hpp>
+#include <saucer/embedded/all.hpp>
+#include <saucer/smartview.hpp>
+
+#ifdef NLP_WITH_ONNX
+#include "nlp/addons/onnx_addon.hh"
+#endif
+
+// Use "nlp/..." (resolves via -I external/) rather than "nlp_engine.hh"
+// (which would resolve via nlp_engine's internal include path -I
+// tools/nlp_engine/nlp/). This ensures we always use the physical copy in
+// external/ which we have guarded.
+#include "nlp/addons/ocr_addon.hh"
+#include "nlp/nlp_engine.hh"
+
+#include "dms_bindings.hh"
+#include <saucer/modules/desktop.hpp>
+
+#include <filesystem>
+#include <print>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#include <objc/runtime.h>
+#include <objc/message.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
+
+namespace fs = std::filesystem;
+
+static std::string get_executable_path() {
+#ifdef __APPLE__
+  char path[1024];
+  uint32_t size = sizeof(path);
+  if (_NSGetExecutablePath(path, &size) == 0)
+    return fs::path(path).parent_path().string();
+#elif defined(_WIN32)
+  wchar_t path[MAX_PATH];
+  GetModuleFileNameW(NULL, path, MAX_PATH);
+  return fs::path(path).parent_path().string();
+#else
+  return fs::read_symlink("/proc/self/exe").parent_path().string();
+#endif
+  return ".";
+}
+
+static std::string data_dir() {
+  auto exe_dir = fs::path(get_executable_path());
+
+  // 1. Check if we're inside a macOS Bundle
+  if (exe_dir.string().find(".app/Contents/MacOS") != std::string::npos) {
+    auto bundle_data = exe_dir.parent_path() / "Resources" / "data";
+    if (fs::exists(bundle_data))
+      return bundle_data.string();
+  }
+
+  // 2. Check sibling data directory (typical for dev/linux)
+  auto sibling_data = exe_dir / "data";
+  if (fs::exists(sibling_data))
+    return sibling_data.string();
+
+  // 3. Fallback to current working directory
+  return "data";
+}
+
+using json = nlohmann::json;
+using namespace pce::nlp;
+
+namespace {
+
+template <typename T>
+  requires std::convertible_to<T, json>
+[[nodiscard]] std::string ok_str(T &&data) {
+  return json{{"ok", true}, {"data", std::forward<T>(data)}}.dump();
+}
+
+[[nodiscard]] std::string err_str(std::string_view msg) {
+  return json{{"ok", false}, {"error", std::string(msg)}}.dump();
+}
+
+// Wraps a callable → json in a uniform try/catch envelope.
+template <std::invocable<> Fn>
+  requires std::convertible_to<std::invoke_result_t<Fn>, json>
+[[nodiscard]] std::string guarded(Fn &&fn) noexcept {
+  try {
+    return ok_str(std::forward<Fn>(fn)());
+  } catch (const std::exception &e) {
+    return err_str(std::format("NLP error: {}", e.what()));
+  } catch (...) {
+    return err_str("Unknown NLP error");
+  }
+}
+
+// Parses a JSON string; returns unexpected on failure.
+[[nodiscard]] std::expected<json, std::string>
+parse_json(std::string_view raw) noexcept {
+  try {
+    return json::parse(raw);
+  } catch (const json::parse_error &e) {
+    return std::unexpected(std::format("JSON parse error: {}", e.what()));
+  }
+}
+
+} // namespace
+
+struct EngineHandle {
+  std::shared_ptr<NLPModel> model;
+  std::unique_ptr<NLPEngine> engine;
+
+  // Direct handle to the embedding addon — bypasses NLPEngine for
+  // operations that call embed() in tight loops (e.g. bulk doc indexing).
+#ifdef NLP_WITH_ONNX
+  std::shared_ptr<onnx::ONNXAddon> embed_addon;
+#endif
+  std::shared_ptr<OCRAddon> ocr_addon;
+
+  EngineHandle() {
+    ensure_models_present();
+
+    model = load_model();
+    engine = std::make_unique<NLPEngine>(model);
+
+    const fs::path model_dir = resolve_model_dir();
+    const fs::path vocab = model_dir / "vocab.txt";
+
+#ifdef NLP_WITH_ONNX
+    // Embed model — store a direct shared_ptr for the DMS indexer.
+    embed_addon = make_addon(model_dir / "embed.onnx", vocab);
+    if (embed_addon) {
+      engine->set_onnx_service(embed_addon);
+      std::print("[nlp] embed model loaded ({} dims)\n",
+                 embed_addon->dimensions());
+    }
+
+    // Sentiment classifier (DistilBERT SST-2).
+    if (auto svc = make_addon(model_dir / "sentiment.onnx", vocab)) {
+      engine->set_sentiment_service(std::make_shared<onnx::OnnxClassifier>(
+          svc, std::vector<std::string>{"NEGATIVE", "POSITIVE"}));
+      std::print("[nlp] sentiment model loaded\n");
+    }
+
+    // NER model (bert-base-NER, CoNLL-2003 BIO labels).
+    if (auto svc = make_addon(model_dir / "ner.onnx", vocab)) {
+      engine->set_ner_service(svc);
+      std::print("[nlp] NER model loaded\n");
+    }
+
+    // Toxicity classifier (Toxic-BERT, multi-label sigmoid).
+    if (auto svc = make_addon(model_dir / "toxicity.onnx", vocab)) {
+      engine->set_toxicity_service(std::make_shared<onnx::OnnxClassifier>(
+          svc,
+          std::vector<std::string>{"toxic", "severe_toxic", "obscene", "threat",
+                                   "insult", "identity_hate"},
+          "logits", onnx::OnnxClassifier::Activation::sigmoid));
+      std::print("[nlp] toxicity model loaded\n");
+    }
+#endif
+
+    // OCR Addon
+    ocr_addon = std::make_shared<OCRAddon>();
+
+    // For non-Apple platforms, we need to load an ONNX model for the OCR addon.
+#ifndef __APPLE__
+#ifdef NLP_WITH_ONNX
+    const fs::path ocr_model = resolve_model_dir() / "ocr.onnx";
+    if (fs::exists(ocr_model)) {
+      auto svc = std::make_shared<onnx::ONNXAddon>();
+      onnx::ONNXAddon::Config ocr_cfg;
+      ocr_cfg.model_path = ocr_model;
+      // PP-OCRv3 uses a character list instead of a WordPiece vocab.
+      // These would normally be loaded from a file, but we'll use the default
+      // labels for now.
+      if (svc->load_model(std::move(ocr_cfg))) {
+        ocr_addon->set_onnx(svc);
+        std::print("[nlp] OCR ONNX model loaded\n");
+      }
+    }
+#endif
+#endif
+
+    if (ocr_addon->initialize()) {
+      engine->set_ocr_service(ocr_addon);
+      std::print("[nlp] OCR addon loaded\n");
+    }
+
+    if (!engine->has_onnx()) {
+      std::print(stderr,
+                 "[nlp] no ONNX models found in '{}'\n"
+                 "      Run: python3 scripts/download_models.py download\n",
+                 fs::absolute(model_dir).string());
+    } else {
+      std::print(
+          "[nlp] capabilities: embed={} sentiment={} ner={} toxicity={}\n",
+          engine->has_onnx(), engine->has_sentiment_model(),
+          engine->has_ner_model(), engine->has_toxicity_model());
+    }
+  }
+
+private:
+  static fs::path data_dir() {
+    if (const char *v = std::getenv("NLP_DATA_DIR"); v && *v) {
+      std::print("[nlp] using NLP_DATA_DIR={}\n", v);
+      return fs::path(v);
+    }
+    return fs::path("data");
+  }
+
+public:
+  static fs::path resolve_model_dir() {
+    if (const char *v = std::getenv("NLP_MODEL_DIR"); v && *v)
+      return fs::path(v);
+    return data_dir() / "models";
+  }
+
+private:
+  static void ensure_models_present() {
+    const fs::path model_dir = resolve_model_dir();
+    const fs::path vocab = model_dir / "vocab.txt";
+    const fs::path embed = model_dir / "embed.onnx";
+
+    if (!fs::exists(vocab) || !fs::exists(embed)) {
+      std::print("[nlp] critical models missing, attempting download...\n");
+
+      // Check common locations for the download script
+      std::string script_path = "scripts/download_models.py";
+      if (!fs::exists(script_path)) {
+        if (fs::exists("../scripts/download_models.py")) {
+          script_path = "../scripts/download_models.py";
+        } else if (fs::exists("../../scripts/download_models.py")) {
+          script_path = "../../scripts/download_models.py";
+        }
+      }
+
+      std::print("[nlp] using download script at: {}\n", script_path);
+      int res = std::system(
+          std::format("python3 {} download --models embed,vocab,sentiment",
+                      script_path)
+              .c_str());
+      if (res != 0) {
+        std::print(stderr, "[nlp] model download failed with code {}\n", res);
+      }
+    }
+  }
+
+  static std::shared_ptr<NLPModel> load_model() {
+    const fs::path dir = data_dir();
+    auto m = std::make_shared<NLPModel>();
+    if (m->load_from(dir.string())) {
+      std::print("[nlp] data files loaded from '{}'\n",
+                 fs::absolute(dir).string());
+      return m;
+    }
+    std::print(stderr,
+               "[nlp] data files not found at '{}'\n"
+               "      Spell-check and dictionary features are unavailable.\n"
+               "      Run: python3 scripts/download_models.py download\n",
+               fs::absolute(dir).string());
+    return NLPModel::create_empty();
+  }
+
+#ifdef NLP_WITH_ONNX
+  static std::shared_ptr<onnx::ONNXAddon>
+  make_addon(const fs::path &model_path, const fs::path &vocab_path) {
+    if (!fs::exists(model_path))
+      return nullptr;
+
+    auto addon = std::make_shared<onnx::ONNXAddon>();
+    onnx::ONNXAddon::Config cfg;
+    cfg.model_path = model_path;
+    if (fs::exists(vocab_path))
+      cfg.vocab_path = vocab_path;
+
+    if (!addon->load_model(std::move(cfg))) {
+      std::print(stderr, "[nlp] failed to load '{}'\n", model_path.string());
+      return nullptr;
+    }
+    return addon;
+  }
+#endif
+};
+
+// Direct expose() registrations
+//
+// Every binding is a self-contained lambda.  Capture rules:
+//   &eng       — reference to EngineHandle::engine (outlives all lambdas)
+//   addon      — shared_ptr copy (keeps ONNXAddon alive independently)
+//
+// All lambdas return std::string — the JSON envelope consumed by the JS side.
+
+static void register_bindings(saucer::smartview &wv, EngineHandle &nlp) {
+  using std::string;
+  NLPEngine &eng = *nlp.engine;
+
+  // health
+  // → { ok, data: { onnx, sentiment, toxicity, ner, version } }
+  wv.expose("nlp_health", [&eng]() -> string {
+    return guarded([&]() -> json {
+      return {
+          {"onnx", eng.has_onnx()},
+          {"sentiment", eng.has_sentiment_model()},
+          {"toxicity", eng.has_toxicity_model()},
+          {"ner", eng.has_ner_model()},
+          {"version", NLP_ENGINE_VERSION},
+      };
+    });
+  });
+
+  // summarize
+  // → { ok, data: { summary, selected_sentences[], ratio,
+  //                 original_length, summary_length } }
+  wv.expose("nlp_summarize",
+            [&eng](string text, float ratio, string query) -> string {
+              return guarded([&]() -> json {
+                return eng.summary_to_json(eng.summarize(text, ratio, query));
+              });
+            });
+
+  // keywords
+  // → { ok, data: [ { term, frequency, tfidf_score, pos } ] }
+  wv.expose(
+      "nlp_keywords", [&eng](string text, int max, string lang) -> string {
+        return guarded([&]() -> json {
+          return eng.keywords_to_json(eng.extract_keywords(text, max, lang));
+        });
+      });
+
+  // sentiment
+  // → { ok, data: { score, label, confidence } }
+  wv.expose("nlp_sentiment", [&eng](string text, string lang) -> string {
+    return guarded([&]() -> json {
+      return eng.sentiment_to_json(eng.analyze_sentiment(text, lang));
+    });
+  });
+
+  //  entities
+  // → { ok, data: [ { text, type, position, confidence } ] }
+  wv.expose("nlp_entities", [&eng](string text, string lang) -> string {
+    return guarded([&]() -> json {
+      return eng.entities_to_json(eng.extract_entities(text, lang));
+    });
+  });
+
+  //  readability
+  // → { ok, data: { flesch_kincaid_grade, readability_score, complexity,
+  //                 word_count, sentence_count, avg_sentence_length,
+  //                 suggestions[] } }
+  wv.expose("nlp_readability", [&eng](string text) -> string {
+    return guarded([&]() -> json {
+      return eng.readability_to_json(eng.analyze_readability(text));
+    });
+  });
+
+  //  toxicity
+  // → { ok, data: { is_toxic, score, triggers[], category } }
+  wv.expose("nlp_toxicity", [&eng](string text, string lang) -> string {
+    return guarded([&]() -> json {
+      return eng.toxicity_to_json(eng.detect_toxicity(text, lang));
+    });
+  });
+
+  // detect_language
+  // → { ok, data: { language, confidence, script_distribution } }
+  wv.expose("nlp_detect_language", [&eng](string text) -> string {
+    return guarded([&]() -> json {
+      return eng.language_to_json(eng.detect_language(text));
+    });
+  });
+
+  //  tokenize
+  // → { ok, data: string[] }
+  wv.expose("nlp_tokenize", [&eng](string text) -> string {
+    return guarded([&]() -> json { return json(eng.tokenize(text)); });
+  });
+
+  //  spell_check
+  // → { ok, data: [ { original, suggested, confidence, reason } ] }
+  wv.expose("nlp_spell_check", [&eng](string text, string lang) -> string {
+    return guarded([&]() -> json {
+      return eng.corrections_to_json(eng.spell_check(text, lang));
+    });
+  });
+
+  // semantic_search
+  // docs_json  JSON-encoded string[] — passed pre-serialised to avoid
+  //            glaze array-of-strings edge cases with large document sets.
+  // → { ok, data: [ { text, score, index } ] }
+  wv.expose(
+      "nlp_semantic_search",
+      [&eng](string query, string docs_json, int top_k) -> string {
+        auto parsed = parse_json(docs_json);
+        if (!parsed || !parsed->is_array())
+          return err_str("'docs' must be a JSON array of strings");
+
+        std::vector<string> docs;
+        docs.reserve(parsed->size());
+        for (const auto &d : *parsed)
+          docs.push_back(d.is_string() ? d.get<string>() : d.dump());
+
+        if (docs.empty())
+          return err_str("documents array is empty");
+
+        return guarded([&]() -> json {
+          auto matches =
+              eng.semantic_search(query, docs, static_cast<std::size_t>(top_k));
+          json out = json::array();
+          for (const auto &[text, score, index] : matches)
+            out.push_back({{"text", text}, {"score", score}, {"index", index}});
+          return out;
+        });
+      });
+
+  // extract_schema
+  // schema_json  JSON-encoded { "field": "description", … }
+  // → { ok, data: { field: "extracted value", …, _scores: {…} } }
+  wv.expose(
+      "nlp_extract_schema", [&eng](string text, string schema_json) -> string {
+        if (!eng.has_onnx())
+          return err_str("extract_schema requires ONNX — no model loaded");
+
+        auto parsed = parse_json(schema_json);
+        if (!parsed || !parsed->is_object())
+          return err_str("'schema' must be a JSON object");
+
+        return guarded(
+            [&]() -> json { return eng.extract_schema(text, *parsed); });
+      });
+
+  // embed — direct ONNXAddon call
+  // Captures the shared_ptr by value so the addon stays alive even if
+  // EngineHandle is somehow reset.  Calls ONNXAddon::embed() directly —
+  // one less virtual dispatch through NLPEngine.
+  // → { ok, data: { success, dimensions, vector: number[] } }
+#ifdef NLP_WITH_ONNX
+  if (nlp.embed_addon) {
+    auto addon = nlp.embed_addon; // shared_ptr copy — extends lifetime
+    wv.expose("nlp_embed", [addon](string text) -> string {
+      if (!addon->is_loaded())
+        return err_str("embed requires ONNX — no model loaded");
+      return guarded([&]() -> json {
+        const auto r = addon->embed(text);
+        return json{
+            {"success", r.success},
+            {"dimensions", r.vector.size()},
+            {"vector", r.vector},
+        };
+      });
+    });
+  } else {
+    // Model file not found — return a clear error.
+    wv.expose("nlp_embed", [](string) -> string {
+      return err_str("embed requires ONNX — no model loaded");
+    });
+  }
+#else
+  wv.expose("nlp_embed", [](string) -> string {
+    return err_str("embed requires ONNX — built with DISABLE_ONNX");
+  });
+#endif
+}
+
+coco::stray start(saucer::application *app, EngineHandle &nlp) {
+  try {
+    saucer::webview::register_scheme("local");
+
+#ifdef __APPLE__
+    // Register "local" as a secure and local scheme to bypass security
+    // restrictions (e.g. for SVG). Using runtime messaging to access private
+    // WebKit methods that Saucer normally only uses if SAUCER_WEBKIT_PRIVATE is
+    // set.
+    {
+      id cls = (id)objc_getClass("WKBrowsingContextController");
+      if (cls) {
+        SEL sel = sel_registerName("registerSchemeForCustomProtocol:");
+        SEL responds = sel_registerName("respondsToSelector:");
+        if (((BOOL (*)(id, SEL, SEL))objc_msgSend)(cls, responds, sel)) {
+          id (*stringWithUTF8String)(id, SEL, const char *) =
+              (id (*)(id, SEL, const char *))objc_msgSend;
+          id scheme = stringWithUTF8String(
+              (id)objc_getClass("NSString"),
+              sel_registerName("stringWithUTF8String:"), "local");
+          ((void (*)(id, SEL, id))objc_msgSend)(cls, sel, scheme);
+        }
+      }
+    }
+#endif
+
+    auto window = saucer::window::create(app);
+    if (!window) {
+      std::print(stderr, "[saucer] failed to create window\n");
+      co_return;
+    }
+    (*window)->set_title("Syngrafo");
+    (*window)->set_size({1280, 800});
+
+    auto webview = saucer::smartview::create({.window = *window});
+    if (!webview) {
+      std::print(stderr, "[saucer] failed to create webview\n");
+      co_return;
+    }
+
+    // Inject engine + DMS capability flags before any page script runs so the
+    // frontend can gate ONNX-dependent UI without a round-trip.
+    webview->inject({
+        .code = std::format(
+            R"js(
+window.__nlp = {{
+    hasOnnx:      {},
+    hasSentiment: {},
+    hasToxicity:  {},
+    hasNer:       {},
+    hasOcr:       {},
+    version:      "{}",
+}};
+window.__dms = {{
+    hasSemanticSearch: {},
+}};
+// Default no-op progress sink — replaced by the React store at runtime.
+if (typeof window.__dms_progress === 'undefined')
+    window.__dms_progress = function(ev) {{ console.debug('[dms]', ev); }};
+)js",
+            nlp.engine->has_onnx() ? "true" : "false",
+            nlp.engine->has_sentiment_model() ? "true" : "false",
+            nlp.engine->has_toxicity_model() ? "true" : "false",
+            nlp.engine->has_ner_model() ? "true" : "false",
+            nlp.engine->has_ocr() ? "true" : "false", NLP_ENGINE_VERSION,
+            nlp.engine->has_onnx() ? "true" : "false"),
+        .run_at = saucer::script::time::creation,
+    });
+
+    webview->embed(saucer::embedded::all());
+
+    // Construct the DMS handle — opens / bootstraps the SQLite database.
+    // DMSHandle is a coroutine-local kept alive by co_await app->finish().
+    // Its jthread is cooperatively stopped and joined when it goes out of
+    // scope.
+#ifdef NLP_WITH_ONNX
+    auto embed_svc = std::make_shared<pce::nlp::onnx::ONNXAddon>();
+    auto rectifier = std::make_shared<pce::nlp::RectifierAddon>();
+
+    // Initialise background DMS handle
+    pce::dms::DMSHandle dms{*nlp.engine, embed_svc, rectifier};
+
+    const fs::path model_path =
+        EngineHandle::resolve_model_dir() / "embed.onnx";
+    onnx::ONNXAddon::Config cfg;
+    cfg.model_path = model_path;
+    cfg.vocab_path = EngineHandle::resolve_model_dir() / "vocab.txt";
+
+    if (auto ok = embed_svc->load_model(std::move(cfg)); !ok) {
+      std::print(stderr, "[main] failed to load embedding model\n");
+    } else {
+      std::print("[main] embedding model ready ({} dims)\n",
+                 embed_svc->dimensions());
+    }
+
+    if (auto ok = rectifier->initialize(); !ok) {
+      std::print(stderr, "[main] failed to init rectifier addon\n");
+    } else {
+      rectifier->set_onnx(
+          embed_svc); // Rectifier can reuse the same ONNX session or its own
+      std::print("[main] rectifier addon ready\n");
+    }
+#else
+    pce::dms::DMSHandle dms{*nlp.engine, nullptr};
+#endif
+
+    // Wire all JS ↔ C++ bindings directly — no bridge class.
+    register_bindings(*webview, nlp);
+    saucer::modules::desktop desk{app};
+    pce::dms::register_dms_bindings(*webview, dms, desk);
+
+#ifndef NDEBUG
+    webview->set_dev_tools(true);
+#endif
+
+    // Simple asset server to bypass "Not allowed to load local resource"
+    // (file:// restrictions). Frontend can load any local file via
+    // local://local/path/to/file.
+    webview->handle_scheme("local", [](saucer::scheme::request request,
+                                       saucer::scheme::executor exec) {
+      auto url = request.url();
+
+      // Reconstruct the full path from the URL.
+      // Saucer's url.path() only gives the part after the authority.
+      // If the URL is local://local/data/inp, authority is "local" and path is
+      // "/data/inp". If the URL is local://localdata/inp, authority is
+      // "localdata" and path is "/inp". We want to treat everything after
+      // "local://" as the path.
+
+      std::string full_url = url.string();
+      std::string prefix = "local://";
+      std::string path_str;
+
+      if (full_url.starts_with(prefix)) {
+        path_str = full_url.substr(prefix.size());
+        // Remove query parameters if present
+        auto query_pos = path_str.find('?');
+        if (query_pos != std::string::npos) {
+          path_str = path_str.substr(0, query_pos);
+        }
+        // Remove the "local" authority part but KEEP the leading "/" so
+        // absolute filesystem paths stay absolute.
+        // local://local/tmp/dlzone/foo.webp
+        //  → after strip "local://": "local/tmp/dlzone/foo.webp"
+        //  → substr(5) "local" stripped: "/tmp/dlzone/foo.webp"  ← absolute ✓
+        if (path_str.starts_with("local/")) {
+          path_str = path_str.substr(5); // keep the "/" → absolute path
+        } else if (path_str.starts_with("local")) {
+          path_str = path_str.substr(5);
+        }
+      } else {
+        path_str = url.path().string();
+      }
+
+      // Percent-decode the path so file names that contain spaces or other
+      // URL-special characters (e.g. "My%20Photo.jpg") resolve correctly on
+      // the filesystem.  The browser always percent-encodes non-ASCII / space
+      // characters before making the scheme request, so we must undo that here.
+      {
+        std::string decoded;
+        decoded.reserve(path_str.size());
+        for (std::size_t i = 0; i < path_str.size(); ++i) {
+          if (path_str[i] == '%' && i + 2 < path_str.size()) {
+            const char h = static_cast<char>(
+                std::tolower(static_cast<unsigned char>(path_str[i + 1])));
+            const char l = static_cast<char>(
+                std::tolower(static_cast<unsigned char>(path_str[i + 2])));
+            if (std::isxdigit(static_cast<unsigned char>(h)) &&
+                std::isxdigit(static_cast<unsigned char>(l))) {
+              const int hv = (h >= 'a') ? (h - 'a' + 10) : (h - '0');
+              const int lv = (l >= 'a') ? (l - 'a' + 10) : (l - '0');
+              decoded.push_back(static_cast<char>((hv << 4) | lv));
+              i += 2;
+              continue;
+            }
+          }
+          decoded.push_back(path_str[i]);
+        }
+        path_str = std::move(decoded);
+      }
+
+      std::print("[local-scheme] resolving: {} (from URL: {})\n", path_str,
+                 full_url);
+
+      namespace fs = std::filesystem;
+      fs::path p(path_str);
+
+      if (p.is_relative()) {
+        // Relative path: resolve against CWD (legacy bundle-relative usage).
+        auto base = fs::current_path();
+        p = base / p;
+        std::print("[local-scheme] relative path detected, resolved to: {}\n",
+                   p.string());
+      } else if (!fs::exists(p)) {
+        // Absolute path doesn't exist on disk.  Try stripping the leading "/"
+        // and resolving relative to CWD — backwards-compat for callers that
+        // used local://local/data/... to mean a bundle-relative resource.
+        std::string rel = p.string().substr(1);
+        if (!rel.empty()) {
+          auto fallback = fs::current_path() / rel;
+          if (fs::exists(fallback) && fs::is_regular_file(fallback)) {
+            std::print("[local-scheme] absolute path not found; using CWD "
+                       "fallback: {}\n",
+                       fallback.string());
+            p = fallback;
+          }
+        }
+      }
+
+      if (!fs::exists(p) || !fs::is_regular_file(p)) {
+        std::print(stderr, "[local-scheme] file not found: {}\n", p.string());
+        return exec.reject(saucer::scheme::error::not_found);
+      }
+
+      // Detect MIME
+      std::string ext = p.extension().string();
+      std::string mime = pce::dms::mime_for_extension(ext);
+
+      // Read and serve binary
+      std::ifstream file(p, std::ios::binary);
+      if (!file) {
+        std::print(stderr, "[local-scheme] failed to open file: {}\n",
+                   p.string());
+        return exec.reject(saucer::scheme::error::denied);
+      }
+
+      std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(file)),
+                                     std::istreambuf_iterator<char>());
+
+      std::print("[local-scheme] serving {} ({} bytes) as {}\n",
+                 p.filename().string(), data.size(), mime);
+
+      exec.resolve({
+          .data    = saucer::stash::from(std::move(data)),
+          .mime    = mime,
+          // Allow saucer://embedded to fetch any local file via the Web APIs
+          // (Web Audio, SVG inline fetch, etc.). This is intentional for a
+          // native desktop app — no untrusted origin can reach this handler.
+          .headers = {
+              {"Access-Control-Allow-Origin",  "*"},
+              {"Access-Control-Allow-Methods", "GET, HEAD, OPTIONS"},
+              {"Access-Control-Allow-Headers", "*"},
+              {"Cross-Origin-Resource-Policy", "cross-origin"},
+          },
+      });
+    });
+
+    webview->set_url("saucer://embedded/index.html");
+
+    (*window)->show();
+    std::print("[app] window open\n");
+
+    co_await app->finish();
+    std::print("[app] window closed\n");
+  } catch (const std::exception &e) {
+    std::print(stderr, "[app] start() threw exception: {}\n", e.what());
+    co_return;
+  } catch (...) {
+    std::print(stderr, "[app] start() threw unknown exception\n");
+    co_return;
+  }
+}
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+#else
+int main()
+#endif
+{
+  try {
+    EngineHandle nlp;
+
+    return saucer::application::create({.id = "org.pce.papiere"})
+        ->run([&nlp](saucer::application *app) -> coco::stray {
+          return start(app, nlp);
+        });
+
+  } catch (const std::exception &e) {
+    std::print(stderr, "[app] fatal: {}\n", e.what());
+    return 1;
+  }
+}

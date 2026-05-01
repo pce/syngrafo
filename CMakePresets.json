@@ -1,0 +1,127 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 31, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Syngrafo — System Toolchain",
+      "description": "Standard release build using the system C++23 compiler",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "BUILD_PYTHON_BINDINGS": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Syngrafo — Debug (System)",
+      "description": "Debug build with symbols",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "llvm22-custom",
+      "displayName": "Syngrafo — LLVM 22 Custom Toolchain",
+      "description": "Uses the local LLVM 22.1.1 toolchain",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "$env{HOME}/toolchains/llvm-22/bin/clang",
+        "CMAKE_CXX_COMPILER": "$env{HOME}/toolchains/llvm-22/bin/clang++",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -nostdinc++ -I$env{HOME}/toolchains/llvm-22/include/c++/v1",
+        "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi -L$env{HOME}/toolchains/llvm-22/lib -Wl,-rpath,$env{HOME}/toolchains/llvm-22/lib",
+        "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++ -lc++abi -L$env{HOME}/toolchains/llvm-22/lib -Wl,-rpath,$env{HOME}/toolchains/llvm-22/lib",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "llvm22-asan",
+      "displayName": "Syngrafo — LLVM 22 ASan/UBSan",
+      "inherits": "llvm22-custom",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++ -nostdinc++ -I$env{HOME}/toolchains/llvm-22/include/c++/v1 -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi -L$env{HOME}/toolchains/llvm-22/lib -Wl,-rpath,$env{HOME}/toolchains/llvm-22/lib -fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++ -lc++abi -L$env{HOME}/toolchains/llvm-22/lib -Wl,-rpath,$env{HOME}/toolchains/llvm-22/lib -fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "asan-system",
+      "displayName": "Syngrafo — System Clang ASan/UBSan",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "ci-linux-clang22",
+      "displayName": "Syngrafo — CI Linux (Clang 22, no ONNX)",
+      "description": "Local testing with Clang 22; CI uses ci-linux (Clang 18).",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang-22",
+        "CMAKE_CXX_COMPILER": "clang++-22",
+        "DISABLE_ONNX": "ON"
+      }
+    },
+    {
+      "name": "ci-macos",
+      "displayName": "Syngrafo — CI macOS (AppleClang, Release)",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ci-linux",
+      "displayName": "Syngrafo — CI Linux (Clang 20 + libc++, no ONNX)",
+      "description": "Ubuntu 24.04 CI: clang-20 with libc++-20 (full C++23). Requires clang-20, libc++-20-dev, libwebkitgtk-6.0-dev.",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang-20",
+        "CMAKE_CXX_COMPILER": "clang++-20",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+        "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
+        "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
+        "DISABLE_ONNX": "ON"
+      }
+    },
+    {
+      "name": "ci-windows",
+      "displayName": "Syngrafo — CI Windows (MSVC + Ninja, Release)",
+      "inherits": "default",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "DISABLE_ONNX": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "build-default", "configurePreset": "default" },
+    { "name": "build-debug", "configurePreset": "debug" },
+    { "name": "build-llvm22", "configurePreset": "llvm22-custom" },
+    { "name": "build-llvm22-asan", "configurePreset": "llvm22-asan" },
+    { "name": "build-asan-system", "configurePreset": "asan-system" },
+    { "name": "build-ci", "configurePreset": "ci-linux-clang22" },
+    { "name": "build-ci-macos", "configurePreset": "ci-macos" },
+    { "name": "build-ci-linux", "configurePreset": "ci-linux" },
+    { "name": "build-ci-windows", "configurePreset": "ci-windows" }
+  ],
+  "testPresets": [
+    { "name": "test-default", "configurePreset": "default", "output": { "outputOnFailure": true } },
+    { "name": "test-ci", "configurePreset": "ci-linux-clang22", "output": { "outputOnFailure": true } },
+    { "name": "test-ci-macos", "configurePreset": "ci-macos", "output": { "outputOnFailure": true } },
+    { "name": "test-ci-linux", "configurePreset": "ci-linux", "output": { "outputOnFailure": true } },
+    { "name": "test-ci-windows", "configurePreset": "ci-windows", "output": { "outputOnFailure": true } }
+  ]
+}
