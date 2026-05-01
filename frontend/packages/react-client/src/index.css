@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+@layer base {
+    /* ── Dark by default (webview-safe) — light via .theme-light ─────────── */
+    :root {
+        --theme-bg:           #121212;
+        --theme-surface:      #1e1e1e;
+        --theme-border:       #333333;
+        --theme-text:         #e0e0e0;
+        --theme-text-muted:   #9e9e9e;
+        --theme-primary:      #f5f5f5;
+        --theme-danger:       #cf6679;
+
+        /* Radius */
+        --theme-radius-sm:    4px;
+        --theme-radius:       8px;
+        --theme-radius-lg:    12px;
+        --theme-radius-xl:    16px;
+
+        --theme-font-sans:    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        --theme-font-serif:   Georgia, Cambria, "Times New Roman", Times, serif;
+        --theme-font-mono:    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+        font-family: var(--theme-font-sans);
+        @apply antialiased;
+        background-color: var(--theme-bg);
+        color: var(--theme-text);
+    }
+
+    /* ── Light ────────────────────────────────────────────────────────────── */
+    .theme-light {
+        --theme-bg:         #f5f5f5;
+        --theme-surface:    #ffffff;
+        --theme-border:     #e0e0e0;
+        --theme-text:       #212121;
+        --theme-text-muted: #757575;
+        --theme-primary:    #424242;
+        --theme-danger:     #d32f2f;
+    }
+
+    /* ── Dark (alias) ─────────────────────────────────────────────────────── */
+    .theme-dark {
+        --theme-bg:         #121212;
+        --theme-surface:    #1e1e1e;
+        --theme-border:     #333333;
+        --theme-text:       #e0e0e0;
+        --theme-text-muted: #9e9e9e;
+        --theme-primary:    #f5f5f5;
+        --theme-danger:     #cf6679;
+    }
+
+    /* ── Solarized Dark ───────────────────────────────────────────────────── */
+    .theme-solarized-dark {
+        --theme-bg:         #002b36;
+        --theme-surface:    #073642;
+        --theme-border:     #586e75;
+        --theme-text:       #93a1a1;
+        --theme-text-muted: #657b83;
+        --theme-primary:    #268bd2;
+        --theme-danger:     #dc322f;
+    }
+
+    /* ── Solarized Light ──────────────────────────────────────────────────── */
+    .theme-solarized-light {
+        --theme-bg:         #fdf6e3;
+        --theme-surface:    #eee8d5;
+        --theme-border:     #d3c9a8;
+        --theme-text:       #657b83;
+        --theme-text-muted: #93a1a1;
+        --theme-primary:    #268bd2;
+        --theme-danger:     #dc322f;
+    }
+
+    /* ── Nord ────────────────────────────────────────────────────────────── */
+    .theme-nord {
+        --theme-bg:         #2e3440;
+        --theme-surface:    #3b4252;
+        --theme-border:     #434c5e;
+        --theme-text:       #eceff4;
+        --theme-text-muted: #9099aa;
+        --theme-primary:    #88c0d0;
+        --theme-danger:     #bf616a;
+    }
+
+    /* ── Dracula ─────────────────────────────────────────────────────────── */
+    .theme-dracula {
+        --theme-bg:         #282a36;
+        --theme-surface:    #44475a;
+        --theme-border:     #6272a4;
+        --theme-text:       #f8f8f2;
+        --theme-text-muted: #bd93f9;
+        --theme-primary:    #bd93f9;
+        --theme-danger:     #ff5555;
+    }
+
+    /* ── Monokai ─────────────────────────────────────────────────────────── */
+    .theme-monokai {
+        --theme-bg:         #272822;
+        --theme-surface:    #3e3d32;
+        --theme-border:     #49483e;
+        --theme-text:       #f8f8f2;
+        --theme-text-muted: #75715e;
+        --theme-primary:    #ae81ff;
+        --theme-danger:     #f92672;
+    }
+
+    /* ── Gruvbox Dark ────────────────────────────────────────────────────── */
+    .theme-gruvbox-dark {
+        --theme-bg:         #282828;
+        --theme-surface:    #3c3836;
+        --theme-border:     #504945;
+        --theme-text:       #ebdbb2;
+        --theme-text-muted: #a89984;
+        --theme-primary:    #fabd2f;
+        --theme-danger:     #fb4934;
+    }
+
+    /* ── Tokyo Night ─────────────────────────────────────────────────────── */
+    .theme-tokyo-night {
+        --theme-bg:         #1a1b26;
+        --theme-surface:    #24283b;
+        --theme-border:     #414868;
+        --theme-text:       #c0caf5;
+        --theme-text-muted: #565f89;
+        --theme-primary:    #7aa2f7;
+        --theme-danger:     #f7768e;
+    }
+
+    /* ── Rosé Pine ───────────────────────────────────────────────────────── */
+    .theme-rose-pine {
+        --theme-bg:         #191724;
+        --theme-surface:    #1f1d2e;
+        --theme-border:     #403d52;
+        --theme-text:       #e0def4;
+        --theme-text-muted: #908caa;
+        --theme-primary:    #c4a7e7;
+        --theme-danger:     #eb6f92;
+    }
+
+    /* ── Material Palenight ──────────────────────────────────────────────── */
+    .theme-material-palenight {
+        --theme-bg:         #292d3e;
+        --theme-surface:    #32374d;
+        --theme-border:     #44475a;
+        --theme-text:       #bfc7d5;
+        --theme-text-muted: #676e95;
+        --theme-primary:    #82aaff;
+        --theme-danger:     #ff5370;
+    }
+
+    /* ── Catppuccin Macchiato ────────────────────────────────────────────── */
+    .theme-catppuccin {
+        --theme-bg:         #1e2030;
+        --theme-surface:    #24273a;
+        --theme-border:     #363a4f;
+        --theme-text:       #cad3f5;
+        --theme-text-muted: #6e738d;
+        --theme-primary:    #8aadf4;
+        --theme-danger:     #ed8796;
+    }
+
+    /* ── Radius presets ──────────────────────────────────────────────────── */
+    .radius-none   { --theme-radius-sm: 0px;      --theme-radius: 0px;    --theme-radius-lg: 0px;    --theme-radius-xl: 0px;    }
+    .radius-small  { --theme-radius-sm: 2px;      --theme-radius: 4px;    --theme-radius-lg: 6px;    --theme-radius-xl: 8px;    }
+    .radius-medium { --theme-radius-sm: 4px;      --theme-radius: 8px;    --theme-radius-lg: 12px;   --theme-radius-xl: 16px;   }
+    .radius-large  { --theme-radius-sm: 8px;      --theme-radius: 12px;   --theme-radius-lg: 16px;   --theme-radius-xl: 24px;   }
+    .radius-pill   { --theme-radius-sm: 9999px;   --theme-radius: 9999px; --theme-radius-lg: 9999px; --theme-radius-xl: 9999px; }
+
+    /* ── Density presets ─────────────────────────────────────────────────── */
+    .density-compact { font-size: 13px; }
+    .density-normal  { font-size: 14px; }
+    .density-roomy   { font-size: 15px; }
+
+    /* ── Zone overrides ──────────────────────────────────────────────────── */
+    .zone-active {
+        --theme-primary:        #3b82f6;
+        --theme-primary-muted:  rgba(59, 130, 246, 0.1);
+        --theme-primary-border: rgba(59, 130, 246, 0.2);
+    }
+    .is-global-mode {
+        --theme-primary:        #10b981;
+        --theme-primary-muted:  rgba(16, 185, 129, 0.1);
+        --theme-primary-border: rgba(16, 185, 129, 0.2);
+    }
+
+    body {
+        @apply min-h-screen m-0 overflow-hidden;
+        font-family: var(--theme-font-sans);
+        background-color: var(--theme-bg);
+        color: var(--theme-text);
+    }
+
+    .font-serif { font-family: var(--theme-font-serif) !important; }
+    .font-mono  { font-family: var(--theme-font-mono)  !important; }
+
+    /* ── Scrollbars ───────────────────────────────────────────────────────── */
+    .scrollbar-thin::-webkit-scrollbar         { width: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track   { @apply bg-transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb   {
+        background-color: var(--theme-border);
+        @apply rounded-full;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
+}

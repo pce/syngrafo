@@ -1,0 +1,14 @@
+{
+  "name": "syngrafo-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/react-client",
+    "packages/client"
+  ],
+  "scripts": {
+    "build": "cd packages/react-client && bun run build.ts --minify",
+    "dev": "cd packages/react-client && bun run dev",
+    "install-all": "bun install"
+  }
+}
