@@ -82,7 +82,6 @@ const PresetCard: React.FC<{
   </button>
 );
 
-// ── ThemePanel ────────────────────────────────────────────────────────────────
 
 interface ThemePanelProps {
   onClose: () => void;
@@ -90,7 +89,6 @@ interface ThemePanelProps {
 
 type Tab = "presets" | "colors" | "appearance" | "settings";
 
-// ── Settings helpers ──────────────────────────────────────────────────────────
 
 const SVG_SIZE_OPTIONS: Array<{ bytes: number; label: string }> = [
   { bytes: 512_000,     label: "500 KB" },

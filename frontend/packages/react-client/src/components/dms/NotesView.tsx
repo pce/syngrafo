@@ -257,10 +257,19 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
       return;
     }
 
-    // Cancel any pending save for the previous note.
+    // Cancel any pending debounce and flush any unsaved content for the
+    // note we're navigating away from.  Fire-and-forget: we don't await
+    // because the effect must return synchronously, and a background write
+    // completing slightly after navigation is an acceptable trade-off vs
+    // silently discarding the last keystrokes.
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
+      const flushPath    = selectedPathRef.current;
+      const flushContent = contentRef.current;
+      if (flushPath) {
+        void dms.writeFile(flushPath, flushContent);
+      }
     }
     setSaveStatus("idle");
 

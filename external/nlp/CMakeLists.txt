@@ -64,6 +64,26 @@ else()
     target_sources(nlp_engine PRIVATE
         addons/platform_services_stub.cpp
     )
+
+    # ── Tesseract OCR (cross-platform fallback) ──────────────────────────────
+    # Provides a real multi-language OCR implementation for Linux / Windows.
+    # Install tessdata language packs separately:
+    #   Linux:   sudo apt-get install tesseract-ocr-deu tesseract-ocr-ell
+    #   vcpkg:   vcpkg install tesseract
+    #   custom:  python3 scripts/download_models.py download --models tessdata
+    option(DISABLE_TESSERACT "Disable Tesseract OCR fallback" OFF)
+    if(NOT DISABLE_TESSERACT)
+        find_package(Tesseract QUIET)
+        if(Tesseract_FOUND OR TARGET Tesseract::libtesseract)
+            message(STATUS "[nlp] Tesseract found (${Tesseract_VERSION}) — multilingual OCR enabled (eng+deu+ell)")
+            target_sources(nlp_engine PRIVATE addons/ocr_addon_tesseract.cpp)
+            target_compile_definitions(nlp_engine PUBLIC NLP_WITH_TESSERACT)
+            target_link_libraries(nlp_engine PRIVATE Tesseract::libtesseract)
+        else()
+            message(STATUS "[nlp] Tesseract NOT found — OCR fallback disabled on this platform")
+            message(STATUS "      Install: sudo apt-get install libtesseract-dev  OR  vcpkg install tesseract")
+        endif()
+    endif()
 endif()
 
 target_include_directories(nlp_engine PUBLIC

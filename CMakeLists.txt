@@ -25,13 +25,25 @@ endif()
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" SYNGRAFO_VERSION)
 string(STRIP "${SYNGRAFO_VERSION}" SYNGRAFO_VERSION)
 
-project(syngrafo LANGUAGES C CXX VERSION ${SYNGRAFO_VERSION})
+# Objective-C++ is required on Apple for .mm sources in both the main app and
+# the NLP engine addons (ocr_addon_apple.mm, exif_addon_apple.mm,
+# rectifier_addon_apple.mm).  OBJCXX *must* be declared here, inside project(),
+# so CMake records it in CMakeCache.txt on the first configure run.  A later
+# enable_language(OBJCXX) call is not cached and therefore breaks stale-cache
+# regenerations with "CMAKE_OBJCXX_COMPILE_OBJECT not set".
+#
+# CMAKE_HOST_SYSTEM_NAME is always available before project() — it reflects the
+# host OS independently of toolchain files or prior cache state.
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    set(_PROJECT_LANGS C CXX OBJCXX)
+else()
+    set(_PROJECT_LANGS C CXX)
+endif()
 
-# Objective-C++ is required on Apple for the ImageIO/CoreGraphics image decoder
-# (app/image_decode_apple.mm). Enable it only on Apple so non-Apple builds
-# (Linux, Windows) are not affected by the absence of an ObjC++ toolchain.
+project(syngrafo LANGUAGES ${_PROJECT_LANGS} VERSION ${SYNGRAFO_VERSION})
+unset(_PROJECT_LANGS)
+
 if(APPLE)
-    enable_language(OBJCXX)
     set(CMAKE_OBJCXX_STANDARD          23)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
     set(CMAKE_OBJCXX_EXTENSIONS        OFF)
@@ -325,6 +337,7 @@ if(APPLE)
         "-framework ImageIO"
         "-framework CoreGraphics"
         "-framework Foundation"
+        "-framework Security"   # Keychain (SecItem* API) for zone key storage
     )
 endif()
 

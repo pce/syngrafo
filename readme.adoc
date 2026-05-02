@@ -221,6 +221,8 @@ They can represent:
 * Audio file support
 * Extensible for additional media types
 
+
+
 == Development
 
 === Run Tests
@@ -278,6 +280,3 @@ Please ensure:
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
 
-== Acknowledgements
-
-Syngrafo builds on established ideas from file systems, document management systems, and knowledge tools, while focusing on a unified approach.

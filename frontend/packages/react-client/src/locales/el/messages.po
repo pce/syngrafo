@@ -1,0 +1,100 @@
+# Papiere — Greek message catalog
+# Language: el
+# Edit with POEdit — https://poedit.net
+msgid ""
+msgstr ""
+"Project-Id-Version: papiere\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: el\n"
+"Language-Team: Ελληνικά\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# ── Navigation ────────────────────────────────────────────────────────────────
+msgid "Explorer"
+msgstr "Εξερευνητής"
+
+msgid "Analysis"
+msgstr "Ανάλυση"
+
+msgid "Settings"
+msgstr "Ρυθμίσεις"
+
+msgid "About"
+msgstr "Σχετικά"
+
+# ── FileBrowser ───────────────────────────────────────────────────────────────
+msgid "Name"
+msgstr "Όνομα"
+
+msgid "Type"
+msgstr "Τύπος"
+
+msgid "Size"
+msgstr "Μέγεθος"
+
+msgid "Modified"
+msgstr "Τροποποιήθηκε"
+
+msgid "Sort ascending"
+msgstr "Αύξουσα ταξινόμηση"
+
+msgid "Sort descending"
+msgstr "Φθίνουσα ταξινόμηση"
+
+msgid "List view"
+msgstr "Προβολή λίστας"
+
+msgid "Details view"
+msgstr "Λεπτομερής προβολή"
+
+msgid "Grid view"
+msgstr "Προβολή πλέγματος"
+
+msgid "Loading…"
+msgstr "Φόρτωση…"
+
+msgid "Empty folder"
+msgstr "Κενός φάκελος"
+
+# ── DocumentViewer ────────────────────────────────────────────────────────────
+msgid "Run OCR"
+msgstr "Εκτέλεση OCR"
+
+msgid "Running OCR…"
+msgstr "Εκτέλεση OCR…"
+
+msgid "No document selected"
+msgstr "Δεν έχει επιλεγεί έγγραφο"
+
+# ── AnalysisPanel ─────────────────────────────────────────────────────────────
+msgid "Keywords"
+msgstr "Λέξεις-κλειδιά"
+
+msgid "Sentiment"
+msgstr "Συναίσθημα"
+
+msgid "Entities"
+msgstr "Οντότητες"
+
+msgid "Extracted Text"
+msgstr "Εξαγόμενο κείμενο"
+
+msgid "Image Info"
+msgstr "Πληροφορίες εικόνας"
+
+msgid "Positive"
+msgstr "Θετικό"
+
+msgid "Negative"
+msgstr "Αρνητικό"
+
+# ── OCR / processing ──────────────────────────────────────────────────────────
+msgid "Indexing…"
+msgstr "Ευρετηρίαση…"
+
+msgid "No results"
+msgstr "Δεν υπάρχουν αποτελέσματα"
+

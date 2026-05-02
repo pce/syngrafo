@@ -69,6 +69,16 @@ RGBAImage decode_image_to_rgba(const std::string& path) {
         // kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast
         // produces RGBA bytes in memory (R=byte0, G=byte1, B=byte2, A=byte3)
         // on all Apple platforms, matching what stb_image returns.
+        //
+        // Use a C-style cast to combine the two CGBitmapInfo enum values.
+        // The bitwise OR of kCGBitmapByteOrder32Big (CGBitmapInfo) with
+        // kCGImageAlphaPremultipliedLast (CGImageAlphaInfo) triggers a
+        // "bitwise op between different enum types" warning in C++17/23.
+        // Casting to the wider uint32_t avoids the warning without changing
+        // the generated code.
+        const CGBitmapInfo bitmapInfo =
+            static_cast<CGBitmapInfo>(kCGBitmapByteOrder32Big)
+            | static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedLast);
         CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
         CGContextRef ctx   = CGBitmapContextCreate(
             result.pixels.data(),
@@ -76,7 +86,7 @@ RGBAImage decode_image_to_rgba(const std::string& path) {
             8,           // bits per component
             w * 4,       // bytes per row
             cs,
-            kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast);
+            bitmapInfo);
         CGColorSpaceRelease(cs);
 
         if (!ctx) {

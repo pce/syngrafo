@@ -24,13 +24,25 @@ const DocumentViewer: React.FC = () => {
   const [isImportLoading, setIsImportLoading] = useState(false);
 
   // ── Media error state ─────────────────────────────────────────────────────
-  // Images and PDFs are served via the local:// scheme handler in main.cc,
-  // which reads files directly from the filesystem with correct MIME types.
-  // This avoids base64-encoding entire files through the JS bridge (which
-  // caused empty/corrupt data URLs for many image types).
   const [mediaError, setMediaError] = useState(false);
-  // Incrementing this forces the browser to re-request the resource (Retry).
   const [fetchKey,   setFetchKey]   = useState(0);
+
+  // ── Large-file guard ─────────────────────────────────────────────────────
+  // Files above this threshold are not buffered through Web Audio decodeAudioData
+  // (which loads the full file into RAM and can freeze the process).
+  // Instead they are played via the native <audio> HTML element, which streams
+  // through the local:// scheme handler (now with HTTP 206 Range support).
+  const AUDIO_WEBAUDIO_MAX_BYTES = 60 * 1024 * 1024; // 60 MB
+  const [fileSizeBytes, setFileSizeBytes] = useState<number | null>(null);
+  const isLargeAudio = isAudio && fileSizeBytes !== null && fileSizeBytes > AUDIO_WEBAUDIO_MAX_BYTES;
+
+  useEffect(() => {
+    setFileSizeBytes(null);
+    if (!state.viewerPath || (!isAudio && !isVideo)) return;
+    dms.fileStats(state.viewerPath).then(res => {
+      if (res.ok && res.data) setFileSizeBytes(res.data.size);
+    });
+  }, [state.viewerPath, isAudio, isVideo]);
 
   const isImage = state.viewerPath ? isImageFile(state.viewerPath) : false;
   const isPdf   = state.viewerPath ? isDocFile(state.viewerPath)   : false;
@@ -38,14 +50,10 @@ const DocumentViewer: React.FC = () => {
   const isArchive = state.viewerPath ? isArchiveFile(state.viewerPath) : false;
   const isHtml    = state.viewerPath ? isHtmlFile(state.viewerPath)    : false;
   const isVideo   = state.viewerPath ? isVideoFile(state.viewerPath)   : false;
-  // SVG is technically an image (it's in IMAGE_EXTS) but needs inline rendering
-  // to bypass custom-scheme <img> restrictions on Linux/Windows WebKit.
   const isSvg   = state.viewerPath ? isSvgFile(state.viewerPath)   : false;
 
-  // Context: are we browsing inside the zone's workspace (out_path)?
   const isInZoneWorkspace = !!(state.zone && state.currentPath &&
     state.currentPath.startsWith(state.zone.out_path));
-  // Context: zone is active but we are NOT in the workspace → source/import context
   const isInZoneSource = !!(state.zone && !isInZoneWorkspace);
 
   // ── SVG inline state ──────────────────────────────────────────────────────
@@ -57,6 +65,7 @@ const DocumentViewer: React.FC = () => {
   const {
     play,
     stop,
+    isLoading: isAudioLoading,
     analyserNode,
     visualizationData,
     isPlaying,
@@ -391,68 +400,94 @@ const DocumentViewer: React.FC = () => {
 
         ) : isAudio ? (
           <div className="flex flex-col items-center gap-6 p-4 h-full">
-            {/* Waveform visualizer */}
-            <div className="w-full max-w-xl">
-              <SlidingAudioVisualizer
-                analyserNode={analyserNode}
-                visualizationData={visualizationData}
-                isPlaying={isPlaying}
-                width={480}
-                height={120}
-                className="mx-auto"
-              />
-            </div>
-
-            {/* Spectrum analyzer */}
-            <div className="w-full max-w-xl h-36 rounded-lg overflow-hidden border border-[var(--theme-border)]">
-              <SpectrumAnalyzer
-                analyserNode={analyserNode}
-                isPlaying={isPlaying}
-                className="w-full h-full"
-              />
-            </div>
-
-            {/* Playback controls */}
-            <div className="flex items-center gap-3">
-              {isPlaying ? (
-                <button
-                  onClick={stop}
-                  className="flex items-center gap-2 px-5 py-2 rounded-full bg-[var(--theme-danger)] hover:opacity-90 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-lg"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="5" y="5" width="14" height="14" rx="2"/>
+            {isLargeAudio ? (
+              /* ── Large audio: stream via native <audio> element ────────── */
+              <div className="w-full max-w-xl flex flex-col gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 font-medium">
+                  <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                   </svg>
-                  Stop
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (!state.viewerPath) return;
-                    setAudioError(null);
-                    play(state.viewerPath, state.viewerPath).catch((e: unknown) => {
-                      setAudioError(
-                        (e instanceof Error ? e.message : String(e)) ||
-                        "Playback failed — check the console for details"
-                      );
-                    });
-                  }}
-                  className="flex items-center gap-2 px-5 py-2 rounded-full bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-bg)] text-xs font-bold uppercase tracking-wider transition-colors shadow-lg"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M5 3l14 9-14 9V3z"/>
-                  </svg>
-                  Play
-                </button>
-              )}
-            </div>
-
-            {audioError && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)] text-[10px] font-medium max-w-sm text-center">
-                <span>⚠ {audioError}</span>
+                  Large file ({fileSizeBytes !== null ? `${(fileSizeBytes / 1048576).toFixed(0)} MB` : "?"}) — streaming playback (no spectrum visualiser)
+                </div>
+                <audio
+                  key={(mediaSrc ?? "") + fetchKey}
+                  src={mediaSrc ?? ""}
+                  controls
+                  onError={() => setAudioError("Audio could not be loaded — format may be unsupported")}
+                  className="w-full rounded-lg"
+                  style={{ colorScheme: "dark" }}
+                />
+                {audioError && (
+                  <p className="text-[10px] text-[var(--theme-danger)] text-center">{audioError}</p>
+                )}
               </div>
+            ) : (
+              /* ── Small/medium audio: Web Audio API with visualiser ──────── */
+              <>
+                <div className="w-full max-w-xl">
+                  <SlidingAudioVisualizer
+                    analyserNode={analyserNode}
+                    visualizationData={visualizationData}
+                    isPlaying={isPlaying}
+                    width={480}
+                    height={120}
+                    className="mx-auto"
+                  />
+                </div>
+                <div className="w-full max-w-xl h-36 rounded-lg overflow-hidden border border-[var(--theme-border)]">
+                  <SpectrumAnalyzer
+                    analyserNode={analyserNode}
+                    isPlaying={isPlaying}
+                    className="w-full h-full"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  {isPlaying ? (
+                    <button
+                      onClick={stop}
+                      className="flex items-center gap-2 px-5 py-2 rounded-full bg-[var(--theme-danger)] hover:opacity-90 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-lg"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      disabled={isAudioLoading}
+                      onClick={() => {
+                        if (!state.viewerPath || isAudioLoading) return;
+                        setAudioError(null);
+                        play(state.viewerPath, state.viewerPath).catch((e: unknown) => {
+                          setAudioError(
+                            (e instanceof Error ? e.message : String(e)) ||
+                            "Playback failed — check the console for details"
+                          );
+                        });
+                      }}
+                      className="flex items-center gap-2 px-5 py-2 rounded-full bg-[var(--theme-primary)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--theme-bg)] text-xs font-bold uppercase tracking-wider transition-colors shadow-lg"
+                    >
+                      {isAudioLoading ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          Loading…
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
+                          Play
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {audioError && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)] text-[10px] font-medium max-w-sm text-center">
+                    <span>⚠ {audioError}</span>
+                  </div>
+                )}
+              </>
             )}
             <p className="text-[10px] font-medium uppercase tracking-widest text-[var(--theme-text-muted)] text-center bg-[var(--theme-surface)]/50 px-4 py-2 rounded-full border border-[var(--theme-border)]">
-              Audio file — click <strong>Play</strong> to preview
+              Audio file
             </p>
           </div>
 

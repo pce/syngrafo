@@ -1,27 +1,13 @@
-name: Build & Release
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Trigger logic
-# ─────────────────────────────────────────────────────────────────────────────
-#
-#   push → prod branch   Every commit to prod creates / overwrites a
-#                        rolling pre-release tagged v{version} (read from
-#                        CMakeLists.txt). Good for "latest" QA builds.
-#
-#   push → v*.*.*  tag   Creates a permanent, versioned stable release.
-#                        Workflow: bump VERSION in CMakeLists.txt → commit →
-#                        push → then:  git tag v1.2.3 && git push origin v1.2.3
-#
-#   pull_request         Builds only, no release (validates the branch).
-# ─────────────────────────────────────────────────────────────────────────────
+name: CI
 
 on:
   push:
-    branches: ["prod"]
-    tags: ["v*.*.*"]
+    branches: ["**"]
+    tags:     ["v*.*.*"]
   pull_request:
-    branches: ["prod", "main"]
+    branches: ["**"]
 
+# Cancel duplicate runs for the same ref to save CI minutes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -29,263 +15,191 @@ concurrency:
 env:
   BUILD_TYPE: Release
 
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
-  # ───────────────────────────────────────────────────────────────────────────
-  # macOS — Apple Silicon (arm64), AppleClang, WebKit backend
-  # ───────────────────────────────────────────────────────────────────────────
+
+  # ── macOS ──────────────────────────────────────────────────────────────────
   build-macos:
-    name: Build — macOS (arm64)
-    runs-on: macos-latest
+    name: Build — macOS (Apple Silicon)
+    runs-on: macos-14          # Apple Silicon runner, AppleClang 15+
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0       # full history for version tags
           submodules: recursive
-          fetch-depth: 0
+
+      # ── Tooling ────────────────────────────────────────────────────────────
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install CMake & Ninja
+      - name: Install CMake
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "~3.31.0"
+          cmakeVersion: "~3.28.0"
 
-      - name: Cache FetchContent deps
+      # ── CPM / FetchContent cache ───────────────────────────────────────────
+      # Caches saucer, ONNX Runtime, nlohmann-json, etc.
+
+      - name: Cache CPM / FetchContent deps
         uses: actions/cache@v4
         with:
           path: |
             ${{ github.workspace }}/build/_deps
             ~/.cpm-cache
-          key: cpm-macos-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json') }}
+          key:          cpm-macos-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-macos-
 
-      - name: Build frontend
+      # ── NLP model data (tessdata not needed on macOS — uses Apple Vision) ──
+
+      - name: Download required NLP models
+        run: python3 scripts/download_models.py download --models embed,vocab
+        working-directory: ${{ github.workspace }}
+
+      # ── Frontend ───────────────────────────────────────────────────────────
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
         working-directory: ${{ github.workspace }}/frontend/packages/react-client
-        run: |
-          bun install
-          bun run build.ts --minify
+
+      - name: Compile i18n catalogs
+        run: bun run i18n:compile
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      - name: Build frontend bundle
+        run: bun run build.ts --minify
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      # ── Native build ───────────────────────────────────────────────────────
 
       - name: Configure CMake
         run: cmake -B build --preset ci-macos
-
-      - name: Delete stale PCH files
-        # saucer-fill propagates PCH to saucer and saucer-desktop.
-        # If Xcode / the SDK is updated between configure and build the mtime
-        # check fails for any of those .pch files. Wipe all of them.
-        run: find build/_deps -name '*.pch' -delete 2>/dev/null || true
+        working-directory: ${{ github.workspace }}
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+        working-directory: ${{ github.workspace }}
 
-      - name: Package .app bundle
-        # Ad-hoc sign so Gatekeeper shows "open anyway" rather than a hard block.
-        # Full notarization requires an Apple Developer ID — not available in CI.
-        # Users can also bypass manually: right-click → Open, or
-        #   sudo xattr -rd com.apple.quarantine /Applications/papiere.app
-        run: |
-          codesign --force --deep --sign - build/papiere.app
-          mkdir -p dist
-          ditto -c -k --keepParent build/papiere.app dist/papiere-macos-arm64.zip
+      # ── Artifact ───────────────────────────────────────────────────────────
 
-      - name: Upload artifact
+      - name: Upload macOS app bundle
         uses: actions/upload-artifact@v4
+        if: success()
         with:
-          name: papiere-macos
-          path: dist/papiere-macos-arm64.zip
-          if-no-files-found: error
+          name: papiere-macos-${{ github.sha }}
+          path: build/papiere.app
+          if-no-files-found: warn
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # Linux — x86_64, Clang 20 + libc++, WebKitGtk backend
-  #
-  # Clang 20 is required: saucer v8.0.5 uses C++23 SFINAE on ereignis
-  # internals that Clang < 20 rejects as a hard error.
-  # Installed via the official LLVM APT repository for Ubuntu 24.04 (noble).
-  # ───────────────────────────────────────────────────────────────────────────
+
+  # ── Linux ──────────────────────────────────────────────────────────────────
   build-linux:
-    name: Build — Linux (x86_64)
+    name: Build — Linux (Ubuntu 24.04, Clang 18)
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+          submodules: recursive
+
+      # ── Tooling ────────────────────────────────────────────────────────────
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install CMake & Ninja
+      - name: Install CMake
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "~3.31.0"
+          cmakeVersion: "~3.28.0"
 
       - name: Install system dependencies
         run: |
-          # Add official LLVM APT repository for Clang 20 on Ubuntu 24.04 (noble).
-          # The default Ubuntu repos only ship up to Clang 18.
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" \
-            | sudo tee /etc/apt/sources.list.d/llvm-20.list
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            clang-20 libc++-20-dev libc++abi-20-dev lld-20 \
+            clang-18 libc++-18-dev libc++abi-18-dev \
             libwebkitgtk-6.0-dev \
+            libgtk-4-dev \
             libadwaita-1-dev \
-            libjson-glib-dev \
             libsqlite3-dev \
+            libtesseract-dev \
+            tesseract-ocr-eng \
+            tesseract-ocr-deu \
+            tesseract-ocr-fra \
+            tesseract-ocr-spa \
+            tesseract-ocr-ita \
+            tesseract-ocr-por \
+            tesseract-ocr-jpn \
+            tesseract-ocr-chi-sim \
+            tesseract-ocr-rus \
+            tesseract-ocr-ell \
+            tesseract-ocr-ara \
             ninja-build \
             pkg-config
 
-      - name: Cache FetchContent deps
+      # ── CPM / FetchContent cache ───────────────────────────────────────────
+
+      - name: Cache CPM / FetchContent deps
         uses: actions/cache@v4
         with:
           path: |
             ${{ github.workspace }}/build/_deps
             ~/.cpm-cache
-          key: cpm-linux-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json') }}
+          key:          cpm-linux-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-linux-
 
-      - name: Build frontend
+      # ── NLP models ─────────────────────────────────────────────────────────
+
+      - name: Download required NLP models
+        run: python3 scripts/download_models.py download --models embed,vocab
+        working-directory: ${{ github.workspace }}
+
+      # ── Frontend ───────────────────────────────────────────────────────────
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
         working-directory: ${{ github.workspace }}/frontend/packages/react-client
-        run: |
-          bun install
-          bun run build.ts --minify
+
+      - name: Compile i18n catalogs
+        run: bun run i18n:compile
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      - name: Build frontend bundle
+        run: bun run build.ts --minify
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      # ── Native build ───────────────────────────────────────────────────────
 
       - name: Configure CMake
         run: cmake -B build --preset ci-linux
+        working-directory: ${{ github.workspace }}
 
       - name: Build
         run: cmake --build build --parallel $(nproc)
+        working-directory: ${{ github.workspace }}
 
-      - name: Package binary
-        run: |
-          strip build/papiere
-          mkdir -p dist
-          tar -czf dist/papiere-linux-x86_64.tar.gz -C build papiere
+      # ── Artifact ───────────────────────────────────────────────────────────
 
-      - name: Upload artifact
+      - name: Upload Linux binary
         uses: actions/upload-artifact@v4
+        if: success()
         with:
-          name: papiere-linux
-          path: dist/papiere-linux-x86_64.tar.gz
-          if-no-files-found: error
+          name: papiere-linux-${{ github.sha }}
+          path: build/papiere
+          if-no-files-found: warn
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # Windows — x64, MSVC 2022 + Ninja, WebView2 backend
-  #
-  # WebView2 is bundled with Edge and present on every Windows 10/11 machine.
-  # SQLite3 is compiled from the official C amalgamation (project LANGUAGES C CXX).
-  # No vcpkg toolchain — it causes infinite recursion inside FetchContent on
-  # CMake 3.31+ (vcpkg intercepts find_package calls FetchContent makes internally).
-  #
-  # continue-on-error: true so a Windows failure never blocks macOS/Linux releases
-  # while the Windows port is being stabilised.
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-windows:
-    name: Build — Windows (x64)
-    runs-on: windows-latest
-    continue-on-error: true
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install CMake & Ninja
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: "~3.31.0"
-
-      - name: Set up MSVC (x64)
-        # Puts cl.exe, link.exe, rc.exe etc. on PATH and sets INCLUDE/LIB
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Cache FetchContent deps
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/build/_deps
-          key: cpm-windows-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json') }}
-          restore-keys: cpm-windows-
-
-      - name: Build frontend
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-        run: |
-          bun install
-          bun run build.ts --minify
-
-      - name: Download SQLite amalgamation (Windows)
-        # CMake's built-in HTTPS download is fragile on Windows CI (SSL/TLS issues
-        # with sqlite.org). Pre-download with PowerShell (better TLS stack) and
-        # point FetchContent to the local path via FETCHCONTENT_SOURCE_DIR so CMake
-        # skips its own download entirely.
-        shell: pwsh
-        run: |
-          $url  = "https://www.sqlite.org/2026/sqlite-amalgamation-3530000.zip"
-          $dest = "sqlite3_amal.zip"
-          Invoke-WebRequest -Uri $url -OutFile $dest
-          Expand-Archive -Path $dest -DestinationPath .
-          Write-Host "SQLite extracted to: $(Resolve-Path sqlite-amalgamation-3530000)"
-
-      - name: Configure CMake
-        # No vcpkg toolchain — SQLite3 is built from amalgamation by CMakeLists.txt.
-        # FETCHCONTENT_SOURCE_DIR_SQLITE3_AMALGAMATION tells CMake to use the
-        # pre-downloaded directory, bypassing FetchContent's own download step.
-        shell: pwsh
-        run: |
-          $sqSrc = "${{ github.workspace }}/sqlite-amalgamation-3530000" -replace '\\','/'
-          cmake -B build --preset ci-windows "-DFETCHCONTENT_SOURCE_DIR_SQLITE3_AMALGAMATION=$sqSrc"
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Package binary
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path build\papiere.exe -DestinationPath dist\papiere-windows-x64.zip
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: papiere-windows
-          path: dist\papiere-windows-x64.zip
-          if-no-files-found: warn # warn, not error — port is still in progress
-
-  # ───────────────────────────────────────────────────────────────────────────
-  # Release
-  #
-  # Runs when:
-  #   • pushed to the prod branch  → rolling pre-release, tag = v{CMake version}
-  #   • a v*.*.* tag is pushed     → stable versioned release
-  #
-  # Uses ncipollo/release-action with allowUpdates + replacesArtifacts so
-  # repeated prod pushes silently overwrite the previous rolling build.
-  # ───────────────────────────────────────────────────────────────────────────
+  # ── Release (version tag only) ─────────────────────────────────────────────
   release:
-    name: Publish GitHub Release
-    # always() lets this job evaluate its if-condition even when a needed
-    # job failed.  We then require at least macOS or Linux to have succeeded.
-    if: >
-      always() &&
-      (github.ref == 'refs/heads/prod' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.build-macos.result == 'success' || needs.build-linux.result == 'success')
-    needs: [build-macos, build-linux, build-windows]
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-macos, build-linux]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -294,73 +208,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve release metadata
-        id: meta
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            # ── Explicit tag push → stable versioned release ──────────────
-            TAG="${GITHUB_REF_NAME}"
-            NAME="Papiere ${TAG}"
-            # A hyphen in the tag (v1.0.0-rc1, v2.0.0-beta) marks a pre-release
-            [[ "${TAG}" == *-* ]] && PRE=true || PRE=false
-            LATEST=true
-          else
-            # ── prod branch push → rolling pre-release ────────────────────
-            # Single source of truth: the VERSION file at the repo root
-            VER=$(cat VERSION)
-            TAG="v${VER}"
-            NAME="Papiere v${VER} — rolling build"
-            PRE=true
-            LATEST=false
-          fi
-
-          echo "tag=${TAG}"         >> $GITHUB_OUTPUT
-          echo "name=${NAME}"       >> $GITHUB_OUTPUT
-          echo "prerelease=${PRE}"  >> $GITHUB_OUTPUT
-          echo "make_latest=${LATEST}" >> $GITHUB_OUTPUT
-
-      - name: Download all build artifacts
+      - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: papiere-*
-          merge-multiple: false
-          path: artifacts
+          name: papiere-macos-${{ github.sha }}
+          path: release/macos/papiere.app
 
-      - name: Rename artifacts to include version tag
-        run: |
-          TAG="${{ steps.meta.outputs.tag }}"
-          # Only move artifacts that were actually uploaded (build may have failed)
-          [[ -f artifacts/papiere-macos/papiere-macos-arm64.zip ]] && \
-            mv artifacts/papiere-macos/papiere-macos-arm64.zip \
-               "papiere-macos-arm64-${TAG}.zip"
-          [[ -f artifacts/papiere-linux/papiere-linux-x86_64.tar.gz ]] && \
-            mv artifacts/papiere-linux/papiere-linux-x86_64.tar.gz \
-               "papiere-linux-x86_64-${TAG}.tar.gz"
-          [[ -f artifacts/papiere-windows/papiere-windows-x64.zip ]] && \
-            mv artifacts/papiere-windows/papiere-windows-x64.zip \
-               "papiere-windows-x64-${TAG}.zip"
-          # Build a comma-separated list of whatever actually exists
-          ARTS=""
-          for f in \
-            "papiere-macos-arm64-${TAG}.zip" \
-            "papiere-linux-x86_64-${TAG}.tar.gz" \
-            "papiere-windows-x64-${TAG}.zip"; do
-            [[ -f "$f" ]] && ARTS="${ARTS:+$ARTS,}$f"
-          done
-          echo "artifacts=${ARTS}" >> $GITHUB_OUTPUT
-        id: pack
-
-      - name: Create or update GitHub Release
-        uses: ncipollo/release-action@v1
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
         with:
-          tag: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.name }}
-          draft: false
-          prerelease: ${{ steps.meta.outputs.prerelease }}
-          makeLatest: ${{ steps.meta.outputs.make_latest }}
-          generateReleaseNotes: true
-          allowUpdates: true
-          replacesArtifacts: true
-          omitBodyDuringUpdate: false
-          artifacts: ${{ steps.pack.outputs.artifacts }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: papiere-linux-${{ github.sha }}
+          path: release/linux
+
+      - name: Package artifacts
+        run: |
+          cd release/macos
+          zip -r "../papiere-macos-${{ github.ref_name }}.zip" papiere.app
+          cd ../../release/linux
+          chmod +x papiere
+          tar -czf "../papiere-linux-${{ github.ref_name }}.tar.gz" papiere
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:   ${{ github.ref_name }}
+          name:       "Papiere ${{ github.ref_name }}"
+          draft:      false
+          # Tags with a hyphen (e.g. v1.0.0-beta.1) are marked as pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            release/papiere-macos-${{ github.ref_name }}.zip
+            release/papiere-linux-${{ github.ref_name }}.tar.gz

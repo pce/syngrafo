@@ -1,11 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useDms } from "../../store/dms-store";
 import { dms } from "../../services/dms-service";
 import type { ZoneHistoryItem } from "../../services/dms-service";
 
 interface Props { onClose: () => void; }
 
-// Auto-suggest workspace path from source + name
+// ── Network-path helpers ───────────────────────────────────────────────────────
+
+/** Schemes that require special resolution before use as a filesystem path. */
+const NETWORK_SCHEMES = ["smb://", "afp://", "cifs://", "nfs://", "ftp://", "ftps://", "ssh://", "sftp://"];
+
+function isNetworkPath(p: string): boolean {
+  return NETWORK_SCHEMES.some(s => p.toLowerCase().startsWith(s));
+}
+
+/** Auto-suggest workspace path from source + name */
 function suggestWorkspace(sourcePath: string, name: string): string {
   if (!sourcePath) return "";
   const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "zone";
@@ -23,10 +32,15 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
   const [error,   setError]   = useState("");
   const [history, setHistory] = useState<ZoneHistoryItem[]>([]);
 
-  // ── Encryption state ─────────────────────────────────────────────────────
-  // `existingIsEncrypted` — true when we loaded an already-encrypted zone
-  // (read-only flag; users can't decrypt an existing zone via this panel).
+  // ── SMB / network-path state ───────────────────────────────────────────────
+  const [inPathResolved,  setInPathResolved]  = useState<string>(""); // local path after resolving
+  const [inNetworkStatus, setInNetworkStatus] = useState<"idle"|"resolving"|"mounted"|"unmounted">("idle");
+  const [inMountHint,     setInMountHint]     = useState<string>("");
+  const [inOpenUrl,       setInOpenUrl]       = useState<string>("");
+
+  // ── Encryption state ───────────────────────────────────────────────────────
   const [existingIsEncrypted, setExistingIsEncrypted] = useState(false);
+  const [keychainMissing,     setKeychainMissing]     = useState(false);
   const [encryptZone,     setEncryptZone]     = useState(false);
   const [password,        setPassword]        = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -40,29 +54,72 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
 
   // Auto-update workspace path as name / source changes (only when in auto mode)
   useEffect(() => {
-    if (autoWorkspace && inPath && name) {
-      setOutPath(suggestWorkspace(inPath, name));
+    // Use resolved local path for workspace suggestion when available
+    const base = inPathResolved || inPath;
+    if (autoWorkspace && base && name) {
+      setOutPath(suggestWorkspace(base, name));
     }
-  }, [inPath, name, autoWorkspace]);
+  }, [inPath, inPathResolved, name, autoWorkspace]);
+
+  // Resolve network path when inPath changes to a URL
+  const resolveInPath = useCallback(async (raw: string) => {
+    if (!isNetworkPath(raw)) {
+      setInPathResolved("");
+      setInNetworkStatus("idle");
+      return;
+    }
+    setInNetworkStatus("resolving");
+    setInPathResolved("");
+    const res = await dms.resolveNetworkPath(raw);
+    if (!res.ok || !res.data) {
+      setInNetworkStatus("unmounted");
+      return;
+    }
+    if (res.data.mounted && res.data.resolved) {
+      setInPathResolved(res.data.resolved);
+      setInNetworkStatus("mounted");
+    } else {
+      setInNetworkStatus("unmounted");
+      setInMountHint(res.data.mount_hint ?? "");
+      setInOpenUrl(res.data.open_url ?? raw);
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => resolveInPath(inPath), 400);
+    return () => clearTimeout(t);
+  }, [inPath, resolveInPath]);
 
   const apply = async () => {
+    setError("");
+    setKeychainMissing(false);
     const trimName = name.trim();
-    const trimIn   = inPath.trim();
+    // Use the local resolved path when the user typed/pasted a network URL
+    const effectiveIn = (inPathResolved || inPath).trim();
     const trimOut  = outPath.trim();
 
-    if (!trimIn)   { setError("Source folder is required."); return; }
-    if (!trimOut)  { setError("Workspace path is required."); return; }
-    if (!trimName) { setError("Zone name is required."); return; }
+    if (!effectiveIn) { setError("Source folder is required."); return; }
+    if (!trimOut)     { setError("Workspace path is required."); return; }
+    if (!trimName)    { setError("Zone name is required."); return; }
+
+    if (isNetworkPath(inPath) && inNetworkStatus === "unmounted") {
+      setError(
+        `Network share is not mounted. ` +
+        (inMountHint ? `Expected at ${inMountHint}. ` : "") +
+        `Open Finder and connect to the server first.`
+      );
+      return;
+    }
 
     // Validate encryption fields when the user opted in.
     if (encryptZone && !existingIsEncrypted) {
-      if (!password)        { setError("Please enter a password for the encrypted zone."); return; }
+      if (!password)           { setError("Please enter a password for the encrypted zone."); return; }
       if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
       if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     }
 
     const zone = {
-      in_path:         trimIn,
+      in_path:         effectiveIn,
       out_path:        trimOut,
       name:            trimName,
       description:     description.trim(),
@@ -79,10 +136,10 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
       }
     }
 
-    // Determine the password to forward: only when creating a new
-    // encrypted zone (we don’t re-key existing zones via this panel).
     const zonePassword =
-      encryptZone && !existingIsEncrypted && password ? password : undefined;
+      (encryptZone && !existingIsEncrypted && password) || (keychainMissing && password)
+        ? password
+        : undefined;
 
     await dms.upsertZone(
       zone.name, zone.in_path, zone.out_path,
@@ -90,8 +147,16 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
       zonePassword,
     );
 
-    const openRes = await dms.openZoneDb(zone.name);
+    const openRes = await dms.openZoneDb(zone.name, zonePassword);
     if (!openRes.ok) {
+      if (openRes.error === "__keychain_missing__") {
+        setKeychainMissing(true);
+        setError(
+          "This zone\u2019s encryption key is not in your macOS Keychain. " +
+          "Enter the zone password to unlock it and restore the key."
+        );
+        return;
+      }
       setError(openRes.error ?? "Could not open zone database.");
       return;
     }
@@ -104,6 +169,8 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
     const res = await dms.selectDirectory();
     if (res.ok && res.data) {
       setInPath(res.data);
+      setInPathResolved("");
+      setInNetworkStatus("idle");
       if (autoWorkspace && name) setOutPath(suggestWorkspace(res.data, name));
     }
   };
@@ -143,7 +210,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
         </h2>
         <p className="text-[var(--theme-text-muted)] text-xs mb-5">
           A Zone is a project workspace. Choose a <strong>source folder</strong> to browse &amp;
-          index, and a <strong>workspace</strong> where Papiere stores its index and processed files.
+          index, and a <strong>workspace</strong> where Syngrafo stores its index and processed files.
         </p>
 
         {/* Recent zones */}
@@ -153,10 +220,10 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
               Recent zones
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {history.map((z, i) => (
-                <button
-                  key={i}
-                  onClick={() => loadHistoryZone(z)}
+              {history.map((z) => (
+                  <button
+                    key={z.name}
+                    onClick={() => loadHistoryZone(z)}
                   className="text-xs px-2 py-1 rounded-md bg-[var(--theme-bg)] hover:bg-[var(--theme-surface)] text-[var(--theme-text)] border border-[var(--theme-border)] transition-colors flex items-center gap-1"
                 >
                   {z.is_encrypted && (
@@ -224,7 +291,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
           <div className="flex gap-2 mt-1">
             <input
               className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
-              placeholder="/Users/you/Documents/Projects"
+              placeholder="/Users/you/Documents  or  smb://nas/share/folder"
               value={inPath}
               onChange={e => setInPath(e.target.value)}
             />
@@ -235,6 +302,37 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
               Browse
             </button>
           </div>
+          {/* Network-path status strip */}
+          {inNetworkStatus === "resolving" && (
+            <p className="mt-1 text-[10px] text-[var(--theme-text-muted)] flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-yellow-400/80 animate-pulse" />
+              Checking mount…
+            </p>
+          )}
+          {inNetworkStatus === "mounted" && (
+            <p className="mt-1 text-[10px] text-emerald-400 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
+              Mounted → <span className="font-mono truncate max-w-xs">{inPathResolved}</span>
+            </p>
+          )}
+          {inNetworkStatus === "unmounted" && (
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              <p className="text-[10px] text-amber-400 flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+                Share not mounted
+                {inMountHint && <span className="text-[var(--theme-text-muted)]"> — expected at <span className="font-mono">{inMountHint}</span></span>}
+              </p>
+              {inOpenUrl && (
+                <button
+                  type="button"
+                  onClick={() => window.open(inOpenUrl)}
+                  className="text-[10px] px-2 py-0.5 rounded bg-[var(--theme-border)] hover:bg-[var(--theme-surface)] text-[var(--theme-text)] transition-colors"
+                >
+                  Mount in Finder…
+                </button>
+              )}
+            </div>
+          )}
         </label>
 
         {/* Workspace */}
@@ -242,7 +340,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">
               Workspace
-              <span className="normal-case font-normal text-[var(--theme-text-muted)] ml-1">— Papiere index &amp; processed files</span>
+              <span className="normal-case font-normal text-[var(--theme-text-muted)] ml-1">— Syngrafo index &amp; processed files</span>
             </span>
             {autoWorkspace && (
               <span className="text-[9px] text-[var(--theme-primary)] font-bold uppercase tracking-wider">auto</span>
@@ -263,7 +361,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
             </button>
           </div>
           <p className="mt-1 text-[10px] text-[var(--theme-text-muted)]">
-            Papiere creates this folder if it doesn’t exist. Leave auto-generated or choose your own.
+            Syngrafo creates this folder if it doesn't exist. Leave auto-generated or choose your own.
           </p>
         </label>
 
@@ -281,7 +379,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
                 Zone is encrypted (AES-256)
               </p>
               <p className="text-[10px] text-[var(--theme-text-muted)] ml-auto">
-                Auto-unlocked from stored key
+                Key in macOS Keychain
               </p>
             </div>
           ) : (
@@ -316,19 +414,33 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
                 )}
               </label>
 
-              {encryptZone && (
+              {(encryptZone || keychainMissing) && (
                 <div className="mt-3 space-y-3 pl-12">
+                  {keychainMissing && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                      <svg className="w-3 h-3 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                      <p className="text-[10px] text-amber-400">
+                        Key not found in Keychain — enter password to restore access.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Password */}
                   <label className="block">
                     <span className="text-[10px] font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">
-                      Password
+                      {keychainMissing ? "Zone password" : "Password"}
                     </span>
                     <div className="flex gap-1.5 mt-1">
                       <input
                         type={showPassword ? "text" : "password"}
                         autoComplete="new-password"
                         className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        placeholder="Min. 8 characters"
+                        placeholder={keychainMissing ? "Enter zone password" : "Min. 8 characters"}
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                       />
@@ -343,34 +455,36 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
                     </div>
                   </label>
 
-                  {/* Confirm password */}
-                  <label className="block">
-                    <span className="text-[10px] font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">
-                      Confirm password
-                    </span>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      className={`mt-1 w-full bg-[var(--theme-bg)] border rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 ${
-                        confirmPassword && confirmPassword !== password
-                          ? "border-red-500/60 focus:ring-red-500"
-                          : confirmPassword && confirmPassword === password
-                          ? "border-emerald-500/60 focus:ring-emerald-500"
-                          : "border-[var(--theme-border)] focus:ring-emerald-500"
-                      }`}
-                      placeholder="Re-enter password"
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                    />
-                    {confirmPassword && confirmPassword !== password && (
-                      <p className="mt-1 text-[10px] text-red-400">Passwords do not match.</p>
-                    )}
-                  </label>
+                  {!keychainMissing && (
+                    /* Confirm password — only for new zone creation */
+                    <label className="block">
+                      <span className="text-[10px] font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">
+                        Confirm password
+                      </span>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        className={`mt-1 w-full bg-[var(--theme-bg)] border rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 ${
+                          confirmPassword && confirmPassword !== password
+                            ? "border-red-500/60 focus:ring-red-500"
+                            : confirmPassword && confirmPassword === password
+                            ? "border-emerald-500/60 focus:ring-emerald-500"
+                            : "border-[var(--theme-border)] focus:ring-emerald-500"
+                        }`}
+                        placeholder="Re-enter password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                      />
+                      {confirmPassword && confirmPassword !== password && (
+                        <p className="mt-1 text-[10px] text-red-400">Passwords do not match.</p>
+                      )}
+                    </label>
+                  )}
 
                   <p className="text-[10px] text-[var(--theme-text-muted)] leading-relaxed">
-                    The zone’s SQLite database will be encrypted with AES-256 via SQLCipher.
-                    A PBKDF2-derived key is stored in the global keystore so the zone
-                    auto-unlocks on re-open. Requires the app to be linked against SQLCipher.
+                    {keychainMissing
+                      ? "The key will be re-derived and stored back in your macOS Keychain."
+                      : "AES-256 via SQLCipher. The derived key is stored in your macOS Keychain, not in the database."}
                   </p>
                 </div>
               )}

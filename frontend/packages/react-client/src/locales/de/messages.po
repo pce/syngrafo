@@ -1,0 +1,100 @@
+# Papiere — German message catalog
+# Language: de
+# Edit with POEdit — https://poedit.net
+msgid ""
+msgstr ""
+"Project-Id-Version: papiere\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: de\n"
+"Language-Team: Deutsch\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# ── Navigation ────────────────────────────────────────────────────────────────
+msgid "Explorer"
+msgstr "Explorer"
+
+msgid "Analysis"
+msgstr "Analyse"
+
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgid "About"
+msgstr "Über"
+
+# ── FileBrowser ───────────────────────────────────────────────────────────────
+msgid "Name"
+msgstr "Name"
+
+msgid "Type"
+msgstr "Typ"
+
+msgid "Size"
+msgstr "Größe"
+
+msgid "Modified"
+msgstr "Geändert"
+
+msgid "Sort ascending"
+msgstr "Aufsteigend sortieren"
+
+msgid "Sort descending"
+msgstr "Absteigend sortieren"
+
+msgid "List view"
+msgstr "Listenansicht"
+
+msgid "Details view"
+msgstr "Detailansicht"
+
+msgid "Grid view"
+msgstr "Rasteransicht"
+
+msgid "Loading…"
+msgstr "Laden…"
+
+msgid "Empty folder"
+msgstr "Leerer Ordner"
+
+# ── DocumentViewer ────────────────────────────────────────────────────────────
+msgid "Run OCR"
+msgstr "Texterkennung starten"
+
+msgid "Running OCR…"
+msgstr "Texterkennung läuft…"
+
+msgid "No document selected"
+msgstr "Kein Dokument ausgewählt"
+
+# ── AnalysisPanel ─────────────────────────────────────────────────────────────
+msgid "Keywords"
+msgstr "Schlagwörter"
+
+msgid "Sentiment"
+msgstr "Stimmung"
+
+msgid "Entities"
+msgstr "Entitäten"
+
+msgid "Extracted Text"
+msgstr "Erkannter Text"
+
+msgid "Image Info"
+msgstr "Bildinfos"
+
+msgid "Positive"
+msgstr "Positiv"
+
+msgid "Negative"
+msgstr "Negativ"
+
+# ── OCR / processing ──────────────────────────────────────────────────────────
+msgid "Indexing…"
+msgstr "Wird indiziert…"
+
+msgid "No results"
+msgstr "Keine Ergebnisse"
+

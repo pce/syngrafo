@@ -1,13 +1,11 @@
 // app/main.cc ─────────────────────────────────────────────────────────────────
-// Papierkram desktop app — saucer::smartview bindings wired directly to
+// Syngrafo desktop app over saucer::smartview bindings wired directly to
 // NLPEngine and ONNXAddon.  No bridge class or wrapper header.
 //
 // JSON envelope (every exposed function returns Promise<string>):
 //   ok  path  → { "ok": true,  "data": <payload> }
 //   err path  → { "ok": false, "error": "<message>" }
 //
-// Build (standalone from webviewapp/):
-//   cmake -S . -B build && cmake --build build --target papiere -j
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <coco/stray/stray.hpp>
@@ -19,10 +17,7 @@
 #include "nlp/addons/onnx_addon.hh"
 #endif
 
-// Use "nlp/..." (resolves via -I external/) rather than "nlp_engine.hh"
-// (which would resolve via nlp_engine's internal include path -I
-// tools/nlp_engine/nlp/). This ensures we always use the physical copy in
-// external/ which we have guarded.
+
 #include "nlp/addons/ocr_addon.hh"
 #include "nlp/nlp_engine.hh"
 
@@ -686,10 +681,17 @@ if (typeof window.__dms_progress === 'undefined')
       }
 
       // Detect MIME
-      std::string ext = p.extension().string();
+      std::string ext  = p.extension().string();
       std::string mime = pce::dms::mime_for_extension(ext);
 
-      // Read and serve binary
+      // File size — used for Content-Length and Range calculations.
+      std::error_code sz_ec;
+      const auto file_size = static_cast<std::size_t>(fs::file_size(p, sz_ec));
+      if (sz_ec) {
+        std::print(stderr, "[local-scheme] stat failed: {}\n", p.string());
+        return exec.reject(saucer::scheme::error::failed);
+      }
+
       std::ifstream file(p, std::ios::binary);
       if (!file) {
         std::print(stderr, "[local-scheme] failed to open file: {}\n",
@@ -697,24 +699,81 @@ if (typeof window.__dms_progress === 'undefined')
         return exec.reject(saucer::scheme::error::denied);
       }
 
-      std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(file)),
-                                     std::istreambuf_iterator<char>());
+      // CORS + range-acceptance headers added to every response.
+      std::map<std::string, std::string> common_headers = {
+          {"Accept-Ranges",                "bytes"},
+          {"Access-Control-Allow-Origin",  "*"},
+          {"Access-Control-Allow-Methods", "GET, HEAD, OPTIONS"},
+          {"Access-Control-Allow-Headers", "*"},
+          {"Cross-Origin-Resource-Policy", "cross-origin"},
+      };
 
-      std::print("[local-scheme] serving {} ({} bytes) as {}\n",
-                 p.filename().string(), data.size(), mime);
+      // ── Range request (HTTP 206 Partial Content) ──────────────────────────
+      // Required for <video>/<audio> seeking and for streaming large files
+      // without buffering the entire content upfront.
+      const auto req_headers = request.headers();
+      auto range_it = req_headers.find("Range");
+      if (range_it != req_headers.end()) {
+        const std::string& rv = range_it->second;
+        if (rv.starts_with("bytes=")) {
+          const std::string spec  = rv.substr(6);
+          const auto        dash  = spec.find('-');
+
+          std::size_t rng_start = 0;
+          std::size_t rng_end   = file_size > 0 ? file_size - 1 : 0;
+
+          if (dash != std::string::npos) {
+            const std::string s0 = spec.substr(0, dash);
+            const std::string s1 = spec.substr(dash + 1);
+            if (!s0.empty()) rng_start = std::stoull(s0);
+            if (!s1.empty()) rng_end   = std::min(std::stoull(s1), file_size > 0 ? file_size - 1 : 0ULL);
+          }
+
+          if (rng_start >= file_size) {
+            // Unsatisfiable range
+            common_headers["Content-Range"] = "bytes */" + std::to_string(file_size);
+            exec.resolve({ .data = saucer::stash::from(std::vector<std::uint8_t>{}),
+                           .mime = mime, .headers = common_headers, .status = 416 });
+            return;
+          }
+          rng_end = std::min(rng_end, file_size - 1);
+          const std::size_t rng_len = rng_end - rng_start + 1;
+
+          std::vector<std::uint8_t> chunk(rng_len);
+          file.seekg(static_cast<std::streamoff>(rng_start));
+          file.read(reinterpret_cast<char*>(chunk.data()),
+                    static_cast<std::streamsize>(rng_len));
+
+          common_headers["Content-Range"]  = "bytes " + std::to_string(rng_start)
+                                             + "-" + std::to_string(rng_end)
+                                             + "/" + std::to_string(file_size);
+          common_headers["Content-Length"] = std::to_string(rng_len);
+
+          std::print("[local-scheme] 206 {} bytes={}-{}/{}\n",
+                     p.filename().string(), rng_start, rng_end, file_size);
+
+          exec.resolve({ .data    = saucer::stash::from(std::move(chunk)),
+                         .mime    = mime,
+                         .headers = common_headers,
+                         .status  = 206 });
+          return;
+        }
+      }
+
+      // ── Full response ─────────────────────────────────────────────────────
+      std::vector<std::uint8_t> data(file_size);
+      file.read(reinterpret_cast<char*>(data.data()),
+                static_cast<std::streamsize>(file_size));
+
+      common_headers["Content-Length"] = std::to_string(file_size);
+
+      std::print("[local-scheme] 200 {} ({} bytes) as {}\n",
+                 p.filename().string(), file_size, mime);
 
       exec.resolve({
           .data    = saucer::stash::from(std::move(data)),
           .mime    = mime,
-          // Allow saucer://embedded to fetch any local file via the Web APIs
-          // (Web Audio, SVG inline fetch, etc.). This is intentional for a
-          // native desktop app — no untrusted origin can reach this handler.
-          .headers = {
-              {"Access-Control-Allow-Origin",  "*"},
-              {"Access-Control-Allow-Methods", "GET, HEAD, OPTIONS"},
-              {"Access-Control-Allow-Headers", "*"},
-              {"Cross-Origin-Resource-Policy", "cross-origin"},
-          },
+          .headers = common_headers,
       });
     });
 

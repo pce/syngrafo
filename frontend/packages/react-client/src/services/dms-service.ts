@@ -474,9 +474,12 @@ export const dms = {
     return call<OcrResult>(binding("dms_ocr_document"), path, zoneName);
   },
 
-  /** Open a native directory picker. */
+  /** Open a native directory picker. Returns the chosen absolute path, or "" if cancelled. */
   selectDirectory: async (): Promise<NlpEnvelope<string>> => {
-    return call<string>(binding("dms_select_directory"));
+    // The C++ binding returns { path: string } inside the envelope data.
+    const res = await call<{ path: string }>(binding("dms_select_directory"));
+    if (!res.ok) return { ok: false, error: res.error };
+    return { ok: true, data: res.data?.path ?? "" };
   },
 
   /** Open a native multi-file picker. Returns absolute paths of selected files.
@@ -544,14 +547,14 @@ export const dms = {
 
   /** Always-available file stats — DB-first, FS fallback. Never requires indexing. */
   fileStats: (path: string) =>
-    call<FileStats>("dms_file_stats", [path]),
+    call<FileStats>(binding("dms_file_stats"), path),
 
   /** Lightweight DB registration (no NLP). Idempotent INSERT OR IGNORE.
    *  Call fire-and-forget whenever any file is selected so that every viewed
    *  file becomes queryable by kind/size/ext even before explicit indexing. */
   registerFile: (path: string) =>
     call<{ registered: boolean; kind: string; size?: number; mtime?: number }>(
-      "dms_register_file", [path]
+      binding("dms_register_file"), path
     ),
 
   /**
@@ -570,6 +573,24 @@ export const dms = {
     const res = await call<{ exists: boolean; is_dir: boolean }>(binding("dms_path_exists"), path);
     if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
     return { ok: true, data: { exists: res.data.exists, isDir: res.data.is_dir } };
+  },
+
+  /**
+   * Resolve a network/virtual URL (smb://, afp://, nfs://, ftp://, cifs://) to
+   * a local filesystem path.  Returns `mounted: true` + `resolved` when the
+   * share is already mounted.  Returns `mounted: false` + `open_url` when it
+   * isn't — the UI can use this to prompt the user to mount the share.
+   */
+  resolveNetworkPath: async (path: string): Promise<NlpEnvelope<{
+    resolved:   string;
+    mounted:    boolean;
+    scheme:     string;
+    host?:      string;
+    share?:     string;
+    mount_hint?: string;
+    open_url?:  string;
+  }>> => {
+    return call(binding("dms_resolve_network_path"), path);
   },
 
   /** Create a directory (and all parents) if it does not already exist. */

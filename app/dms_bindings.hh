@@ -62,6 +62,7 @@
 
 #ifdef __APPLE__
 #  include <CommonCrypto/CommonKeyDerivation.h>
+#  include "keychain_mac.hh"
 #endif
 
 namespace fs = std::filesystem;
@@ -130,6 +131,14 @@ inline void bootstrap_zone_schema(pce::db::Database &db) {
   try {
     db.exec("ALTER TABLE dms_zones ADD COLUMN taxonomy_domain TEXT NOT NULL "
             "DEFAULT 'General';");
+  } catch (...) {
+  }
+  // salt_hex: cryptographically random 32-byte salt stored as 64-char hex.
+  // Introduced to replace the deterministic zone-name salt used in v0.1.
+  // Empty string means the zone was created before this column existed
+  // and the old zone-name-as-salt derivation is used as a fallback.
+  try {
+    db.exec("ALTER TABLE dms_zones ADD COLUMN salt_hex TEXT NOT NULL DEFAULT '';");
   } catch (...) {
   }
 
@@ -416,42 +425,77 @@ inline std::string extract_svg_text(const std::string& svg) {
   return std::format("{:016x}", fnv1a_64(s));
 }
 
-/// Derive a 32-byte AES key from a user password using PBKDF2-HMAC-SHA256.
-/// The zone name is used as a deterministic 16-byte salt.
-/// Returns a 64-character lowercase hex string suitable for use as a
-/// SQLCipher hex passphrase ("x'<64-hex-chars>'").
-///
-/// @param password   User-supplied password (UTF-8).
-/// @param zone_name  Zone name — used as the PBKDF2 salt.
-/// @returns 64-char hex key string.
-inline std::string derive_zone_key(std::string_view password,
-                                   std::string_view zone_name) {
+/// Generate a cryptographically random 32-byte salt, returned as a 64-char
+/// lowercase hex string.  Used once at zone creation; stored in `salt_hex`.
+/// Apple: arc4random_buf (Secure Enclave CSPRNG).
+/// Other: /dev/urandom with an LCG fallback (not for production — see TODO).
+[[nodiscard]] inline std::string generate_zone_salt() {
+  uint8_t buf[32] = {};
 #ifdef __APPLE__
-  uint8_t salt[16] = {};
-  const size_t salt_copy = std::min(zone_name.size(), sizeof(salt));
-  std::memcpy(salt, zone_name.data(), salt_copy);
+  arc4random_buf(buf, sizeof(buf));
+#else
+  // TODO: replace with getrandom()/CryptGenRandom on Linux/Windows.
+  {
+    std::ifstream f("/dev/urandom", std::ios::binary);
+    if (f) {
+      f.read(reinterpret_cast<char *>(buf), sizeof(buf));
+    } else {
+      // Emergency fallback (low entropy) — do NOT use in production.
+      auto tp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+      uint64_t s = static_cast<uint64_t>(tp);
+      for (int i = 0; i < 4; ++i) {
+        s = s * 6364136223846793005ULL + 1442695040888963407ULL;
+        std::memcpy(buf + i * 8, &s, 8);
+      }
+    }
+  }
+#endif
+  char hex[65] = {};
+  for (int i = 0; i < 32; ++i)
+    std::snprintf(hex + i * 2, 3, "%02x", buf[i]);
+  return std::string{hex, 64};
+}
+
+/// Derive a 32-byte AES key from a user password using PBKDF2-HMAC-SHA256.
+///
+/// @param password  User-supplied password (UTF-8).
+/// @param salt_hex  64-char hex salt produced by generate_zone_salt().
+///                  If shorter than 64 chars (e.g. legacy zone-name salt),
+///                  the available bytes are used and the rest zeroed.
+/// @returns 64-char lowercase hex key suitable for SQLCipher (x'…' form).
+[[nodiscard]] inline std::string derive_zone_key(std::string_view password,
+                                                  std::string_view salt_hex) {
+#ifdef __APPLE__
+  // Decode salt_hex → raw bytes (up to 32 bytes).
+  uint8_t salt[32] = {};
+  const size_t salt_len = std::min(salt_hex.size() / 2, sizeof(salt));
+  for (size_t i = 0; i < salt_len; ++i) {
+    unsigned byte_val = 0;
+    std::sscanf(salt_hex.data() + i * 2, "%02x", &byte_val);
+    salt[i] = static_cast<uint8_t>(byte_val);
+  }
 
   uint8_t key[32] = {};
   CCKeyDerivationPBKDF(kCCPBKDF2,
                        password.data(),
                        static_cast<size_t>(password.size()),
                        salt,
-                       sizeof(salt),
+                       std::max(salt_len, size_t{1}), // PBKDF2 requires salt_len >= 1
                        kCCPRFHmacAlgSHA256,
-                       100'000,
+                       200'000,
                        key,
                        sizeof(key));
 
   char hex[65] = {};
   for (int i = 0; i < 32; ++i)
     std::snprintf(hex + i * 2, 3, "%02x", key[i]);
-  return std::string(hex, 64);
+  return std::string{hex, 64};
 #else
-  // Non-Apple fallback: iterated FNV-1a expansion.
+  // Non-Apple fallback: iterated FNV-1a.
   // TODO: replace with OpenSSL PKCS5_PBKDF2_HMAC when available.
-  (void)zone_name;
+  (void)salt_hex;
   uint64_t h = fnv1a_64(password);
-  for (int i = 0; i < 100'000; ++i)
+  for (int i = 0; i < 200'000; ++i)
     h = h * 6364136223846793005ULL + 1442695040888963407ULL;
   const uint64_t b = h ^ 0xdeadbeefcafebabeULL;
   char hex[65] = {};
@@ -459,7 +503,7 @@ inline std::string derive_zone_key(std::string_view password,
   std::snprintf(hex + 16, 17, "%016llx", (unsigned long long)b);
   std::snprintf(hex + 32, 17, "%016llx", (unsigned long long)(h ^ b));
   std::snprintf(hex + 48, 17, "%016llx", (unsigned long long)(h + b));
-  return std::string(hex, 64);
+  return std::string{hex, 64};
 #endif
 }
 
@@ -1548,12 +1592,29 @@ struct DMSHandle {
                        .value("taxonomy_domain", std::string{taxonomy_domain});
 
       if (password && !password->empty()) {
-        // Derive a 256-bit key using PBKDF2-HMAC-SHA256 (zone name = salt).
-        // The derived hex key is stored as the SQLCipher passphrase so the
-        // raw user password never persists on disk.
-        const std::string derived = derive_zone_key(*password, name);
-        query.value("password_hashed", derived);
+        // Generate a fresh random salt (stored in DB) and derive the key.
+        const std::string salt = generate_zone_salt();
+        const std::string key  = derive_zone_key(*password, salt);
+        query.value("salt_hex", salt);
         query.value("is_encrypted", 1);
+
+#ifdef __APPLE__
+        // Store key in macOS Keychain — NOT in the DB.
+        // If Keychain write fails, fall back to DB storage so the zone is
+        // still usable (with a security warning).
+        const std::string account = pce::keychain::zone_account(name);
+        if (pce::keychain::store(account, key)) {
+          query.value("password_hashed", ""); // key lives in Keychain only
+        } else {
+          std::print(stderr,
+              "[dms] WARNING: Keychain store failed for zone '{}'. "
+              "Falling back to DB key storage (less secure).\n", name);
+          query.value("password_hashed", key);
+        }
+#else
+        // Non-Apple: store derived key in DB (no OS secret store available).
+        query.value("password_hashed", key);
+#endif
       }
 
       (void)query.on_conflict_replace().execute();
@@ -1561,19 +1622,23 @@ struct DMSHandle {
     });
   }
 
-  /** Open a zone-specific database. If the zone is encrypted, uses the provided
-   * password. */
+  /** Open a zone-specific database.
+   *
+   * Key-resolution order for encrypted zones:
+   *  1. If a password is provided: re-derive the key from (password + salt_hex).
+   *     Store the result in the Keychain (on Apple) for future auto-unlock.
+   *  2. Otherwise (auto-unlock):
+   *     a. macOS: look up the key in the Keychain via zone_account(name).
+   *     b. If not in Keychain but password_hashed is non-empty (old-style or
+   *        Keychain-store-failed fallback): use that key and migrate it to
+   *        the Keychain.
+   *     c. If neither: return an error with tag "__keychain_missing__" so the
+   *        frontend can surface a password prompt.
+   */
   [[nodiscard]] Expected<pce::db::Database>
   open_zone_db(std::string_view zone_name,
                std::optional<std::string> password = std::nullopt) {
     if (zone_name == "global" || zone_name == "") {
-      // pce::db::Database is move-only. Since this method returns by value,
-      // and 'db' is a member that we want to keep, we can't return 'db'
-      // directly. However, returning a reference in an Expected is also not
-      // ideal. Based on the error, we need to return a Database object. Since
-      // Database is move-only and doesn't seem to have a 'clone' or 'copy'
-      // functionality (sqlite3* is managed by rule-of-5), we should probably
-      // just reopen it using open_db_().
       return open_db_();
     }
     std::optional<pce::db::Row> zone_row;
@@ -1587,48 +1652,86 @@ struct DMSHandle {
     if (!zone_row)
       return std::unexpected(std::format("Zone '{}' not found", zone_name));
 
-    // Zone DB lives in the workspace (out_path), not the source folder (in_path).
+    // Zone DB lives in the workspace (out_path), not the source folder.
     fs::path db_path =
         fs::path{zone_row->get<std::string>("out_path")} / ".papiere.db";
-
-    // Ensure the workspace directory exists before opening.
     {
       std::error_code ec;
       fs::create_directories(db_path.parent_path(), ec);
     }
 
-    bool is_encrypted = zone_row->get<int64_t>("is_encrypted") != 0;
+    const bool is_encrypted = zone_row->get<int64_t>("is_encrypted") != 0;
 
     try {
-      if (is_encrypted) {
-        std::string key;
-        if (password && !password->empty()) {
-          // Caller supplied a raw password — re-derive the key so it matches
-          // what was stored at creation time.
-          key = derive_zone_key(*password,
-                                zone_row->get<std::string>("name"));
-        } else {
-          // Auto-unlock: use the derived key that was stored during creation.
-          auto stored =
-              zone_row->try_get<std::string>("password_hashed");
-          if (!stored || stored->empty()) {
-            return std::unexpected(
-                std::string{"Encrypted zone has no stored key — "
-                            "please provide the password."});
-          }
-          key = *stored;
-        }
-        auto zone_db =
-            pce::db::Database::open_encrypted(db_path.string(), key);
-        bootstrap_dms_schema(zone_db);
-        bootstrap_nlp_schema(zone_db);
-        return std::move(zone_db);
-      } else {
+      if (!is_encrypted) {
         auto zone_db = pce::db::Database::open(db_path.string());
         bootstrap_dms_schema(zone_db);
         bootstrap_nlp_schema(zone_db);
         return std::move(zone_db);
       }
+
+      // ── Resolve the encryption key ─────────────────────────────────────────
+      const std::string zone_name_str = zone_row->get<std::string>("name");
+      const std::string salt_hex      = zone_row->try_get<std::string>("salt_hex")
+                                            .value_or("");
+      const std::string stored_key    = zone_row->try_get<std::string>("password_hashed")
+                                            .value_or("");
+      std::string key;
+
+      if (password && !password->empty()) {
+        // ── Explicit password supplied ───────────────────────────────────────
+        // Derive using the stored salt, or (legacy) zone-name as salt.
+        const std::string eff_salt = salt_hex.empty()
+            ? std::string{zone_name_str}   // backward compat: old zone
+            : salt_hex;
+        key = derive_zone_key(*password, eff_salt);
+
+#ifdef __APPLE__
+        // Persist the key in the Keychain so next open auto-unlocks.
+        (void)pce::keychain::store(pce::keychain::zone_account(zone_name_str), key);
+#endif
+
+      } else {
+        // ── Auto-unlock ──────────────────────────────────────────────────────
+#ifdef __APPLE__
+        const std::string account = pce::keychain::zone_account(zone_name_str);
+        auto kc_key = pce::keychain::load(account);
+        if (kc_key) {
+          // Happy path: key is in the Keychain.
+          key = std::move(*kc_key);
+        } else if (!stored_key.empty()) {
+          // Migration path: key was stored in DB (pre-Keychain or fallback).
+          // Use it once, then move it to the Keychain.
+          key = stored_key;
+          if (pce::keychain::store(account, key)) {
+            // Optionally clear the DB copy once migrated.
+            // (We leave it for now so a downgrade to an older build still works.)
+            std::print(stderr,
+                "[dms] Migrated zone '{}' key from DB to Keychain.\n",
+                zone_name_str);
+          }
+        } else {
+          // Key not in Keychain and not in DB — ask the user for their password.
+          // The sentinel "__keychain_missing__" is checked by the frontend to
+          // surface a password-prompt UI without showing a generic error.
+          return std::unexpected(std::string{"__keychain_missing__"});
+        }
+#else
+        // Non-Apple: key lives in the DB.
+        if (stored_key.empty()) {
+          return std::unexpected(
+              std::string{"Encrypted zone has no stored key — "
+                          "please provide the password."});
+        }
+        key = stored_key;
+#endif
+      }
+
+      auto zone_db = pce::db::Database::open_encrypted(db_path.string(), key);
+      bootstrap_dms_schema(zone_db);
+      bootstrap_nlp_schema(zone_db);
+      return std::move(zone_db);
+
     } catch (const std::exception &e) {
       return std::unexpected(
           std::format("Failed to open zone DB: {}", e.what()));
@@ -3320,26 +3423,81 @@ inline void register_dms_bindings(saucer::smartview &wv, DMSHandle &dms,
               return DMSHandle::ok_str(*r);
             });
 
+  // ── picker path normalisation ─────────────────────────────────────────────
+  // Saucer (via GTK portal on Linux, NSOpenPanel on macOS, IFileDialog on
+  // Windows) may return either a plain filesystem path or a file:// URI.
+  //
+  //  macOS / Linux  file:///Users/pce/Downloads/  → /Users/pce/Downloads
+  //  Windows        file:///C:/Users/pce/Down%20loads/ → C:\Users\pce\Down loads
+  //  All platforms  already-plain paths              → unchanged
+  //
+  // Steps: strip scheme → percent-decode → fix Windows drive letter → trim
+  // trailing separators.
+  auto normalise_picker_path = [](const std::string& raw) -> std::string {
+    std::string p = raw;
+
+    // 1. Strip file:// scheme variants
+    if      (p.starts_with("file:///"))            p = p.substr(7);  // → /...  or  /C:/...
+    else if (p.starts_with("file://localhost/"))    p = p.substr(16); // → /...
+    else if (p.starts_with("file://"))              p = p.substr(7);  // unusual but safe
+
+    // 2. Percent-decode (handles spaces and non-ASCII in paths)
+    std::string dec;
+    dec.reserve(p.size());
+    for (size_t i = 0; i < p.size(); ++i) {
+      if (p[i] == '%' && i + 2 < p.size()) {
+        auto hx = [](unsigned char c) -> int {
+          if (c >= '0' && c <= '9') return c - '0';
+          if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+          if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+          return -1;
+        };
+        int h = hx(p[i + 1]), l = hx(p[i + 2]);
+        if (h >= 0 && l >= 0) { dec += static_cast<char>(h * 16 + l); i += 2; continue; }
+      }
+      dec += p[i];
+    }
+
+    // 3. Windows drive-letter fix: /C:/Users/… → C:/Users/…
+    //    A file:///C:/… URL strips to /C:/… — the leading '/' is spurious.
+#if defined(_WIN32) || defined(_WIN64)
+    if (dec.size() >= 3 && dec[0] == '/' &&
+        std::isalpha(static_cast<unsigned char>(dec[1])) && dec[2] == ':') {
+      dec = dec.substr(1);
+    }
+    // Normalise path separators to backslash on Windows
+    std::replace(dec.begin(), dec.end(), '/', '\\');
+    // Trim trailing backslash (but keep "C:\")
+    while (dec.size() > 3 && dec.back() == '\\') dec.pop_back();
+#else
+    // 4. Trim trailing slash on Unix (but keep root "/")
+    while (dec.size() > 1 && dec.back() == '/') dec.pop_back();
+#endif
+
+    return dec;
+  };
+
   // ── dms_select_directory ─────────────────────────────────────────────────
-  // Uses saucer::modules::desktop — works on macOS, Windows, Linux.
-  wv.expose("dms_select_directory", [&desk]() -> string {
+  // Opens a native folder picker. Returns the chosen absolute filesystem path,
+  // or "" if the user cancelled.  Cross-platform: macOS / Linux / Windows.
+  wv.expose("dms_select_directory", [&desk, &normalise_picker_path]() -> string {
     namespace picker = saucer::modules::picker;
     auto res = desk.pick<picker::type::folder>();
     if (!res.has_value())
       return DMSHandle::ok_str(json({{"path", ""}}));
-    return DMSHandle::ok_str(json({{"path", res->string()}}));
+    return DMSHandle::ok_str(json({{"path", normalise_picker_path(res->string())}}));
   });
 
   // ── dms_select_files ─────────────────────────────────────────────────────
-  // Opens a multi-file native picker. Returns JSON { paths: string[] }.
-  // Empty array = user cancelled. Each path is an absolute filesystem path.
-  wv.expose("dms_select_files", [&desk]() -> string {
+  // Opens a native multi-file picker. Returns JSON { paths: string[] }.
+  // Empty array = user cancelled.  Cross-platform: macOS / Linux / Windows.
+  wv.expose("dms_select_files", [&desk, &normalise_picker_path]() -> string {
     namespace picker = saucer::modules::picker;
     auto res = desk.pick<picker::type::files>();
     json paths = json::array();
     if (res.has_value()) {
-      for (const auto &p : *res)
-        paths.push_back(p.string());
+      for (const auto& p : *res)
+        paths.push_back(normalise_picker_path(p.string()));
     }
     return DMSHandle::ok_str(json({{"paths", paths}}));
   });
@@ -3352,6 +3510,108 @@ inline void register_dms_bindings(saucer::smartview &wv, DMSHandle &dms,
     const bool exists = fs::exists(fs::path{path}, ec);
     const bool is_dir = exists && fs::is_directory(fs::path{path}, ec);
     return DMSHandle::ok_str(json{{"exists", exists}, {"is_dir", is_dir}});
+  });
+
+  // ── dms_resolve_network_path ─────────────────────────────────────────────
+  // Resolve a network/virtual URL (smb://, afp://, ftp://, nfs://) to a
+  // local filesystem path.
+  //
+  // On macOS, SMB/AFP mounts appear in /Volumes/<share-name>.
+  // Strategy:
+  //   1. If the input starts with a recognised scheme, parse it.
+  //   2. Try /Volumes/<share>[/remaining-path].
+  //   3. If found, return { resolved: "<local-path>", mounted: true }.
+  //   4. If not found, return { resolved: "", mounted: false, scheme: "smb",
+  //      host: "...", share: "...", mount_hint: "/Volumes/<share>" }.
+  //      The frontend can then prompt the user to mount the share.
+  //   5. Plain paths (no scheme) are echoed back unchanged.
+  //
+  // Returns DMSHandle::err_str only on malformed input.
+  wv.expose("dms_resolve_network_path", [](string raw) -> string {
+    namespace fs = std::filesystem;
+    // Strip surrounding whitespace
+    auto trim = [](const std::string& s) -> std::string {
+      size_t b = s.find_first_not_of(" \t\r\n");
+      if (b == std::string::npos) return "";
+      size_t e = s.find_last_not_of(" \t\r\n");
+      return s.substr(b, e - b + 1);
+    };
+    const std::string path = trim(raw);
+
+    // Recognised virtual-filesystem schemes
+    static const std::array<std::string, 5> SCHEMES = {
+      "smb://", "afp://", "cifs://", "nfs://", "ftp://"
+    };
+
+    std::string scheme, rest;
+    for (const auto& sc : SCHEMES) {
+      if (path.size() > sc.size() &&
+          path.substr(0, sc.size()) == sc) {
+        scheme = sc.substr(0, sc.size() - 3); // e.g. "smb"
+        rest   = path.substr(sc.size());      // "host/share/remaining"
+        break;
+      }
+    }
+
+    if (scheme.empty()) {
+      // Plain path — just normalise and return as-is.
+      return DMSHandle::ok_str(json{
+        {"resolved", path}, {"mounted", true}, {"scheme", ""}
+      });
+    }
+
+    // Parse host / share / remaining sub-path
+    const size_t slash1 = rest.find('/');
+    const std::string host  = (slash1 == std::string::npos) ? rest : rest.substr(0, slash1);
+    const std::string after = (slash1 == std::string::npos) ? "" : rest.substr(slash1 + 1);
+    const size_t slash2     = after.find('/');
+    const std::string share   = (slash2 == std::string::npos) ? after : after.substr(0, slash2);
+    const std::string subpath = (slash2 == std::string::npos) ? "" : after.substr(slash2 + 1);
+
+    if (share.empty()) {
+      return DMSHandle::err_str("Malformed network URL — cannot determine share name: " + path);
+    }
+
+    const std::string mount_hint = "/Volumes/" + share;
+
+    // Check common mount points.
+    // macOS mounts SMB/AFP at /Volumes/<share-name>.
+    // Some NAS devices use the host label as the mount prefix.
+    std::vector<std::string> candidates;
+    candidates.push_back(subpath.empty() ? mount_hint : mount_hint + "/" + subpath);
+    // Some mounts use "<host>-<share>" or "<host> <share>" naming
+    candidates.push_back("/Volumes/" + host + "-" + share + (subpath.empty() ? "" : "/" + subpath));
+    // Linux: /run/user/<uid>/gvfs/smb-share:server=<host>,share=<share>
+    if (const char* uid_env = std::getenv("UID")) {
+      candidates.push_back("/run/user/" + std::string(uid_env) +
+                           "/gvfs/smb-share:server=" + host + ",share=" + share +
+                           (subpath.empty() ? "" : "/" + subpath));
+    }
+
+    std::error_code ec;
+    for (const auto& c : candidates) {
+      if (fs::exists(fs::path{c}, ec)) {
+        return DMSHandle::ok_str(json{
+          {"resolved",   c},
+          {"mounted",    true},
+          {"scheme",     scheme},
+          {"host",       host},
+          {"share",      share},
+          {"mount_hint", mount_hint}
+        });
+      }
+    }
+
+    // Not mounted yet
+    return DMSHandle::ok_str(json{
+      {"resolved",   ""},
+      {"mounted",    false},
+      {"scheme",     scheme},
+      {"host",       host},
+      {"share",      share},
+      {"mount_hint", mount_hint},
+      {"open_url",   path}  // pass back to frontend for Finder/xdg-open
+    });
   });
 
   // ── dms_create_dir ────────────────────────────────────────────────────────

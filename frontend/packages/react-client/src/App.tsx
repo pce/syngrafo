@@ -1,7 +1,10 @@
 import React from "react";
+import { I18nProvider } from "@lingui/react";
 import { DmsProvider } from "./store/dms-store";
 import { ThemeProvider } from "./store/theme-store";
 import { SettingsProvider } from "./store/settings-store";
+import { LocaleProvider, useLocale } from "./store/locale-store";
+import { i18n } from "./i18n";
 import Dashboard from "./components/Dashboard";
 import "./index.css";
 
@@ -17,7 +20,7 @@ class ErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
   override componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("[Papierkram] render error:", error, info);
+    console.error("[Syngrafo] render error:", error, info);
   }
   override render() {
     if (this.state.hasError) {
@@ -42,9 +45,12 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-export function App() {
+/** Inner wrapper — waits for catalog load before rendering to avoid flash of untranslated text. */
+function I18nApp() {
+  const { loading } = useLocale();
+  if (loading) return null;  // catalog not yet active — brief blank frame
   return (
-    <ErrorBoundary>
+    <I18nProvider i18n={i18n}>
       <ThemeProvider>
         <SettingsProvider>
           <DmsProvider>
@@ -52,6 +58,16 @@ export function App() {
           </DmsProvider>
         </SettingsProvider>
       </ThemeProvider>
+    </I18nProvider>
+  );
+}
+
+export function App() {
+  return (
+    <ErrorBoundary>
+      <LocaleProvider>
+        <I18nApp />
+      </LocaleProvider>
     </ErrorBoundary>
   );
 }

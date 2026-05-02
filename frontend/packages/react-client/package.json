@@ -5,15 +5,23 @@
   "type": "module",
   "scripts": {
     "start": "NODE_ENV=production bun src/index.ts",
-    "build": "bun run build.ts"
+    "build": "bun run build.ts",
+    "i18n:extract": "bun ./node_modules/@lingui/cli/dist/lingui.js extract",
+    "i18n:compile": "bun ./node_modules/@lingui/cli/dist/lingui.js compile --typescript",
+    "i18n": "bun run i18n:extract && bun run i18n:compile"
   },
   "dependencies": {
+    "@lingui/core": "^6.0.1",
+    "@lingui/format-po": "^6.0.1",
+    "@lingui/react": "^6.0.1",
     "bun-plugin-tailwind": "^0.1.2",
     "react": "^19",
     "react-dom": "^19",
     "tailwindcss": "^4.1.11"
   },
   "devDependencies": {
+    "@lingui/cli": "^6.0.1",
+    "@lingui/conf": "^6.0.1",
     "@saucer-dev/types": "^2.0.1",
     "@types/bun": "latest",
     "@types/react": "^19",

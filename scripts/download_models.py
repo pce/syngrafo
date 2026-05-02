@@ -29,6 +29,9 @@ from pathlib import Path
 _BAR_WIDTH: int = 42
 _CHUNK_BYTES: int = 65_536
 
+# Tesseract "best" trained models (higher accuracy than the default tessdata).
+_TESSDATA_BASE = "https://github.com/tesseract-ocr/tessdata_best/raw/main"
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -39,6 +42,8 @@ class ModelSpec:
     size_hint: str
     description: str
     required: bool = False
+    # sub-directory inside the data/ dir (default: "models/")
+    subdir: str = "models"
     labels: list[str] = field(default_factory=list)
     output_node: str = "logits"
     activation: str = "softmax"
@@ -108,27 +113,92 @@ MODELS: dict[str, ModelSpec] = {
         output_node="logits",
         activation="sigmoid",
     ),
-    "ocr": ModelSpec(
-        filename="ocr.onnx",
-        url=(
-            "https://huggingface.co/Xenova/pp-ocrv3-en-recognition-cpu/"
-            "resolve/main/onnx/model_quantized.onnx"
-        ),
-        size_hint="~12 MB",
-        description="PP-OCRv3 Recognition int8 — fallback for non-Apple OCR",
-        labels=[
-            # Standard PP-OCR char set (approx 94 chars)
-            "blank", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]", "^", "_", "`", "{", "|", "}", "~", " "
-        ],
-        output_node="softmax_0.tmp_0",
-        activation="softmax",
-    ),
+    # ── Tesseract OCR language data ──────────────────────────────────────────
+    # Only required on Linux / Windows (macOS uses Apple Vision built-in).
+    # Source: https://github.com/tesseract-ocr/tessdata_best (LSTM "best" models)
+    # macOS (brew):   brew install tesseract tesseract-lang  (all languages)
+    # Ubuntu/Debian:  sudo apt-get install tesseract-ocr-deu tesseract-ocr-jpn …
+    #
+    # Use the 'tessdata' alias to download all language packs at once:
+    #   python3 scripts/download_models.py download --models tessdata
+    **{
+        f"tessdata-{code}": ModelSpec(
+            filename=f"{code}.traineddata",
+            url=f"{_TESSDATA_BASE}/{code}.traineddata",
+            size_hint=hint,
+            description=desc,
+            subdir="tessdata",
+        )
+        for code, hint, desc in [
+            # ── Latin-script European ─────────────────────────────────────────
+            ("eng",  "~12 MB",  "English"),
+            ("deu",  "~8 MB",   "German (Deutsch)"),
+            ("fra",  "~9 MB",   "French (Français)"),
+            ("spa",  "~8 MB",   "Spanish (Español)"),
+            ("ita",  "~7 MB",   "Italian (Italiano)"),
+            ("por",  "~8 MB",   "Portuguese (Português)"),
+            ("nld",  "~8 MB",   "Dutch (Nederlands)"),
+            ("pol",  "~7 MB",   "Polish (Polski)"),
+            ("hun",  "~7 MB",   "Hungarian (Magyar)"),
+            ("ces",  "~6 MB",   "Czech (Čeština)"),
+            ("slk",  "~6 MB",   "Slovak (Slovenčina)"),
+            ("ron",  "~7 MB",   "Romanian (Română)"),
+            ("hrv",  "~6 MB",   "Croatian (Hrvatski)"),
+            ("swe",  "~8 MB",   "Swedish (Svenska)"),
+            ("nor",  "~7 MB",   "Norwegian (Norsk)"),
+            ("dan",  "~7 MB",   "Danish (Dansk)"),
+            ("fin",  "~7 MB",   "Finnish (Suomi)"),
+            ("tur",  "~7 MB",   "Turkish (Türkçe)"),
+            ("lat",  "~5 MB",   "Latin"),
+            # ── Greek / Cyrillic ──────────────────────────────────────────────
+            ("ell",  "~5 MB",   "Greek (Ελληνικά)"),
+            ("rus",  "~8 MB",   "Russian (Русский)"),
+            ("ukr",  "~7 MB",   "Ukrainian (Українська)"),
+            ("bel",  "~7 MB",   "Belarusian (Беларуская)"),
+            ("bul",  "~7 MB",   "Bulgarian (Български)"),
+            # ── CJK ───────────────────────────────────────────────────────────
+            ("jpn",          "~14 MB", "Japanese horizontal (日本語)"),
+            ("jpn_vert",     "~14 MB", "Japanese vertical (日本語 縦書き)"),
+            ("chi_sim",      "~20 MB", "Chinese Simplified (简体中文)"),
+            ("chi_sim_vert", "~20 MB", "Chinese Simplified vertical"),
+            ("chi_tra",      "~23 MB", "Chinese Traditional (繁體中文)"),
+            ("chi_tra_vert", "~23 MB", "Chinese Traditional vertical"),
+            ("kor",          "~10 MB", "Korean (한국어)"),
+            ("kor_vert",     "~10 MB", "Korean vertical"),
+            # ── Indic / South-East Asian ─────────────────────────────────────
+            ("hin",  "~7 MB",  "Hindi (हिन्दी)"),
+            ("ben",  "~6 MB",  "Bengali (বাংলা)"),
+            ("tam",  "~5 MB",  "Tamil (தமிழ்)"),
+            ("tel",  "~5 MB",  "Telugu (తెలుగు)"),
+            ("kan",  "~5 MB",  "Kannada (ಕನ್ನಡ)"),
+            ("mal",  "~5 MB",  "Malayalam (മലയാളം)"),
+            ("tha",  "~6 MB",  "Thai (ภาษาไทย)"),
+            ("vie",  "~6 MB",  "Vietnamese (Tiếng Việt)"),
+            ("ind",  "~6 MB",  "Indonesian (Bahasa Indonesia)"),
+            # ── RTL ───────────────────────────────────────────────────────────
+            ("ara",  "~8 MB",  "Arabic (العربية)"),
+            ("heb",  "~5 MB",  "Hebrew (עברית)"),
+            # ── Other ─────────────────────────────────────────────────────────
+            ("swa",  "~5 MB",  "Swahili"),
+            ("afr",  "~5 MB",  "Afrikaans"),
+        ]
+    },
 }
 
 
+def _default_data_dir() -> Path:
+    """Return the data/ directory relative to this script."""
+    return Path(__file__).resolve().parent.parent / "data"
+
+
 def _default_model_dir() -> Path:
-    """Return the default model directory relative to this script."""
-    return Path(__file__).resolve().parent.parent / "data" / "models"
+    """Return the default model directory (kept for back-compat)."""
+    return _default_data_dir() / "models"
+
+
+def _model_dest(spec: "ModelSpec", data_dir: Path) -> Path:
+    """Return the destination path for a model spec."""
+    return data_dir / spec.subdir / spec.filename
 
 
 def _progress_bar(downloaded: int, total: int) -> None:
@@ -177,19 +247,19 @@ def _download_file(url: str, dest: Path) -> bool:
         return False
 
 
-def _presence(model_dir: Path) -> dict[str, bool]:
+def _presence(data_dir: Path) -> dict[str, bool]:
     """Return a mapping of model key → whether the file exists on disk."""
-    return {key: (model_dir / spec.filename).exists() for key, spec in MODELS.items()}
+    return {key: _model_dest(spec, data_dir).exists() for key, spec in MODELS.items()}
 
 
-def _print_status(model_dir: Path) -> None:
+def _print_status(data_dir: Path) -> None:
     """Print a formatted status table for all known assets."""
-    present = _presence(model_dir)
-    col_key  = 12
-    col_file = 22
+    present = _presence(data_dir)
+    col_key  = 16
+    col_file = 24
     col_stat = 10
 
-    print(f"\nModel directory: {model_dir.resolve()}\n")
+    print(f"\nData directory: {data_dir.resolve()}\n")
     print(
         f"  {'key':<{col_key}} {'file':<{col_file}} {'status':<{col_stat}} description"
     )
@@ -219,41 +289,50 @@ def _print_status(model_dir: Path) -> None:
 
 def _cmd_check(args: argparse.Namespace) -> int:
     """Handle the 'check' sub-command."""
-    model_dir = Path(args.dir) if args.dir else _default_model_dir()
-    _print_status(model_dir)
+    data_dir = Path(args.dir) if args.dir else _default_data_dir()
+    _print_status(data_dir)
     return 0
 
 
 def _cmd_download(args: argparse.Namespace) -> int:
     """Handle the 'download' sub-command."""
-    model_dir = Path(args.dir) if args.dir else _default_model_dir()
+    data_dir = Path(args.dir) if args.dir else _default_data_dir()
 
-    if args.models:
-        requested = [k.strip() for k in args.models.split(",") if k.strip()]
-        unknown   = sorted(set(requested) - set(MODELS))
+    # Convenience alias: --models tessdata expands to all tessdata-* entries
+    raw_models = args.models or ""
+    expanded: list[str] = []
+    for k in (k.strip() for k in raw_models.split(",") if k.strip()):
+        if k == "tessdata":
+            expanded.extend(mk for mk in MODELS if mk.startswith("tessdata-"))
+        else:
+            expanded.append(k)
+
+    if expanded:
+        unknown = sorted(set(expanded) - set(MODELS))
         if unknown:
             print(f"Unknown model keys: {', '.join(unknown)}")
             print(f"Available keys:     {', '.join(MODELS)}")
             return 1
+        requested = expanded
     else:
         requested = list(MODELS.keys())
 
-    model_dir.mkdir(parents=True, exist_ok=True)
     results: dict[str, bool] = {}
 
     for key in requested:
         spec = MODELS[key]
-        dest = model_dir / spec.filename
+        dest = _model_dest(spec, data_dir)
 
         if dest.exists() and not args.force:
             size_bytes = dest.stat().st_size
-            print(f"  {key:<12} already present ({size_bytes / 1_048_576:.1f} MB) — skipping")
+            print(f"  {key:<18} already present ({size_bytes / 1_048_576:.1f} MB) — skipping")
             results[key] = True
             continue
 
         print(f"\n{key}  ({spec.size_hint})")
         print(f"  {spec.description}")
         print(f"  {spec.url}")
+        dest.parent.mkdir(parents=True, exist_ok=True)
         results[key] = _download_file(spec.url, dest)
 
         if not results[key]:
@@ -266,7 +345,7 @@ def _cmd_download(args: argparse.Namespace) -> int:
     if failed:
         print(f"\nFailed to download: {', '.join(failed)}")
 
-    _print_status(model_dir)
+    _print_status(data_dir)
     return 0 if not failed else 1
 
 
@@ -281,8 +360,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "  python3 scripts/download_models.py check\n"
             "  python3 scripts/download_models.py download\n"
             "  python3 scripts/download_models.py download --models embed,vocab\n"
+            "  python3 scripts/download_models.py download --models tessdata\n"
             "  python3 scripts/download_models.py download --force\n"
-            "  python3 scripts/download_models.py --dir /tmp/models download\n"
+            "  python3 scripts/download_models.py --dir /tmp/data download\n"
         ),
     )
     parser.add_argument(

@@ -31,6 +31,8 @@ export interface AudioPlaybackControls {
   /** Start playback. source can be a Blob, an absolute path, or a local:// URL. */
   play:               (source: Blob | string, id: string) => Promise<void>;
   stop:               () => void;
+  /** True while downloading + decoding the audio file (before playback starts). */
+  isLoading:          boolean;
   /** The live AnalyserNode — null when idle. Canvas components watch this prop
    *  and restart their own rAF loop when it changes. */
   analyserNode:       AnalyserNode | null;
@@ -55,6 +57,7 @@ export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
   const [analyserNode,     setAnalyserNode]     = useState<AnalyserNode | null>(null);
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
   const [isPlaying,        setIsPlaying]        = useState(false);
+  const [isLoading,        setIsLoading]        = useState(false);
   const [visualizationData, setVizData]         = useState<PlaybackVisualizationData | null>(null);
 
   // ── stop ───────────────────────────────────────────────────────────────────
@@ -67,89 +70,98 @@ export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
     }
     setAnalyserNode(null);
     setIsPlaying(false);
+    setIsLoading(false);
     setCurrentPlayingId(null);
     setVizData(null);
   }, []);
 
   // ── play ───────────────────────────────────────────────────────────────────
   const play = useCallback(async (source: Blob | string, id: string) => {
-    // Tear down any current playback
+    // Guard: ignore if already loading or playing (prevents double-tap)
+    // Tear down any in-progress playback first
     try { sourceRef.current?.stop(); } catch { /* ok */ }
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
 
-    // Lazily create AudioContext
-    const ctx = ctxRef.current ?? new AudioContext();
-    ctxRef.current = ctx;
-    if (ctx.state === "suspended") await ctx.resume();
+    setIsLoading(true);
+    setIsPlaying(false);
+    setCurrentPlayingId(null);
 
-    // Resolve source → ArrayBuffer
-    let arrayBuffer: ArrayBuffer;
-    if (source instanceof Blob) {
-      arrayBuffer = await source.arrayBuffer();
-    } else {
-      const url = source.startsWith("local://")
-        ? source
-        : `local://local${source}`;
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`[audio] fetch failed: ${resp.status} ${url}`);
-      arrayBuffer = await resp.arrayBuffer();
-    }
+    try {
+      // Lazily create AudioContext
+      const ctx = ctxRef.current ?? new AudioContext();
+      ctxRef.current = ctx;
+      if (ctx.state === "suspended") await ctx.resume();
 
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    const duration    = audioBuffer.duration;
+      // Resolve source → ArrayBuffer
+      let arrayBuffer: ArrayBuffer;
+      if (source instanceof Blob) {
+        arrayBuffer = await source.arrayBuffer();
+      } else {
+        const url = source.startsWith("local://")
+          ? source
+          : `local://local${source}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`[audio] fetch failed: ${resp.status} ${url}`);
+        arrayBuffer = await resp.arrayBuffer();
+      }
 
-    // Build audio graph: source → analyser → speakers
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize              = 2048;
-    analyser.smoothingTimeConstant = 0.8;
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      const duration    = audioBuffer.duration;
 
-    const src = ctx.createBufferSource();
-    src.buffer = audioBuffer;
-    src.connect(analyser);
-    analyser.connect(ctx.destination);
+      // Build audio graph: source → analyser → speakers
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize              = 2048;
+      analyser.smoothingTimeConstant = 0.8;
 
-    durRef.current       = duration;
-    startedAtRef.current = ctx.currentTime;
-    src.start(0);
+      const src = ctx.createBufferSource();
+      src.buffer = audioBuffer;
+      src.connect(analyser);
+      analyser.connect(ctx.destination);
 
-    src.onended = () => {
+      durRef.current       = duration;
+      startedAtRef.current = ctx.currentTime;
+      src.start(0);
+
+      src.onended = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+        if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+        setVizData({ progress: 1, currentTime: duration, duration, isPlaying: false });
+      };
+
+      sourceRef.current = src;
+
+      // Push initial state to React
+      setAnalyserNode(analyser);
+      setCurrentPlayingId(id);
+      setIsPlaying(true);
+      setIsLoading(false);
+      setVizData({ progress: 0, currentTime: 0, duration, isPlaying: true });
+      tickStampRef.current = performance.now();
+
+      // Progress loop — runs at rAF rate but only flushes React state at ~10 fps
+      const tick = () => {
+        const elapsed  = Math.min(ctx.currentTime - startedAtRef.current, duration);
+        const progress = elapsed / duration;
+        const now = performance.now();
+        if (now - tickStampRef.current >= 100) {
+          tickStampRef.current = now;
+          setVizData({ progress, currentTime: elapsed, duration, isPlaying: true });
+        }
+        if (elapsed < duration) {
+          rafRef.current = requestAnimationFrame(tick);
+        }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch (err) {
+      setIsLoading(false);
       setIsPlaying(false);
-      setCurrentPlayingId(null);
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      // Leave visualizationData with progress=1 so the UI shows the final state
-      setVizData({ progress: 1, currentTime: duration, duration, isPlaying: false });
-    };
-
-    sourceRef.current = src;
-
-    // Push initial state to React
-    setAnalyserNode(analyser);
-    setCurrentPlayingId(id);
-    setIsPlaying(true);
-    setVizData({ progress: 0, currentTime: 0, duration, isPlaying: true });
-    tickStampRef.current = performance.now();
-
-    // Progress loop — runs at rAF rate but only flushes React state at ~10 fps
-    // so the parent component (list, page) doesn't re-render at 60 fps.
-    const tick = () => {
-      const elapsed  = Math.min(ctx.currentTime - startedAtRef.current, duration);
-      const progress = elapsed / duration;
-
-      const now = performance.now();
-      if (now - tickStampRef.current >= 100) {
-        tickStampRef.current = now;
-        setVizData({ progress, currentTime: elapsed, duration, isPlaying: true });
-      }
-
-      if (elapsed < duration) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    };
-    rafRef.current = requestAnimationFrame(tick);
+      throw err;
+    }
   }, []);
 
-  return { play, stop, analyserNode, visualizationData, currentPlayingId, isPlaying };
+  return { play, stop, isLoading, analyserNode, visualizationData, currentPlayingId, isPlaying };
 }

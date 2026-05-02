@@ -23,6 +23,22 @@ def run(cmd: Iterable[str], cwd: Optional[Path] = None, check: bool = True) -> s
     return subprocess.run(list(cmd), cwd=(str(cwd) if cwd else None), check=check)
 
 
+def clean_cmake_cache(build_dir: Path) -> None:
+    """Remove CMakeCache.txt and CMakeFiles/ while preserving build/_deps.
+
+    This forces a full re-configuration on the next cmake run without
+    re-downloading any FetchContent dependencies.
+    """
+    cache = build_dir / "CMakeCache.txt"
+    cmake_files = build_dir / "CMakeFiles"
+    if cache.exists():
+        cache.unlink()
+        logging.info("Cleaned %s", cache)
+    if cmake_files.is_dir():
+        shutil.rmtree(cmake_files)
+        logging.info("Cleaned %s/", cmake_files)
+
+
 def cmake_configure(source_dir: Path, build_dir: Path, build_type: str = "Release", extra: Optional[List[str]] = None) -> None:
     extra = extra or []
     cmd = ["cmake", "-S", str(source_dir), "-B", str(build_dir), f"-DCMAKE_BUILD_TYPE={build_type}"] + extra
@@ -130,6 +146,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p_debug.add_argument("--source-dir", type=Path, default=Path("."))
     p_debug.add_argument("--target", type=str, default=None, help="CMake target name to build")
     p_debug.add_argument("-j", "--jobs", type=int, default=None)
+    p_debug.add_argument(
+        "--fresh", action="store_true",
+        help="Wipe CMakeCache.txt + CMakeFiles/ before configuring (keeps _deps/)")
 
     # release
     p_rel = sub.add_parser("release", help="Build Release target for a platform")
@@ -139,6 +158,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p_rel.add_argument("--target", type=str, default=None)
     p_rel.add_argument("-j", "--jobs", type=int, default=None)
     p_rel.add_argument("--cmake-extra", nargs="*", default=None, help="Extra -D flags for cmake configure")
+    p_rel.add_argument(
+        "--fresh", action="store_true",
+        help="Wipe CMakeCache.txt + CMakeFiles/ before configuring (keeps _deps/)")
 
     # deploy
     p_dep = sub.add_parser("deploy", help="Package and prepare release for a platform")
@@ -169,25 +191,65 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_debug(args: argparse.Namespace) -> int:
-    bd = args.build_dir
-    sd = args.source_dir
+def _cmake_configure_with_retry(
+    sd: Path,
+    bd: Path,
+    build_type: str = "Debug",
+    extra: Optional[List[str]] = None,
+    fresh: bool = False,
+) -> None:
+    """Run cmake configure, auto-retrying once with a clean cache on failure.
 
-    # Ensure frontend is built before running the app
-    logging.info("Building frontend...")
-    run(["bun", "run", "build"], cwd=sd / "frontend")
+    A stale CMakeCache.txt (e.g. one created before OBJCXX was added to the
+    project() declaration) causes cmake to fail during the generation phase
+    with 'CMAKE_OBJCXX_COMPILE_OBJECT not set'.  Wiping the cache and
+    CMakeFiles/ — while keeping _deps/ so FetchContent is not re-downloaded —
+    fixes this without a full from-scratch configure.
+    """
+    if fresh:
+        logging.info("--fresh: wiping CMake cache (preserving _deps/)...")
+        clean_cmake_cache(bd)
 
-    # Since we are using embedded assets, we need to re-configure CMake
-    # to scan the new dist/ and re-generate the C++ sources.
-    logging.info("Re-configuring CMake to update embedded assets...")
     presets_file = sd / "CMakePresets.json"
-    if presets_file.exists():
-        logging.info("Using CMake preset 'debug'...")
-        run(["cmake", "--preset", "debug"], cwd=sd)
-    else:
-        cmake_configure(sd, bd, build_type="Debug")
+    try:
+        if presets_file.exists():
+            preset = "debug" if build_type == "Debug" else "default"
+            logging.info("Using CMake preset '%s'...", preset)
+            run(["cmake", "--preset", preset], cwd=sd)
+        else:
+            cmake_configure(sd, bd, build_type=build_type, extra=extra)
+    except subprocess.CalledProcessError:
+        if fresh:
+            # Already tried with a clean cache — give up.
+            raise
+        logging.warning(
+            "CMake configure failed.  Retrying with a clean cache "
+            "(CMakeCache.txt + CMakeFiles/ removed, _deps/ preserved)..."
+        )
+        clean_cmake_cache(bd)
+        if presets_file.exists():
+            preset = "debug" if build_type == "Debug" else "default"
+            run(["cmake", "--preset", preset], cwd=sd)
+        else:
+            cmake_configure(sd, bd, build_type=build_type, extra=extra)
 
-    logging.info("Building Debug")
+
+def _cmd_debug(args: argparse.Namespace) -> int:
+    bd: Path = args.build_dir
+    sd: Path = args.source_dir
+
+    # Build the React frontend directly (cmake also does this during configure,
+    # but running it first means the dist/ assets are fresh before cmake scans
+    # them for saucer_embed()).
+    logging.info("Building frontend...")
+    frontend_pkg = sd / "frontend" / "packages" / "react-client"
+    run(["bun", "run", "build.ts", "--minify"], cwd=frontend_pkg)
+
+    # Configure — includes saucer_embed() rescan of the updated dist/.
+    logging.info("Configuring CMake (debug)...")
+    _cmake_configure_with_retry(sd, bd, build_type="Debug", fresh=args.fresh)
+
+    logging.info("Building debug target...")
     cmake_build(bd, config="Debug", target=args.target, jobs=args.jobs)
     return 0
 
@@ -198,14 +260,12 @@ def _cmd_release(args: argparse.Namespace) -> int:
     plat: str = args.platform
     logging.info("Configuring Release build for %s in %s", plat, bd)
     extra = args.cmake_extra or []
-    # user may pass plain -DFOO=bar strings; accept either list of '-DFOO=bar' or ['FOO=bar']
-    processed_extra = []
-    for e in extra:
-        if e.startswith("-D"):
-            processed_extra.append(e)
-        else:
-            processed_extra.append(f"-D{e}")
-    cmake_configure(sd, bd, build_type="Release", extra=processed_extra)
+    processed_extra = [
+        (e if e.startswith("-D") else f"-D{e}") for e in extra
+    ]
+    _cmake_configure_with_retry(
+        sd, bd, build_type="Release", extra=processed_extra, fresh=args.fresh
+    )
     cmake_build(bd, config="Release", target=args.target, jobs=args.jobs)
     return 0
 

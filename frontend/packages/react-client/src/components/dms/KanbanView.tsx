@@ -5,8 +5,10 @@ import Icon from "../Icon";
 // ── Data model ────────────────────────────────────────────────────────────────
 
 interface KanbanCard {
-  /** Original line index in rawLines, used as a stable key for serialisation. */
+  /** Stable UUID used as React key and for in-memory lookups. */
   id: string;
+  /** Current line index in rawLines — used only for serialisation. */
+  lineIdx: number;
   title: string;
   done: boolean;
 }
@@ -46,7 +48,8 @@ function parseCards(content: string): { cards: KanbanCard[]; rawLines: string[] 
     const m = line.match(TASK_RE);
     if (m) {
       cards.push({
-        id: String(idx),
+        id: crypto.randomUUID(),   // stable within session; React key
+        lineIdx: idx,              // real file position; used by serialiseCards
         done: m[1].toLowerCase() === "x",
         title: m[2],
       });
@@ -57,8 +60,9 @@ function parseCards(content: string): { cards: KanbanCard[]; rawLines: string[] 
 }
 
 function serialiseCards(lane: KanbanLane): string {
+  // Build lookup by lineIdx (not id) so the mapping is independent of UUIDs.
   const cardByLineIdx = new Map<number, KanbanCard>();
-  lane.cards.forEach((c) => cardByLineIdx.set(Number(c.id), c));
+  lane.cards.forEach((c) => cardByLineIdx.set(c.lineIdx, c));
 
   return lane.rawLines
     .map((line, idx) => {
@@ -172,15 +176,14 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
 
   const deleteCard = async (laneIdx: number, cardId: string) => {
     const lane = lanes[laneIdx];
-    const lineIdx = Number(cardId);
+    const card = lane.cards.find((c) => c.id === cardId);
+    if (!card) return;
+    const lineIdx = card.lineIdx;
     const updatedRawLines = lane.rawLines.filter((_, i) => i !== lineIdx);
-    // Re-number card ids after the removed line
+    // Shift lineIdx down for every card that came after the deleted line.
     const updatedCards = lane.cards
       .filter((c) => c.id !== cardId)
-      .map((c) => {
-        const orig = Number(c.id);
-        return { ...c, id: String(orig > lineIdx ? orig - 1 : orig) };
-      });
+      .map((c) => (c.lineIdx > lineIdx ? { ...c, lineIdx: c.lineIdx - 1 } : c));
     await writeLane({ ...lane, rawLines: updatedRawLines, cards: updatedCards });
     await loadBoard();
   };
@@ -191,7 +194,8 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     const newLine = `- [ ] ${title.trim()}`;
     const updatedRawLines = [...lane.rawLines, newLine];
     const newCard: KanbanCard = {
-      id: String(updatedRawLines.length - 1),
+      id: crypto.randomUUID(),
+      lineIdx: updatedRawLines.length - 1,
       title: title.trim(),
       done: false,
     };
@@ -240,25 +244,21 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     const card = srcLane.cards.find((c) => c.id === drag.cardId);
     if (!card) return;
 
-    const srcLineIdx = Number(card.id);
+    const srcLineIdx = card.lineIdx;
     const srcLine = srcLane.rawLines[srcLineIdx];
 
-    // Remove card line from source lane
+    // Remove the card line from the source lane; shift subsequent lineIdx values.
     const newSrcRawLines = srcLane.rawLines.filter((_, i) => i !== srcLineIdx);
     const newSrcCards = srcLane.cards
       .filter((c) => c.id !== drag.cardId)
-      .map((c) => {
-        const orig = Number(c.id);
-        return { ...c, id: String(orig > srcLineIdx ? orig - 1 : orig) };
-      });
+      .map((c) => (c.lineIdx > srcLineIdx ? { ...c, lineIdx: c.lineIdx - 1 } : c));
 
-    // Append card line to target lane
-    const appendedLine =
-      srcLine ?? `- [${card.done ? "x" : " "}] ${card.title}`;
+    // Append the card line to the target lane; assign new lineIdx.
+    const appendedLine = srcLine ?? `- [${card.done ? "x" : " "}] ${card.title}`;
     const newTgtRawLines = [...tgtLane.rawLines, appendedLine];
     const movedCard: KanbanCard = {
       ...card,
-      id: String(newTgtRawLines.length - 1),
+      lineIdx: newTgtRawLines.length - 1, // UUID stays the same
     };
     const newTgtCards = [...tgtLane.cards, movedCard];
 
