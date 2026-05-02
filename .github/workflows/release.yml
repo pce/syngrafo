@@ -7,325 +7,255 @@ on:
   pull_request:
     branches: ["**"]
 
-# Cancel duplicate runs for the same ref to save CI minutes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  BUILD_TYPE: Release
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
 
   # ── macOS ──────────────────────────────────────────────────────────────────
   build-macos:
-    name: Build — macOS (Apple Silicon)
-    runs-on: macos-14          # Apple Silicon runner, AppleClang 15+
+    name: macOS 15 · AppleClang 16
+    runs-on: macos-15
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0       # full history for version tags
-          submodules: recursive
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: recursive }
 
-      # ── Tooling ────────────────────────────────────────────────────────────
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: lukka/get-cmake@latest
+        with: { cmakeVersion: "~3.31.0" }
 
-      - name: Install CMake
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: "~3.28.0"
-
-      # ── CPM / FetchContent cache ───────────────────────────────────────────
-      # Caches saucer, ONNX Runtime, nlohmann-json, etc.
-
-      - name: Cache CPM / FetchContent deps
+      - name: Cache CPM deps
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ github.workspace }}/build/_deps
-            ~/.cpm-cache
-          key:          cpm-macos-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'external/nlp/CMakeLists.txt') }}
+          path: ~/.cpm-cache
+          key:          cpm-macos-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-macos-
 
-      # ── NLP model data (tessdata not needed on macOS — uses Apple Vision) ──
+      - name: Cache bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key:          bun-macos-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
+          restore-keys: bun-macos-
 
-      - name: Download required NLP models
+      - name: Download NLP models
         run: python3 scripts/download_models.py download --models embed,vocab
-        working-directory: ${{ github.workspace }}
 
-      # ── Frontend ───────────────────────────────────────────────────────────
+      - name: Frontend
+        working-directory: frontend/packages/react-client
+        run: |
+          bun install --frozen-lockfile
+          bun run i18n:compile
+          bun run build.ts --minify
 
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      - name: Compile i18n catalogs
-        run: bun run i18n:compile
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      - name: Build frontend bundle
-        run: bun run build.ts --minify
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      # ── Native build ───────────────────────────────────────────────────────
-
-      - name: Configure CMake
+      - name: Configure
         run: cmake -B build --preset ci-macos
-        working-directory: ${{ github.workspace }}
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.ncpu)
-        working-directory: ${{ github.workspace }}
 
-      # ── Artifact ───────────────────────────────────────────────────────────
+      - name: Package (DMG)
+        working-directory: build
+        run: cpack -C Release
 
-      - name: Upload macOS app bundle
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: papiere-macos-${{ github.sha }}
-          path: build/papiere.app
+          name: installer-macos-${{ github.sha }}
+          path: build/Syngrafo-*.dmg
           if-no-files-found: warn
 
 
   # ── Linux ──────────────────────────────────────────────────────────────────
   build-linux:
-    name: Build — Linux (Ubuntu 24.04, Clang 18)
+    name: Ubuntu 24.04 · Clang 20
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: recursive }
 
-      # ── Tooling ────────────────────────────────────────────────────────────
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: lukka/get-cmake@latest
+        with: { cmakeVersion: "~3.31.0" }
 
-      - name: Install CMake
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: "~3.28.0"
-
-      - name: Install system dependencies
+      # Ubuntu 24.04 (Noble) ships clang-18 by default.
+      # clang-20 is available from the upstream LLVM apt repository.
+      - name: Add LLVM 20 apt repository
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-20.list >/dev/null
           sudo apt-get update -qq
+
+      - name: Install system deps
+        run: |
           sudo apt-get install -y --no-install-recommends \
-            clang-18 libc++-18-dev libc++abi-18-dev \
-            libwebkitgtk-6.0-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libsqlite3-dev \
-            libtesseract-dev \
-            tesseract-ocr-eng \
-            tesseract-ocr-deu \
-            tesseract-ocr-fra \
-            tesseract-ocr-spa \
-            tesseract-ocr-ita \
-            tesseract-ocr-por \
-            tesseract-ocr-jpn \
-            tesseract-ocr-chi-sim \
-            tesseract-ocr-rus \
-            tesseract-ocr-ell \
-            tesseract-ocr-ara \
-            ninja-build \
-            pkg-config
+            clang-20 libc++-20-dev libc++abi-20-dev lld-20 \
+            libwebkitgtk-6.0-dev libgtk-4-dev libadwaita-1-dev \
+            libsqlite3-dev libtesseract-dev \
+            tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-fra \
+            tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por \
+            tesseract-ocr-jpn tesseract-ocr-chi-sim \
+            tesseract-ocr-rus tesseract-ocr-ell tesseract-ocr-ara \
+            ninja-build pkg-config
 
-      # ── CPM / FetchContent cache ───────────────────────────────────────────
-
-      - name: Cache CPM / FetchContent deps
+      - name: Cache CPM deps
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ github.workspace }}/build/_deps
-            ~/.cpm-cache
-          key:          cpm-linux-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'external/nlp/CMakeLists.txt') }}
+          path: ~/.cpm-cache
+          key:          cpm-linux-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-linux-
 
-      # ── NLP models ─────────────────────────────────────────────────────────
+      - name: Cache bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key:          bun-linux-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
+          restore-keys: bun-linux-
 
-      - name: Download required NLP models
+      - name: Download NLP models
         run: python3 scripts/download_models.py download --models embed,vocab
-        working-directory: ${{ github.workspace }}
 
-      # ── Frontend ───────────────────────────────────────────────────────────
+      - name: Frontend
+        working-directory: frontend/packages/react-client
+        run: |
+          bun install --frozen-lockfile
+          bun run i18n:compile
+          bun run build.ts --minify
 
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      - name: Compile i18n catalogs
-        run: bun run i18n:compile
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      - name: Build frontend bundle
-        run: bun run build.ts --minify
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      # ── Native build ───────────────────────────────────────────────────────
-
-      - name: Configure CMake
+      - name: Configure
         run: cmake -B build --preset ci-linux
-        working-directory: ${{ github.workspace }}
 
       - name: Build
         run: cmake --build build --parallel $(nproc)
-        working-directory: ${{ github.workspace }}
 
-      # ── Artifact ───────────────────────────────────────────────────────────
+      - name: Package (DEB + TGZ)
+        working-directory: build
+        run: cpack -C Release
 
-      - name: Upload Linux binary
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: papiere-linux-${{ github.sha }}
-          path: build/papiere
+          name: installer-linux-${{ github.sha }}
+          # Upload both the .deb and the .tar.gz produced by CPack
+          path: |
+            build/Syngrafo-*.deb
+            build/Syngrafo-*.tar.gz
           if-no-files-found: warn
 
 
   # ── Windows ────────────────────────────────────────────────────────────────
   build-windows:
-    name: Build — Windows (MSVC, Release)
-    runs-on: windows-2022
+    name: Windows 2025 · MSVC
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      # Force Python UTF-8 I/O on Windows (belt-and-suspenders alongside the
+      # sys.stdout.reconfigure() call in download_models.py — avoids cp1252
+      # UnicodeEncodeError from the progress bar's block characters).
+      PYTHONUTF8: "1"
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: recursive }
 
-      # ── Tooling ────────────────────────────────────────────────────────────
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: lukka/get-cmake@latest
+        with: { cmakeVersion: "~3.31.0", ninjaVersion: "latest" }
 
-      - name: Install CMake + Ninja
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: "~3.28.0"
-          ninjaVersion: "latest"
-
-      # ── CPM / FetchContent cache ───────────────────────────────────────────
-
-      - name: Cache CPM / FetchContent deps
+      - name: Cache CPM deps
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ github.workspace }}/build/_deps
-            ~/AppData/Local/cpm-cache
-          key:          cpm-windows-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'external/nlp/CMakeLists.txt') }}
+          path: ~/AppData/Local/cpm-cache
+          key:          cpm-windows-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-windows-
 
-      # ── NLP models ─────────────────────────────────────────────────────────
+      - name: Cache bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key:          bun-windows-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
+          restore-keys: bun-windows-
 
-      - name: Download required NLP models
+      - name: Download NLP models
         run: python3 scripts/download_models.py download --models embed,vocab
-        working-directory: ${{ github.workspace }}
 
-      # ── Frontend ───────────────────────────────────────────────────────────
+      - name: Frontend
+        working-directory: frontend/packages/react-client
+        run: |
+          bun install --frozen-lockfile
+          bun run i18n:compile
+          bun run build.ts --minify
 
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+      - uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Compile i18n catalogs
-        run: bun run i18n:compile
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      - name: Build frontend bundle
-        run: bun run build.ts --minify
-        working-directory: ${{ github.workspace }}/frontend/packages/react-client
-
-      # ── Native build ───────────────────────────────────────────────────────
-
-      - name: Configure CMake (MSVC via Developer Command Prompt)
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Configure CMake
+      - name: Configure
         run: cmake -B build --preset ci-windows
-        working-directory: ${{ github.workspace }}
 
       - name: Build
         run: cmake --build build --config Release --parallel
-        working-directory: ${{ github.workspace }}
 
-      # ── Artifact ───────────────────────────────────────────────────────────
+      - name: Package (NSIS + ZIP)
+        working-directory: build
+        # NSIS is pre-installed on windows-2025 GitHub Actions runners.
+        run: cpack -C Release
+        shell: bash
 
-      - name: Upload Windows binary
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: papiere-windows-${{ github.sha }}
-          path: build/Release/papiere.exe
+          name: installer-windows-${{ github.sha }}
+          # Upload both the NSIS .exe installer and the portable .zip
+          path: |
+            build/Syngrafo-*.exe
+            build/Syngrafo-*.zip
           if-no-files-found: warn
 
 
-  # ── Release (version tag only) ─────────────────────────────────────────────
+  # ── Release (tag only) ─────────────────────────────────────────────────────
   release:
-    name: Create GitHub Release
+    name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+      # Download all three installer artifacts into the same dist/ directory.
+      # CPack names them Syngrafo-<ver>-{Darwin,Linux,Windows}.{dmg,deb,…}
+      # so the filenames are unique and can all live in one flat directory.
+      - uses: actions/download-artifact@v4
+        with: { name: "installer-macos-${{ github.sha }}",   path: dist }
+
+      - uses: actions/download-artifact@v4
+        with: { name: "installer-linux-${{ github.sha }}",   path: dist }
+
+      - uses: actions/download-artifact@v4
+        with: { name: "installer-windows-${{ github.sha }}", path: dist }
+
+      - name: List release assets
+        run: ls -lh dist/
+
+      - uses: softprops/action-gh-release@v2
         with:
-          name: papiere-macos-${{ github.sha }}
-          path: release/macos/papiere.app
-
-      - name: Download Linux artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: papiere-linux-${{ github.sha }}
-          path: release/linux
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: papiere-windows-${{ github.sha }}
-          path: release/windows
-
-      - name: Package artifacts
-        run: |
-          cd release/macos
-          zip -r "../papiere-macos-${{ github.ref_name }}.zip" papiere.app
-          cd ../../release/linux
-          chmod +x papiere
-          tar -czf "../papiere-linux-${{ github.ref_name }}.tar.gz" papiere
-          cd ../../release/windows
-          zip "../papiere-windows-${{ github.ref_name }}.zip" papiere.exe
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name:   ${{ github.ref_name }}
-          name:       "Papiere ${{ github.ref_name }}"
-          draft:      false
-          # Tags with a hyphen (e.g. v1.0.0-beta.1) are marked as pre-release.
-          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
-          files: |
-            release/papiere-macos-${{ github.ref_name }}.zip
-            release/papiere-linux-${{ github.ref_name }}.tar.gz
-            release/papiere-windows-${{ github.ref_name }}.zip
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Publish every installer CPack produced — DMG, DEB, TGZ, EXE, ZIP
+          files: dist/Syngrafo-*

@@ -7,12 +7,29 @@
 
 image:https://img.shields.io/badge/status-active-brightgreen[]
 image:https://img.shields.io/badge/license-MIT-blue[]
-image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey[]
-image:https://github.com/pce/tools/actions/workflows/release.yml/badge.svg[CI]
+image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey[]
+image:https://github.com/pce/syngrafo/actions/workflows/release.yml/badge.svg?branch=main[CI,link=https://github.com/pce/syngrafo/actions/workflows/release.yml]
 
 Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
 
 == Quick Start
+
+[source,bash]
+----
+python3 scripts/dev.py debug --use-client
+----
+
+
+Optional env vars (defaults shown):
+
+[source,bash]
+----
+export NLP_DATA_DIR=$(pwd)/data
+export NLP_MODEL_DIR=$(pwd)/data/models
+----
+
+
+Granular:
 
 [source,bash]
 ----
@@ -25,15 +42,6 @@ python3 scripts/dev.py debug --use-client -j8
 # run
 ./build/syngrafo.app/Contents/MacOS/syngrafo
 ----
-
-Optional env vars (defaults shown):
-
-[source,bash]
-----
-export NLP_DATA_DIR=$(pwd)/data
-export NLP_MODEL_DIR=$(pwd)/data/models
-----
-
 == Architecture
 
 [cols="1,3",options="header"]
@@ -49,7 +57,7 @@ Key source layout:
 [source]
 ----
 app/
-  main.cc                 — startup, 32 saucer expose() bindings
+  main.cc                 — startup, saucer expose() bindings
   dms_bindings.hh         — binding implementations
   db/database.hh          — LINQ-style SQLite/SQLCipher (C++23, header-only)
   ocr_mac.mm              — macOS Vision OCR
@@ -70,12 +78,52 @@ frontend/packages/react-client/src/
 | *OCR* | macOS Vision framework; Tesseract as Fallback
 | *NLP* | Keywords · NER · sentiment · embeddings — all local ONNX, no cloud
 | *Zones* | Named workspaces with optional AES-256 encryption (SQLCipher + macOS Keychain)
-| *Notes* | Markdown-lite `.notes` files in any folder
-| *Kanban* | `.kanban` boards with drag-and-drop lanes
+| *Notes* | Markdown-lite `.notes` folder each zone
+| *Kanban* | `.kanban` board each zone with drag-and-drop lanes and cards
 | *Search* | Semantic (cosine) + keyword fallback
 | *Themes* | 12 colour presets + custom CSS vars, radius/density toggles
 | *i18n* | English · Deutsch · Ελληνικά — switch in *Settings → Language*
 |===
+
+
+== Image Options
+
+=== OCR
+
+image::data/inp/syngrafo_image_ocr.jpg[Static,300]
+
+
+
+=== SVG
+
+image::data/inp/syngrafo_img_2_svg.jpg[Static,300]
+
+Image to SVG with AB as chosen Colorpaltte
+- RCT for Pixel Perfect
+- PLY for Polygonal and
+- TRI for triangulated
+
+conversion with support for ColorPalettes.
+
+[cols="1,1,1",options="header"]
+|===
+| ORIG | PLY (Polygonal) | TRI (Triangulated)
+
+| image:data/inp/trees.jpg[width=250]
+Original raster image
+
+| image:data/inp/trees_ply.svg[width=250]
+Polygonal approximation
+
+| image:data/inp/trees_tri.svg[width=250]
+Triangulated mesh
+|===
+
+
+// image::data/inp/trees.jpg[Static,300]
+// image::data/inp/trees_ply.svg[Static,300]
+// image::data/inp/trees_tri.svg[Static,300]
+
 
 == Zones
 
@@ -152,7 +200,7 @@ Controls: *drag* = rotate · *scroll* = zoom · *right-drag* = pan.
 |===
 | Tool | Min | Purpose
 | CMake | 3.25 | Build system
-| Clang / AppleClang | C++23 | Compiler
+| Clang / AppleClang | C++23 (Clang 18+ / AppleClang 16+) | Compiler
 | Bun | 1.0 | Frontend bundler
 | Python 3 | 3.9 | Dev runner, model scripts
 |===
@@ -168,15 +216,6 @@ cmake -S . -B build && cmake --build build --config Debug
 # tests
 python3 scripts/dev.py test --target syngrafo
 ----
-
-== Roadmap
-
-* [ ] FolderOptions serialisation (MessagePack/CBOR) + cross-machine Zone sync
-* [ ] Per-file / per-record encryption
-* [ ] Audio project view: BPM/key classification, sample manager
-* [ ] HTML preview (sandboxed local server)
-* [ ] PDF/DOCX document creation and conversion
-* [ ] Windows packaging
 
 == License
 

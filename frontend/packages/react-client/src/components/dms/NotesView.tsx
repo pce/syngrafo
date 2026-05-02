@@ -1,15 +1,20 @@
 // components/dms/NotesView.tsx ─────────────────────────────────────────────────
 // Two-panel notes editor shown when the FileBrowser navigates into .notes/.
 //
-// Left pane  (~220 px): flat list of .md files, sorted by modified desc.
+// Left pane  (~240 px): tree view — root .md files + collapsible Collection groups.
 // Right pane (flex-1):  textarea (edit) + live markdown preview, side-by-side.
+//
+// Collections = one-level subdirectories inside .notes/.  Each subdir is a
+// "Collection" (also called "Album") that groups related notes.
 //
 // Features:
 //   • Auto-save with 600 ms debounce (stale-closure-safe via refs)
-//   • Create note: window.prompt → slugify → dms.writeFile + dir creation
-//   • Delete note: window.confirm → dms.deleteFiles
-//   • Handles missing .notes dir gracefully (shows empty state)
-//   • Simple MVP markdown renderer (no external deps)
+//   • Create note: inline form with optional Collection picker
+//   • Create collection / album: inline form via folder icon
+//   • Delete note / collection: inline confirm (WKWebView has no window.confirm)
+//   • Cascade-delete collection: deletes all inner notes, then the dir
+//   • Markdown renderer: headings, lists, tasks, **bold**, *italic*, `code`,
+//     fenced code/ASCII art blocks (```ascii), standalone images ![alt](path)
 // ──────────────────────────────────────────────────────────────────────────────
 
 import React, {
@@ -36,9 +41,15 @@ export interface NotesViewProps {
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-// ── Markdown renderer (MVP, no external deps) ──────────────────────────────────
+interface CollectionGroup {
+  name: string;
+  dirPath: string;
+  notes: FsEntry[];
+}
 
-/** Escape HTML special chars *before* applying inline spans. */
+// ── Markdown renderer ──────────────────────────────────────────────────────────
+
+/** Escape HTML special chars. */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -47,89 +58,158 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Apply inline markup: **bold**, *italic*, _italic_ */
+/**
+ * Apply inline markup: `code`, **bold**, *italic*, _italic_, inline images.
+ * Images are extracted before HTML-escaping so URLs survive intact.
+ */
 function applyInline(raw: string): string {
-  return escapeHtml(raw)
+  // Step 1: extract images to placeholders
+  const imgs: Array<{ src: string; alt: string }> = [];
+  let s = raw.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, src) => {
+    imgs.push({ src, alt });
+    return `\x00IMG${imgs.length - 1}\x00`;
+  });
+  // Step 2: HTML-escape everything
+  s = escapeHtml(s);
+  // Step 3: restore image tags
+  s = s.replace(/\x00IMG(\d+)\x00/g, (_m, idx) => {
+    const { src, alt } = imgs[Number(idx)];
+    const safeSrc = src.startsWith("/") ? `local:/${src}` : src;
+    return (
+      `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(alt)}" ` +
+      `class="max-w-full rounded-lg border border-[var(--theme-border)] my-1 inline-block" loading="lazy" />`
+    );
+  });
+  // Step 4: inline patterns
+  return s
+    .replace(/`([^`]+)`/g,
+      `<code class="font-mono text-[0.82em] px-1 py-0.5 rounded ` +
+      `bg-[var(--theme-surface)] border border-[var(--theme-border)]">$1</code>`)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/_(.+?)_/g, "<em>$1</em>");
 }
 
 /**
- * Convert markdown string to an HTML string.
- * Processes line-by-line; no block-level nesting.
+ * Convert markdown string to HTML.
+ * Supports: headings, task lists, bullets, hr, fenced code/ASCII art blocks
+ * (```ascii / ```art / ```diagram), standalone image lines, inline markup.
  */
 function renderMarkdown(md: string): string {
   const lines = md.split("\n");
   const out: string[] = [];
+  let inCodeBlock = false;
+  let codeLang = "";
+  let codeLines: string[] = [];
   let prevWasBlank = false;
 
+  const flushCode = () => {
+    const escaped = codeLines.map((l) => escapeHtml(l)).join("\n");
+    const isAscii = ["ascii", "art", "diagram", "txt"].includes(codeLang);
+    out.push(
+      `<pre class="my-2 overflow-x-auto rounded-lg p-3 text-[11px] leading-snug font-mono` +
+        ` whitespace-pre bg-[var(--theme-surface)] border border-[var(--theme-border)]` +
+        ` text-[var(--theme-text)]${isAscii ? " text-green-600 dark:text-green-400" : ""}">` +
+      (codeLang && !isAscii
+        ? `<span class="text-[9px] font-bold uppercase tracking-wider ` +
+          `text-[var(--theme-text-muted)] block mb-1">${escapeHtml(codeLang)}</span>`
+        : "") +
+      `<code>${escaped}</code></pre>`
+    );
+    codeLines = [];
+    codeLang = "";
+  };
+
   for (const line of lines) {
-    // Blank line → paragraph break, but collapse consecutive blanks into one.
+    if (inCodeBlock) {
+      if (line.trimEnd() === "```" || line.trimEnd() === "~~~") {
+        flushCode();
+        inCodeBlock = false;
+      } else {
+        codeLines.push(line);
+      }
+      prevWasBlank = false;
+      continue;
+    }
+
+    if (line.startsWith("```") || line.startsWith("~~~")) {
+      inCodeBlock = true;
+      codeLang = line.slice(3).trim().toLowerCase();
+      prevWasBlank = false;
+      continue;
+    }
+
     if (line.trim() === "") {
-      if (!prevWasBlank) out.push("<br /><br />");
+      if (!prevWasBlank) out.push("<br />");
       prevWasBlank = true;
       continue;
     }
     prevWasBlank = false;
 
-    // Headings (check ### before ## before #)
     if (line.startsWith("### ")) {
-      out.push(
-        `<h3 class="text-base font-semibold mb-1">${applyInline(line.slice(4))}</h3>`
-      );
+      out.push(`<h3 class="text-base font-semibold mt-3 mb-1">${applyInline(line.slice(4))}</h3>`);
       continue;
     }
     if (line.startsWith("## ")) {
-      out.push(
-        `<h2 class="text-lg font-bold mb-1">${applyInline(line.slice(3))}</h2>`
-      );
+      out.push(`<h2 class="text-lg font-bold mt-4 mb-1">${applyInline(line.slice(3))}</h2>`);
       continue;
     }
     if (line.startsWith("# ")) {
+      out.push(`<h1 class="text-xl font-bold mt-4 mb-2">${applyInline(line.slice(2))}</h1>`);
+      continue;
+    }
+
+    if (/^[-*_]{3,}$/.test(line.trim())) {
+      out.push('<hr class="my-3 border-[var(--theme-border)]" />');
+      continue;
+    }
+
+    // Standalone image line
+    const imgMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imgMatch) {
+      const alt = escapeHtml(imgMatch[1]);
+      const src = imgMatch[2];
+      const safeSrc = src.startsWith("/") ? `local:/${src}` : src;
       out.push(
-        `<h1 class="text-xl font-bold mb-2">${applyInline(line.slice(2))}</h1>`
+        `<img src="${escapeHtml(safeSrc)}" alt="${alt}" loading="lazy" ` +
+        `class="max-w-full rounded-lg border border-[var(--theme-border)] my-2 block" />`
       );
       continue;
     }
 
-    // Task list items — must be tested before plain bullet
     if (/^- \[ \] /.test(line)) {
-      const text = applyInline(line.slice(6));
       out.push(
         `<div class="flex items-start gap-2 my-0.5">` +
           `<input type="checkbox" disabled class="mt-1 shrink-0 accent-current" />` +
-          `<span>${text}</span>` +
+          `<span>${applyInline(line.slice(6))}</span>` +
         `</div>`
       );
       continue;
     }
     if (/^- \[x\] /i.test(line)) {
-      const text = applyInline(line.slice(6));
       out.push(
         `<div class="flex items-start gap-2 my-0.5">` +
           `<input type="checkbox" disabled checked class="mt-1 shrink-0 accent-current" />` +
-          `<span class="line-through opacity-60">${text}</span>` +
+          `<span class="line-through opacity-60">${applyInline(line.slice(6))}</span>` +
         `</div>`
       );
       continue;
     }
 
-    // Plain bullet
     if (line.startsWith("- ")) {
       out.push(
         `<div class="flex items-start gap-2 my-0.5">` +
-          `<span class="mt-2 w-1.5 h-1.5 rounded-full bg-current shrink-0 inline-block"></span>` +
+          `<span class="mt-[7px] w-1.5 h-1.5 rounded-full bg-current shrink-0 inline-block"></span>` +
           `<span>${applyInline(line.slice(2))}</span>` +
         `</div>`
       );
       continue;
     }
 
-    // Default: paragraph
     out.push(`<p class="my-0.5">${applyInline(line)}</p>`);
   }
 
+  if (inCodeBlock) flushCode();
   return out.join("\n");
 }
 
@@ -173,32 +253,41 @@ function fmtDate(ms: number | undefined): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
-  // ── Store (for Analysis panel sync) ──────────────────────────────────────────
   const { dispatch: storeDispatch } = useDms();
 
-  // ── Local state ──────────────────────────────────────────────────────────────
-  const [notes,        setNotes]        = useState<FsEntry[]>([]);
+  // ── State ─────────────────────────────────────────────────────────────────────
+  const [rootNotes,    setRootNotes]    = useState<FsEntry[]>([]);
+  const [collections,  setCollections]  = useState<CollectionGroup[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [content,      setContent]      = useState<string>("");
   const [saveStatus,   setSaveStatus]   = useState<SaveStatus>("idle");
   const [listLoading,  setListLoading]  = useState(false);
 
-  // ── Inline create / delete state ─────────────────────────────────────────
-  // We avoid window.prompt/confirm because WKWebView does not implement them.
-  const [creatingNote,  setCreatingNote]  = useState(false);
-  const [newNoteTitle,  setNewNoteTitle]  = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Collapsed state for collection groups
+  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
 
-  // ── Refs (keep latest values accessible inside debounce callback) ────────────
+  // New-note inline form
+  const [creatingNote,      setCreatingNote]      = useState(false);
+  const [newNoteTitle,      setNewNoteTitle]       = useState("");
+  const [newNoteCollection, setNewNoteCollection] = useState<string>("");
+
+  // New-collection inline form
+  const [creatingCollection, setCreatingCollection] = useState(false);
+  const [newCollectionName,  setNewCollectionName]  = useState("");
+
+  // Delete confirmations
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState<string | null>(null);
+  const [confirmDeleteCol,  setConfirmDeleteCol]  = useState<string | null>(null);
+
+  // ── Refs ──────────────────────────────────────────────────────────────────────
   const contentRef      = useRef<string>("");
   const selectedPathRef = useRef<string | null>(null);
   const saveTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Mirror state into refs every render so the debounce closure is always fresh.
   contentRef.current      = content;
   selectedPathRef.current = selectedPath;
 
-  // ── Load notes list ──────────────────────────────────────────────────────────
+  // ── Load notes (two-level scan) ───────────────────────────────────────────────
 
   const loadNotes = useCallback(async () => {
     setListLoading(true);
@@ -206,254 +295,343 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     setListLoading(false);
 
     if (!res.ok || !res.data) {
-      // Directory doesn't exist yet — show empty state, let ＋ create it.
-      setNotes([]);
+      setRootNotes([]);
+      setCollections([]);
       return;
     }
 
-    const mdFiles = res.data.entries
+    const entries = res.data.entries;
+    const mdFiles = entries
       .filter((e) => e.kind === "file" && e.name.endsWith(".md"))
       .sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0));
 
-    setNotes(mdFiles);
+    const subdirs = entries.filter((e) => e.kind === "dir");
+    const groups: CollectionGroup[] = [];
+    for (const dir of subdirs) {
+      const subRes = await dms.scanDir(dir.path);
+      if (!subRes.ok || !subRes.data) continue;
+      const subNotes = subRes.data.entries
+        .filter((e) => e.kind === "file" && e.name.endsWith(".md"))
+        .sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0));
+      groups.push({ name: dir.name, dirPath: dir.path, notes: subNotes });
+    }
+
+    setRootNotes(mdFiles);
+    setCollections(groups);
   }, [notesDir]);
 
-  useEffect(() => {
-    loadNotes();
-  }, [loadNotes]);
+  useEffect(() => { loadNotes(); }, [loadNotes]);
 
-  // ── Sync selected note into the store ────────────────────────────────────────
-  // The Analysis panel reads state.selectedPath / state.metadata from the store.
-  // Without this sync it would keep showing stale metadata from whatever was
-  // last clicked in the file browser.
-  //
-  // Dispatching SELECT_FILE:
-  //   • clears state.metadata in the reducer immediately
-  //   • triggers Dashboard's useEffect(selectedPath) which auto-loads the
-  //     note's metadata and populates the Analysis panel correctly.
-  //
-  // On mount we clear any leftover selection from the file browser.
-  // On unmount we clear again so the panel doesn't linger with note data.
+  // ── Store sync ────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     storeDispatch({ type: "SELECT_FILE", path: selectedPath });
   }, [selectedPath, storeDispatch]);
 
   useEffect(() => {
-    // Clear stale file-browser selection the moment NotesView mounts.
     storeDispatch({ type: "SELECT_FILE", path: null });
-    return () => {
-      // Also clear when leaving Notes view.
-      storeDispatch({ type: "SELECT_FILE", path: null });
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { storeDispatch({ type: "SELECT_FILE", path: null }); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Load note content when the selected path changes ─────────────────────────
+  // ── Load content when selection changes ───────────────────────────────────────
 
   useEffect(() => {
-    if (!selectedPath) {
-      setContent("");
-      setSaveStatus("idle");
-      return;
-    }
+    if (!selectedPath) { setContent(""); setSaveStatus("idle"); return; }
 
-    // Cancel any pending debounce and flush any unsaved content for the
-    // note we're navigating away from.  Fire-and-forget: we don't await
-    // because the effect must return synchronously, and a background write
-    // completing slightly after navigation is an acceptable trade-off vs
-    // silently discarding the last keystrokes.
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
-      const flushPath    = selectedPathRef.current;
-      const flushContent = contentRef.current;
-      if (flushPath) {
-        void dms.writeFile(flushPath, flushContent);
-      }
+      const p = selectedPathRef.current;
+      const c = contentRef.current;
+      if (p) void dms.writeFile(p, c);
     }
     setSaveStatus("idle");
 
     let cancelled = false;
     dms.readFile(selectedPath).then((res) => {
       if (cancelled) return;
-      const text =
-        res.ok && res.data?.content != null ? res.data.content : "";
-      setContent(text);
+      setContent(res.ok && res.data?.content != null ? res.data.content : "");
     });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [selectedPath]);
 
   // ── Debounced auto-save ───────────────────────────────────────────────────────
 
-  /**
-   * Schedule a save 600 ms after the last keystroke.
-   * Reads from refs so it never captures stale state.
-   */
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setSaveStatus("saving");
-
     saveTimerRef.current = setTimeout(async () => {
       const path = selectedPathRef.current;
       if (!path) return;
-
       const res = await dms.writeFile(path, contentRef.current);
       setSaveStatus(res.ok ? "saved" : "error");
-      // Auto-reset the "Saved" badge so it doesn't linger.
-      if (res.ok) {
-        setTimeout(
-          () => setSaveStatus((s) => (s === "saved" ? "idle" : s)),
-          2000,
-        );
-      }
+      if (res.ok) setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 2000);
     }, 600);
-  }, []); // intentionally no deps — refs carry the latest values
+  }, []);
 
   const handleContentChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setContent(e.target.value);
-      scheduleSave();
-    },
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => { setContent(e.target.value); scheduleSave(); },
     [scheduleSave]
   );
 
-  // ── Create a new note ─────────────────────────────────────────────────────────
+  // ── Create note ───────────────────────────────────────────────────────────────
 
-  /**
-   * Called when the inline form is committed (Enter or ✓ button).
-   * Takes the title string directly — no window.prompt.
-   */
-  const createNote = useCallback(async (title: string) => {
-    const trimmed = title.trim();
-    if (!trimmed) return;
+  const createNote = useCallback(
+    async (title: string, collection: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      const baseSlug = slugify(trimmed) || "note";
+      const targetDir = collection ? `${notesDir}/${collection}` : notesDir;
+      const existingNotes = collection
+        ? (collections.find((c) => c.name === collection)?.notes ?? [])
+        : rootNotes;
+      const existingPaths = new Set(existingNotes.map((n) => n.path));
+      let filePath = `${targetDir}/${baseSlug}.md`;
+      if (existingPaths.has(filePath)) {
+        let n = 2;
+        while (existingPaths.has(`${targetDir}/${baseSlug}-${n}.md`)) n++;
+        filePath = `${targetDir}/${baseSlug}-${n}.md`;
+      }
+      await dms.createDir(targetDir);
+      const res = await dms.writeFile(filePath, `# ${trimmed}\n\n`);
+      if (!res.ok) { console.error("[NotesView] Failed to create note:", res.error); return; }
+      await loadNotes();
+      setSelectedPath(filePath);
+    },
+    [notesDir, collections, rootNotes, loadNotes]
+  );
 
-    const baseSlug = slugify(trimmed) || "note";
-
-    // Guard against filename collisions with already-existing notes.
-    const existingPaths = new Set(notes.map((n) => n.path));
-    let filePath = `${notesDir}/${baseSlug}.md`;
-    if (existingPaths.has(filePath)) {
-      let n = 2;
-      while (existingPaths.has(`${notesDir}/${baseSlug}-${n}.md`)) n++;
-      filePath = `${notesDir}/${baseSlug}-${n}.md`;
-    }
-
-    // Ensure the .notes directory exists (idempotent).
-    await dms.createDir(notesDir);
-
-    const res = await dms.writeFile(filePath, `# ${trimmed}\n\n`);
-    if (!res.ok) {
-      console.error("[NotesView] Failed to create note:", res.error);
-      return;
-    }
-
-    await loadNotes();
-    setSelectedPath(filePath);
-  }, [notesDir, notes, loadNotes]);
-
-  /** Commit the inline new-note form. */
   const commitNewNote = useCallback(async () => {
     const title = newNoteTitle.trim();
     setCreatingNote(false);
     setNewNoteTitle("");
-    if (title) await createNote(title);
-  }, [newNoteTitle, createNote]);
+    if (title) await createNote(title, newNoteCollection);
+  }, [newNoteTitle, newNoteCollection, createNote]);
 
-  // ── Delete a note ─────────────────────────────────────────────────────────────
+  // ── Create collection ─────────────────────────────────────────────────────────
 
-  /** Actually removes the file after the inline confirmation is accepted. */
-  const confirmAndDelete = useCallback(
+  const createCollection = useCallback(async () => {
+    const name = newCollectionName.trim();
+    setCreatingCollection(false);
+    setNewCollectionName("");
+    if (!name) return;
+    await dms.createDir(`${notesDir}/${name}`);
+    await loadNotes();
+  }, [newCollectionName, notesDir, loadNotes]);
+
+  // ── Delete note ───────────────────────────────────────────────────────────────
+
+  const deleteNote = useCallback(
     async (path: string) => {
-      setConfirmDelete(null);
+      setConfirmDeleteNote(null);
       const res = await dms.deleteFiles([path]);
       if (res.ok) {
-        if (selectedPath === path) {
-          setSelectedPath(null);
-          setContent("");
-        }
+        if (selectedPath === path) { setSelectedPath(null); setContent(""); }
         await loadNotes();
       } else {
-        console.error("[NotesView] Delete failed:", res.error);
+        console.error("[NotesView] Delete note failed:", res.error);
       }
     },
     [selectedPath, loadNotes]
   );
 
-  // ── Derived values ────────────────────────────────────────────────────────────
+  // ── Delete collection (cascade delete all notes, then dir) ────────────────────
 
-  // Memoised so markdown parsing only re-runs when content actually changes,
-  // not on every hover event or other incidental re-render.
+  const deleteCollection = useCallback(
+    async (group: CollectionGroup) => {
+      setConfirmDeleteCol(null);
+      const notePaths = group.notes.map((n) => n.path);
+      if (notePaths.length > 0) await dms.deleteFiles(notePaths);
+      await dms.deleteFiles([group.dirPath]).catch(() => {});
+      if (selectedPath && group.notes.some((n) => n.path === selectedPath)) {
+        setSelectedPath(null);
+        setContent("");
+      }
+      await loadNotes();
+    },
+    [selectedPath, loadNotes]
+  );
+
+  // ── Toggle collection collapsed ───────────────────────────────────────────────
+
+  const toggleCollapse = useCallback((name: string) => {
+    setCollapsedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }, []);
+
+  // ── Derived ───────────────────────────────────────────────────────────────────
+
   const preview = useMemo(() => renderMarkdown(content), [content]);
+  const allCollectionNames = collections.map((c) => c.name);
+
+  // ── Render helper: one note row ───────────────────────────────────────────────
+
+  const renderNoteRow = (note: FsEntry, indent: boolean) => {
+    const isSelected = note.path === selectedPath;
+    const label = note.name.replace(/\.md$/, "");
+    const isDeleting = confirmDeleteNote === note.path;
+
+    if (isDeleting) {
+      return (
+        <div
+          key={note.path}
+          className={`flex items-center gap-1.5 py-2 bg-red-500/8 border-b border-red-500/15 ${indent ? "pl-6 pr-2" : "px-2"}`}
+        >
+          <span className="flex-1 text-[10px] text-red-600 dark:text-red-400 truncate">
+            Delete &ldquo;{label}&rdquo;?
+          </span>
+          <button
+            onClick={() => void deleteNote(note.path)}
+            className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0"
+          >Yes</button>
+          <button
+            onClick={() => setConfirmDeleteNote(null)}
+            className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0"
+          >No</button>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={note.path}
+        onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setSelectedPath(note.path); }}
+        className={[
+          "group relative flex items-center gap-2 py-2 cursor-pointer transition-colors select-none",
+          indent ? "pl-6 pr-3" : "px-3",
+          isSelected
+            ? "bg-[var(--theme-primary)] text-white"
+            : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]",
+        ].join(" ")}
+      >
+        <div className="flex-1 min-w-0">
+          <div className={`text-xs font-medium truncate ${isSelected ? "text-white" : "text-[var(--theme-text)]"}`}>
+            {label}
+          </div>
+          {note.modified != null && (
+            <div className={`text-[10px] mt-0.5 ${isSelected ? "text-white/70" : "text-[var(--theme-text-muted)]"}`}>
+              {fmtDate(note.modified)}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); setConfirmDeleteNote(note.path); }}
+          title="Delete note"
+          className={[
+            "shrink-0 w-5 h-5 flex items-center justify-center rounded transition-all",
+            isSelected
+              ? "text-white/60 hover:text-white hover:bg-white/20"
+              : "text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-red-500/10",
+            isSelected
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto",
+          ].join(" ")}
+        >
+          <Icon name="trash" size="xs" />
+        </button>
+      </div>
+    );
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--theme-bg)]">
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          Left pane — note list
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ══ Left pane ══════════════════════════════════════════════════════════ */}
       <div
         className="flex flex-col shrink-0 border-r border-[var(--theme-border)] bg-[var(--theme-surface)]"
-        style={{ width: 220 }}
+        style={{ width: 240 }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--theme-border)] shrink-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">
+          <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">
             Notes
           </span>
-          <button
-            onClick={() => {
-              setConfirmDelete(null); // dismiss any open delete confirmation
-              setCreatingNote(true);
-              setNewNoteTitle("");
-            }}
-            title="New note"
-            className="w-6 h-6 flex items-center justify-center rounded transition-colors
-                       text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10
-                       active:scale-95"
-          >
-            <Icon name="plus" size="xs" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingCollection(true); setNewCollectionName(""); }}
+              title="New collection"
+              className="w-6 h-6 flex items-center justify-center rounded transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 active:scale-95"
+            >
+              <Icon name="folder" size="xs" />
+            </button>
+            <button
+              onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingNote(true); setNewNoteTitle(""); setNewNoteCollection(""); }}
+              title="New note"
+              className="w-6 h-6 flex items-center justify-center rounded transition-colors text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 active:scale-95"
+            >
+              <Icon name="plus" size="xs" />
+            </button>
+          </div>
         </div>
 
-        {/* Inline new-note form — shown instead of window.prompt */}
+        {/* Inline new-collection form */}
+        {creatingCollection && (
+          <div className="px-2 pt-2 pb-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)] shrink-0">
+            <div className="flex items-center gap-1 mb-1">
+              <Icon name="folder" size="xs" className="text-[var(--theme-text-muted)] shrink-0" />
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">New Collection</span>
+            </div>
+            <input
+              autoFocus type="text" value={newCollectionName}
+              onChange={(e) => setNewCollectionName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter")  void createCollection();
+                if (e.key === "Escape") { setCreatingCollection(false); setNewCollectionName(""); }
+              }}
+              placeholder="Collection name…"
+              className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+            />
+            <div className="flex gap-1 mt-1.5">
+              <button onClick={() => void createCollection()} disabled={!newCollectionName.trim()}
+                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
+                Create
+              </button>
+              <button onClick={() => { setCreatingCollection(false); setNewCollectionName(""); }}
+                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Inline new-note form */}
         {creatingNote && (
           <div className="px-2 pt-2 pb-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)] shrink-0">
             <input
-              autoFocus
-              type="text"
-              value={newNoteTitle}
+              autoFocus type="text" value={newNoteTitle}
               onChange={(e) => setNewNoteTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter")  void commitNewNote();
                 if (e.key === "Escape") { setCreatingNote(false); setNewNoteTitle(""); }
               }}
               placeholder="Note title…"
-              className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)]
-                         rounded-md px-2 py-1 text-xs text-[var(--theme-text)]
-                         placeholder:text-[var(--theme-text-muted)]
-                         focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+              className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-1.5"
             />
-            <div className="flex gap-1 mt-1.5">
-              <button
-                onClick={() => void commitNewNote()}
-                disabled={!newNoteTitle.trim()}
-                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider
-                           rounded bg-[var(--theme-primary)] text-white
-                           hover:opacity-90 disabled:opacity-40 transition-opacity"
+            {allCollectionNames.length > 0 && (
+              <select
+                value={newNoteCollection}
+                onChange={(e) => setNewNoteCollection(e.target.value)}
+                className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-1.5"
               >
+                <option value="">(root — no collection)</option>
+                {allCollectionNames.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-1">
+              <button onClick={() => void commitNewNote()} disabled={!newNoteTitle.trim()}
+                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
                 Create
               </button>
-              <button
-                onClick={() => { setCreatingNote(false); setNewNoteTitle(""); }}
-                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider
-                           rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)]
-                           hover:bg-[var(--theme-bg)] transition-colors"
-              >
+              <button onClick={() => { setCreatingNote(false); setNewNoteTitle(""); }}
+                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors">
                 Cancel
               </button>
             </div>
@@ -463,221 +641,134 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
         {/* List body */}
         <div className="flex-1 overflow-y-auto">
           {listLoading ? (
-            /* Spinner while scanning */
             <div className="flex items-center justify-center py-10">
-              <span
-                className="w-4 h-4 rounded-full border-2 animate-spin
-                           border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)]"
-              />
+              <span className="w-4 h-4 rounded-full border-2 animate-spin border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)]" />
             </div>
 
-          ) : notes.length === 0 ? (
-            /* Empty state */
+          ) : (rootNotes.length === 0 && collections.length === 0) ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 gap-2 text-center">
-              <Icon
-                name="file"
-                size="md"
-                className="opacity-20 text-[var(--theme-text)]"
-              />
+              <Icon name="file" size="md" className="opacity-20 text-[var(--theme-text)]" />
               <p className="text-[10px] leading-relaxed text-[var(--theme-text-muted)]">
-                No notes yet.
-                <br />
-                Press&nbsp;＋&nbsp;to create one.
+                No notes yet.<br />Press&nbsp;＋&nbsp;to create one.
               </p>
             </div>
 
           ) : (
-            /* Note rows */
-            notes.map((note) => {
-              const isSelected = note.path === selectedPath;
-              const label      = note.name.replace(/\.md$/, "");
+            <>
+              {/* Root notes */}
+              {rootNotes.map((note) => renderNoteRow(note, false))}
 
-              // Inline delete confirmation replaces the row
-              if (confirmDelete === note.path) {
+              {/* Collection groups */}
+              {collections.map((group) => {
+                const isCollapsed  = collapsedCols.has(group.name);
+                const isDeletingCol = confirmDeleteCol === group.name;
                 return (
-                  <div
-                    key={note.path}
-                    className="flex items-center gap-1.5 px-2 py-2 bg-red-500/8 border-b border-red-500/15"
-                  >
-                    <span className="flex-1 text-[10px] text-red-600 dark:text-red-400 truncate">
-                      Delete &ldquo;{label}&rdquo;?
-                    </span>
-                    <button
-                      onClick={() => void confirmAndDelete(note.path)}
-                      className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(null)}
-                      className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0"
-                    >
-                      No
-                    </button>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={note.path}
-                  onClick={() => { setConfirmDelete(null); setSelectedPath(note.path); }}
-                  className={[
-                    "group relative flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors select-none",
-                    isSelected
-                      ? "bg-[var(--theme-primary)] text-white"
-                      : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]",
-                  ].join(" ")}
-                >
-                  {/* Text block */}
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className={[
-                        "text-xs font-medium truncate",
-                        isSelected ? "text-white" : "text-[var(--theme-text)]",
-                      ].join(" ")}
-                    >
-                      {label}
-                    </div>
-                    {note.modified != null && (
+                  <div key={group.dirPath}>
+                    {isDeletingCol ? (
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-red-500/8 border-y border-red-500/15">
+                        <span className="flex-1 text-[10px] text-red-600 dark:text-red-400 truncate">
+                          Delete &ldquo;{group.name}&rdquo; ({group.notes.length})?
+                        </span>
+                        <button onClick={() => void deleteCollection(group)}
+                          className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">Yes</button>
+                        <button onClick={() => setConfirmDeleteCol(null)}
+                          className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">No</button>
+                      </div>
+                    ) : (
                       <div
-                        className={[
-                          "text-[10px] mt-0.5",
-                          isSelected
-                            ? "text-white/70"
-                            : "text-[var(--theme-text-muted)]",
-                        ].join(" ")}
+                        className="group flex items-center gap-1.5 px-3 py-1.5 border-t border-[var(--theme-border)] bg-[var(--theme-surface)] cursor-pointer select-none hover:bg-[var(--theme-bg)] transition-colors"
+                        onClick={() => toggleCollapse(group.name)}
                       >
-                        {fmtDate(note.modified)}
+                        <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size="xs" className="shrink-0 text-[var(--theme-text-muted)]" />
+                        <Icon name="folder" size="xs" className="shrink-0 text-[var(--theme-text-muted)]" />
+                        <span className="flex-1 text-[10px] font-bold uppercase tracking-wide text-[var(--theme-text-muted)] truncate">
+                          {group.name}
+                        </span>
+                        <span className="text-[10px] text-[var(--theme-text-muted)] tabular-nums shrink-0">
+                          {group.notes.length}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteCol(group.name); }}
+                          title="Delete collection"
+                          className="shrink-0 w-4 h-4 flex items-center justify-center rounded transition-all text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-red-500/10 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+                        >
+                          <Icon name="trash" size="xs" />
+                        </button>
                       </div>
                     )}
+                    {!isCollapsed && (
+                      group.notes.length === 0
+                        ? <div className="pl-6 pr-3 py-2 text-[10px] text-[var(--theme-text-muted)] italic">Empty collection</div>
+                        : group.notes.map((note) => renderNoteRow(note, true))
+                    )}
                   </div>
-
-                  {/* Trash button — always in DOM, shown via CSS group-hover
-                      so we don't need hover state (avoids a re-render + markdown
-                      re-parse on every mouse-enter). */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setConfirmDelete(note.path); }}
-                    title="Delete note"
-                    className={[
-                      "shrink-0 w-5 h-5 flex items-center justify-center rounded transition-all",
-                      isSelected
-                        ? "text-white/60 hover:text-white hover:bg-white/20"
-                        : "text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-red-500/10",
-                      // Hidden until the row is hovered; pointer-events blocked
-                      // so it doesn't intercept clicks on invisible area.
-                      isSelected
-                        ? "opacity-100"
-                        : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto",
-                    ].join(" ")}
-                  >
-                    <Icon name="trash" size="xs" />
-                  </button>
-                </div>
-              );
-            })
+                );
+              })}
+            </>
           )}
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          Right pane — editor + preview
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ══ Right pane — editor + preview ══════════════════════════════════════ */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
         {selectedPath == null ? (
-          /* ── No selection: empty state ── */
           <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8">
-            <Icon
-              name="edit"
-              size="xl"
-              className="opacity-20 text-[var(--theme-text)]"
-            />
-            <p className="text-sm text-[var(--theme-text-muted)]">
-              Select a note or create one
-            </p>
+            <Icon name="edit" size="xl" className="opacity-20 text-[var(--theme-text)]" />
+            <p className="text-sm text-[var(--theme-text-muted)]">Select a note or create one</p>
           </div>
-
         ) : (
           <>
-            {/* ── Editor + Preview panels ── */}
             <div className="flex flex-1 min-h-0 overflow-hidden">
-
-              {/* Textarea (left half) */}
+              {/* Textarea */}
               <div className="flex flex-col flex-1 min-w-0 border-r border-[var(--theme-border)]">
-                {/* Sub-header — show the note's filename as a title */}
                 <div className="shrink-0 px-3 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] flex items-center gap-2">
                   <span className="flex-1 text-xs font-semibold truncate text-[var(--theme-text)]">
-                    {selectedPath?.split("/").pop()?.replace(/\.md$/, "") ?? ""}
+                    {selectedPath.split("/").pop()?.replace(/\.md$/, "") ?? ""}
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] shrink-0">
-                    md
-                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] shrink-0">md</span>
                 </div>
-
                 <textarea
                   value={content}
                   onChange={handleContentChange}
                   spellCheck={false}
-                  placeholder="Start writing…"
-                  className="flex-1 w-full resize-none outline-none font-mono text-sm leading-relaxed
-                             p-4 bg-[var(--theme-bg)] text-[var(--theme-text)]
-                             placeholder:text-[var(--theme-text-muted)]"
+                  placeholder={"Start writing…\n\nSupports **markdown**, `inline code`,\n```ascii\n┌─────┐\n│ art │\n└─────┘\n```\nand ![image](path)"}
+                  className="flex-1 w-full resize-none outline-none font-mono text-sm leading-relaxed p-4 bg-[var(--theme-bg)] text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)]"
                 />
               </div>
 
-              {/* Preview (right half) */}
+              {/* Preview */}
               <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-                {/* Sub-header */}
                 <div className="shrink-0 px-3 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">
-                    Preview
-                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">Preview</span>
                 </div>
-
                 <div
                   className="flex-1 overflow-y-auto p-4 text-sm text-[var(--theme-text)] leading-relaxed"
-                  // Safe: content is authored by the user themselves,
-                  // and escapeHtml() is applied to all user text before
-                  // any HTML tags are injected by renderMarkdown().
                   dangerouslySetInnerHTML={{ __html: preview }}
                 />
               </div>
             </div>
 
-            {/* ── Status bar ── */}
+            {/* Status bar */}
             <div
-              className="shrink-0 flex items-center justify-end gap-2 px-4 py-1
-                         border-t border-[var(--theme-border)] bg-[var(--theme-surface)]"
+              className="shrink-0 flex items-center justify-end gap-2 px-4 py-1 border-t border-[var(--theme-border)] bg-[var(--theme-surface)]"
               style={{ minHeight: 28 }}
             >
               {saveStatus === "saving" && (
                 <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-muted)]">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full border border-[var(--theme-primary)]/40
-                               border-t-[var(--theme-primary)] animate-spin"
-                  />
+                  <span className="w-2.5 h-2.5 rounded-full border border-[var(--theme-primary)]/40 border-t-[var(--theme-primary)] animate-spin" />
                   Saving…
                 </span>
               )}
-
               {saveStatus === "saved" && (
                 <span className="flex items-center gap-1 text-[10px] text-green-500 font-medium">
-                  <Icon name="check" size="xs" />
-                  Saved
+                  <Icon name="check" size="xs" />Saved
                 </span>
               )}
-
               {saveStatus === "error" && (
-                <span className="text-[10px] font-medium text-red-500">
-                  Save failed
-                </span>
+                <span className="text-[10px] font-medium text-red-500">Save failed</span>
               )}
-
-              {/* Idle: invisible spacer to keep the bar height stable */}
               {saveStatus === "idle" && (
-                <span className="text-[10px] opacity-0 select-none" aria-hidden>
-                  &nbsp;
-                </span>
+                <span className="text-[10px] opacity-0 select-none" aria-hidden>&nbsp;</span>
               )}
             </div>
           </>
@@ -688,3 +779,4 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 };
 
 export default NotesView;
+

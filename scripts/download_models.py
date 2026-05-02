@@ -23,6 +23,17 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+
+# ── Windows cp1252 / ANSI console fix ────────────────────────────────────────
+# GitHub Actions Windows agents default to cp1252 which cannot encode the
+# Unicode block characters used in the progress bar (U+2588 █, U+2591 ░).
+# Reconfigure stdout/stderr to UTF-8 with a safe replacement fallback so the
+# script never crashes with UnicodeEncodeError, even in legacy codepage shells.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from pathlib import Path
 
 

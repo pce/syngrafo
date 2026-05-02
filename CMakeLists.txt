@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.31)
+# 3.25 = minimum supported; 3.31 = highest policy version understood.
+# CMake 3.25–3.30 will build with 3.25 policies; 3.31+ uses the full policy set.
+cmake_minimum_required(VERSION 3.25...3.31)
 
 # ─── Standalone vs monorepo build ────────────────────────────────────────────
 # When included by the nlp_engine monorepo the nlp_engine target already exists.
@@ -441,7 +443,69 @@ if(SQLCIPHER_FOUND AND APPLE)
     unset(_sc_dylib_realpath)
 endif()
 
-# (Embedding already configured above to generate sources into the build dir.)
+# ── Install rules (consumed by CPack and cmake --install) ────────────────────
+# These tell CPack what goes into each platform's installer package.
+if(APPLE)
+    # Install the whole .app bundle.  The POST_BUILD commands above have already
+    # copied ONNX and SQLCipher dylibs into Contents/Frameworks/, so the bundle
+    # is fully self-contained by the time CPack reads it.
+    install(TARGETS syngrafo BUNDLE DESTINATION .)
+elseif(WIN32)
+    install(TARGETS syngrafo RUNTIME DESTINATION .)
+else()
+    include(GNUInstallDirs)
+    install(TARGETS syngrafo RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+# ── CPack installer configuration ─────────────────────────────────────────────
+#
+# Generates:
+#   macOS  → Syngrafo-<ver>-Darwin.dmg          (DragNDrop DMG)
+#   Linux  → Syngrafo-<ver>-Linux.deb           (Debian package)
+#            Syngrafo-<ver>-Linux.tar.gz         (portable tarball)
+#   Windows→ Syngrafo-<ver>-Windows.exe         (NSIS installer)
+#            Syngrafo-<ver>-Windows.zip          (portable ZIP)
+#
+# Run after cmake --build:   cd build && cpack -C Release
+
+set(CPACK_PACKAGE_NAME                "Syngrafo")
+set(CPACK_PACKAGE_VENDOR              "pce")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Local-first document management with NLP and 3D preview")
+set(CPACK_PACKAGE_VERSION             "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_HOMEPAGE_URL        "https://github.com/pce/syngrafo")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY   "Syngrafo")
+set(CPACK_STRIP_FILES                 TRUE)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+endif()
+
+if(APPLE)
+    set(CPACK_GENERATOR       "DragNDrop")
+    set(CPACK_DMG_FORMAT      "UDBZ")          # bzip2-compressed DMG
+    set(CPACK_DMG_VOLUME_NAME "Syngrafo ${PROJECT_VERSION}")
+
+elseif(UNIX)
+    set(CPACK_GENERATOR "DEB;TGZ")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER  "pce")
+    set(CPACK_DEBIAN_PACKAGE_SECTION     "utils")
+    # amd64 matches the ubuntu-24.04 CI runner; override for ARM builds.
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+    # Runtime dependencies on Ubuntu 24.04 (Noble) + LLVM 20 runtime.
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS
+        "libwebkitgtk-6.0-4, libgtk-4-1, libadwaita-1-0, libsqlite3-0, libc++1-20, libc++abi1-20")
+
+elseif(WIN32)
+    set(CPACK_GENERATOR "NSIS;ZIP")
+    # NSIS is pre-installed on GitHub Actions windows-2025 runners.
+    set(CPACK_NSIS_DISPLAY_NAME                  "Syngrafo ${PROJECT_VERSION}")
+    set(CPACK_NSIS_PACKAGE_NAME                  "Syngrafo")
+    set(CPACK_NSIS_URL_INFO_ABOUT                "https://github.com/pce/syngrafo")
+    set(CPACK_NSIS_MODIFY_PATH                   ON)
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+endif()
+
+include(CPack)
 
 # Summary
 
