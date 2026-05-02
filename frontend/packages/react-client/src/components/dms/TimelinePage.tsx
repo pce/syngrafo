@@ -229,7 +229,7 @@ const TimelinePage: React.FC = () => {
         {/* No files found */}
         {!loading && activePath && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-            <span className="text-2xl opacity-20">📂</span>
+            <Icon name="folder" size="lg" className="opacity-20 text-[var(--theme-text)]" />
             <p className="text-sm text-[var(--theme-text-muted)]">No files found</p>
           </div>
         )}

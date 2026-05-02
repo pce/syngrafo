@@ -3,9 +3,11 @@ import { useDms } from "../../store/dms-store";
 import { nlp } from "../../services/nlp-service";
 import { dms, isImageFile } from "../../services/dms-service";
 import type { ImageAnalysis } from "../../services/dms-service";
-import { KIND_LABEL, KIND_EMOJI } from "../../services/dms-service";
+import { KIND_LABEL, KIND_ICON } from "../../services/dms-service";
 import type { SentimentData, Keyword, Entity } from "../../services/nlp-service";
 import type { ZoneHistoryItem } from "../../services/dms-service";
+import Icon from "../Icon";
+import type { IconName } from "../Icon";
 
 function fmtBytes(b: number): string {
   if (b < 1024)           return `${b} B`;
@@ -193,12 +195,14 @@ const AnalysisPanel: React.FC = () => {
       {state.fileStats && (() => {
         const fs = state.fileStats;
         const kindLabel = KIND_LABEL[fs.kind] ?? "File";
-        const emoji     = KIND_EMOJI[fs.kind]  ?? "📎";
+        const kindIcon  = KIND_ICON[fs.kind]  ?? "file";
         return (
           <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] overflow-hidden">
             {/* Title row */}
             <div className="flex items-center gap-2.5 px-3 py-2.5">
-              <span className="text-xl leading-none shrink-0">{emoji}</span>
+              <span className="shrink-0 text-[var(--theme-text-muted)]">
+                <Icon name={kindIcon as IconName} size="sm" />
+              </span>
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-semibold text-[var(--theme-text)] truncate">
                   {fs.name}

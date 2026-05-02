@@ -195,11 +195,91 @@ jobs:
           if-no-files-found: warn
 
 
+  # ── Windows ────────────────────────────────────────────────────────────────
+  build-windows:
+    name: Build — Windows (MSVC, Release)
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      # ── Tooling ────────────────────────────────────────────────────────────
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install CMake + Ninja
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "~3.28.0"
+          ninjaVersion: "latest"
+
+      # ── CPM / FetchContent cache ───────────────────────────────────────────
+
+      - name: Cache CPM / FetchContent deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/_deps
+            ~/AppData/Local/cpm-cache
+          key:          cpm-windows-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'external/nlp/CMakeLists.txt') }}
+          restore-keys: cpm-windows-
+
+      # ── NLP models ─────────────────────────────────────────────────────────
+
+      - name: Download required NLP models
+        run: python3 scripts/download_models.py download --models embed,vocab
+        working-directory: ${{ github.workspace }}
+
+      # ── Frontend ───────────────────────────────────────────────────────────
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      - name: Compile i18n catalogs
+        run: bun run i18n:compile
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      - name: Build frontend bundle
+        run: bun run build.ts --minify
+        working-directory: ${{ github.workspace }}/frontend/packages/react-client
+
+      # ── Native build ───────────────────────────────────────────────────────
+
+      - name: Configure CMake (MSVC via Developer Command Prompt)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: cmake -B build --preset ci-windows
+        working-directory: ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+        working-directory: ${{ github.workspace }}
+
+      # ── Artifact ───────────────────────────────────────────────────────────
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: papiere-windows-${{ github.sha }}
+          path: build/Release/papiere.exe
+          if-no-files-found: warn
+
+
   # ── Release (version tag only) ─────────────────────────────────────────────
   release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-macos, build-linux]
+    needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -220,6 +300,12 @@ jobs:
           name: papiere-linux-${{ github.sha }}
           path: release/linux
 
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: papiere-windows-${{ github.sha }}
+          path: release/windows
+
       - name: Package artifacts
         run: |
           cd release/macos
@@ -227,6 +313,8 @@ jobs:
           cd ../../release/linux
           chmod +x papiere
           tar -czf "../papiere-linux-${{ github.ref_name }}.tar.gz" papiere
+          cd ../../release/windows
+          zip "../papiere-windows-${{ github.ref_name }}.zip" papiere.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -240,3 +328,4 @@ jobs:
           files: |
             release/papiere-macos-${{ github.ref_name }}.zip
             release/papiere-linux-${{ github.ref_name }}.tar.gz
+            release/papiere-windows-${{ github.ref_name }}.zip

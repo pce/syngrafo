@@ -1,160 +1,32 @@
-= Syngrafo0.1.0
-:toc:
+= Syngrafo
+:toc: left
+:toc-title: Contents
+:toclevels: 2
 :icons: font
 :source-highlighter: highlight.js
 
-Syngrafo0 is a cross-platform, local-first file browser that integrates document management, note-taking, and task organization into a unified system.
+image:https://img.shields.io/badge/status-active-brightgreen[]
+image:https://img.shields.io/badge/license-MIT-blue[]
+image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey[]
+image:https://github.com/pce/tools/actions/workflows/release.yml/badge.svg[CI]
 
-It is built around a native C++ core for performance, with a modular frontend architecture.
+Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
 
-== Project Status
-
-[cols="1,3"]
-|===
-| Status        | Active development
-| License       | MIT (see `LICENSE`)
-| Platforms     | macOS, Linux (Windows planned)
-| Architecture  | Native backend (C++) + web-based client
-|===
-
-== Features
-
-* Unified file browser with structured navigation
-* Document Management System (DMS)
-* OCR support for images
-* Audio file handling
-* Local-first architecture
-* Extensible NLP integration
-* Integrated notes and lightweight knowledge capture
-* Kanban-style task organization
-
-
-== Screenshots
-
-image::data/inp/syngrafo_image_ocr.jpg[OCR Example]
-
-== Zones & Security
-
-Syngrafo0 uses *Zones* as the primary unit of isolation, organization, and security.
-
-A Zone represents a self-contained workspace that encapsulates files, metadata, indexes, and configuration. Zones are designed to be portable, local-first, and optionally encrypted.
-
-=== Zone Model
-
-Each Zone contains:
-
-* File data (documents, media, attachments)
-* Structured metadata (notes, tasks, contacts)
-* Search indexes and NLP artifacts
-* Configuration and view definitions
-
-Zones can be treated as independent environments and may be created, copied, archived, or deleted without affecting other Zones.
-
-=== Encryption
-
-Zones can be configured to use encryption at rest.
-
-When enabled:
-
-* A *per-Zone encryption key* is used
-* Metadata and indexes are encrypted on disk
-* Optional file-level encryption can be applied to stored content
-* All sensitive data remains local to the device
-
-Encryption is designed to be:
-
-* *Local-first* — no external services required
-* *Self-contained* — no global key dependency
-* *Portable* — encrypted Zones can be moved between systems
-
-=== Locking and Unlocking
-
-Encrypted Zones operate in two states:
-
-* *Locked*
-  - Data remains encrypted
-  - No indexing or semantic search is available
-  - Minimal metadata exposure
-
-* *Unlocked*
-  - Data is decrypted in memory
-  - Full functionality is available (search, NLP, views)
-
-Unlocking a Zone provides access only for the current session.
-
-=== Search and NLP Considerations
-
-Syngrafo0 integrates a local NLP pipeline for semantic search and data extraction.
-
-For encrypted Zones:
-
-* Indexes are stored encrypted at rest
-* NLP processing occurs only when a Zone is unlocked
-* No data is sent to external services
-
-This model ensures that advanced queries (e.g. semantic or contextual search) do not compromise data confidentiality.
-
-=== Design Principles
-
-* *Isolation* — Zones do not share data unless explicitly exported
-* *Explicit access* — encrypted data requires user action to unlock
-* *No silent sync* — no background transmission of user data
-* *Graceful degradation* — functionality reduces predictably when locked
-
-=== Future Work
-
-* Fine-grained encryption (per-file / per-record)
-* Secure key management integration (OS keychains, hardware tokens)
-* Incremental re-indexing for large encrypted Zones
-* Optional encrypted backups and synchronization
-
-
-== Getting Started
-
-=== Prerequisites
-
-* Python 3
-* CMake
-* A C++ toolchain (Clang or GCC)
-* https://bun.sh[Bun] (for frontend builds)
-
-=== Build (Debug)
-
-From the repository root:
+== Quick Start
 
 [source,bash]
 ----
-python3 scripts/dev.py debug \
-  --build-dir build \
-  --source-dir . \
-  --target syngrafo \
-  -j 8
-----
+# frontend
+cd frontend/packages/react-client && bun install && bun run build.ts --minify
 
-=== Build with Client
-
-[source,bash]
-----
+# C++ debug build (rebuilds frontend automatically with --use-client)
 python3 scripts/dev.py debug --use-client -j8
-----
 
-=== Run
-
-macOS app bundle:
-
-[source,bash]
-----
+# run
 ./build/syngrafo.app/Contents/MacOS/syngrafo
 ----
 
-Binary in build directory:
-
-[source,bash]
-----
-./build/syngrafo
-----
-
-== Environment Configuration
+Optional env vars (defaults shown):
 
 [source,bash]
 ----
@@ -162,121 +34,150 @@ export NLP_DATA_DIR=$(pwd)/data
 export NLP_MODEL_DIR=$(pwd)/data/models
 ----
 
-== Frontend
-
-[source,bash]
-----
-cd frontend/packages/react-client
-bun install
-bun run build.ts --minify
-----
-
 == Architecture
 
-=== Overview
+[cols="1,3",options="header"]
+|===
+| Layer | Role
+| *C++ Core* | DMS engine, OCR, NLP pipeline, SQLite/SQLCipher, saucer webview host
+| *IPC* | `window.saucer.exposed.<name>()` — every binding returns `Promise<string>` (JSON envelope `{ok, data?, error?}`)
+| *Frontend* | React 19 + TypeScript, Bun bundler, Tailwind CSS, LinguiJS i18n, Three.js 3D viewer
+|===
 
-Syngrafo is structured into three main layers:
+Key source layout:
+
+[source]
+----
+app/
+  main.cc                 — startup, 32 saucer expose() bindings
+  dms_bindings.hh         — binding implementations
+  db/database.hh          — LINQ-style SQLite/SQLCipher (C++23, header-only)
+  ocr_mac.mm              — macOS Vision OCR
+frontend/packages/react-client/src/
+  store/                  — dms, theme, settings, locale context stores
+  services/dms-service.ts — typed IPC wrappers + file-kind taxonomy
+  components/dms/         — FileBrowser · DocumentViewer · AnalysisPanel · ZonePanel
+  components/dms/ThreeDViewer.tsx  — Three.js PLY/OBJ/GLTF/GLB/STL viewer
+----
+
+== Features
 
 [cols="1,3"]
 |===
-| Layer        | Description
-| Core (C++)   | Document management, indexing, processing
-| Services     | API layer exposing DMS functionality
-| UI           | Web-based client
+| *File browser* | Multi-select, keyboard nav, breadcrumb, zone source/workspace toggle
+| *Document viewer* | Image (OCR · rectify · PDF export · SVG conversion), PDF, audio, video, SVG inline, 3D models, text/code
+| *3D preview* | PLY · OBJ (+MTL) · GLTF · GLB · STL — orbit controls (Three.js)
+| *OCR* | macOS Vision framework; Tesseract as Fallback
+| *NLP* | Keywords · NER · sentiment · embeddings — all local ONNX, no cloud
+| *Zones* | Named workspaces with optional AES-256 encryption (SQLCipher + macOS Keychain)
+| *Notes* | Markdown-lite `.notes` files in any folder
+| *Kanban* | `.kanban` boards with drag-and-drop lanes
+| *Search* | Semantic (cosine) + keyword fallback
+| *Themes* | 12 colour presets + custom CSS vars, radius/density toggles
+| *i18n* | English · Deutsch · Ελληνικά — switch in *Settings → Language*
 |===
 
-=== Core (C++)
+== Zones
 
-The DMS logic is implemented in the `syngrafo` target.
+A Zone pairs a **source folder** (original documents) with a **workspace folder** (index and processed files).
 
-Backend components:
+Default workspace path: `{source}/.papiere/{zone-slug}/`
 
-* `dms_bindings.hh`
-* Progress events emitted via:
-  `window.__dms_progress`
+Zones support **AES-256 encryption** via SQLCipher. Passphrase → PBKDF2 key → macOS Keychain. Locked zones expose no index data; full search/NLP resumes on unlock.
 
-=== Services
-
-* DMS API abstraction layer
-
-=== UI
-
-* Configurable frontend (default: React-based client)
-
-== Concepts
-
-=== Zones
-
-Zones are isolated workspaces used to organize data and workflows.
-
-They can represent:
-
-* Projects
-* Sandboxes
-* Logical environments
-
-== File Browser Capabilities
-
-* Image processing (OCR)
-* Audio file support
-* Extensible for additional media types
-
-
-
-== Development
-
-=== Run Tests
+== NLP Models
 
 [source,bash]
 ----
+python3 scripts/download_models.py download
+python3 scripts/download_models.py check
+----
+
+[cols="2,3,1,3",options="header"]
+|===
+| File | Model | Size | Purpose
+| `embed.onnx` | all-MiniLM-L6-v2 (int8) | 23 MB | 384-dim sentence embeddings
+| `sentiment.onnx` | distilbert-sst-2 | 67 MB | Positive / negative
+| `ner.onnx` | bert-base-NER | 415 MB | CoNLL-2003 entities
+| `toxicity.onnx` | toxic-bert | 415 MB | Multi-label toxicity
+| `vocab.txt` | BERT WordPiece | 232 KB | Shared tokeniser
+|===
+
+== Database
+
+`pce::db::Database` (`app/db/database.hh`) — header-only LINQ-style builder. No ORM, no macros. Statements compiled once per SQL shape and cached. WAL journal mode on every connection.
+
+[source,cpp]
+----
+auto db = pce::db::Database::open("syngrafo.db");           // plain
+auto db = pce::db::Database::open_encrypted("syngrafo.db", passphrase); // AES-256
+
+auto rows = db.from("dms_zones")
+              .where("is_encrypted = ?", 1)
+              .order_by("last_visited", false)
+              .limit(10).execute();
+----
+
+== i18n / Language
+
+Switch language in-app: **Theme & Settings → Settings tab → Language**.
+
+To add a locale:
+
+[source,bash]
+----
+bun run i18n:extract          # scan src/ → update .po files
+# translate src/locales/<lang>/messages.po in POEdit
+bun run i18n:compile          # .po → .ts catalogs
+# register the new code in src/i18n/index.ts → LOCALES
+bun run build.ts
+----
+
+Catalogs are statically imported so Bun can tree-shake unused ones at build time.
+
+== 3D Preview
+
+Three.js renders PLY, OBJ (+MTL auto-detection), GLTF, GLB, and STL files in the Document Viewer through the saucer `local://` scheme.
+
+image::data/inp/syngrafo_3d_2026-05-02at2.27PM.jpg[3d preview]
+
+
+
+Controls: *drag* = rotate · *scroll* = zoom · *right-drag* = pan.
+
+== Build
+
+.Prerequisites
+[cols="1,1,2",options="header"]
+|===
+| Tool | Min | Purpose
+| CMake | 3.25 | Build system
+| Clang / AppleClang | C++23 | Compiler
+| Bun | 1.0 | Frontend bundler
+| Python 3 | 3.9 | Dev runner, model scripts
+|===
+
+[source,bash]
+----
+# debug build
+python3 scripts/dev.py debug --use-client -j8
+
+# force CMake to rescan dist/
+cmake -S . -B build && cmake --build build --config Debug
+
+# tests
 python3 scripts/dev.py test --target syngrafo
-----
-
-=== Troubleshooting
-
-Force CMake to rescan the `dist/` directory:
-
-[source,bash]
-----
-cmake -S . -B build
-cmake --build build --config Debug
 ----
 
 == Roadmap
 
-* [ ] Complete DMS core implementation
-* [ ] Stable client bindings
-* [ ] Zone-based workflow system
-* [ ] Cross-platform packaging
-* [ ] Plugin system
-* [ ] Search and indexing improvements
-
-== Contributing
-
-Contributions are welcome.
-
-To get started:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make focused changes with clear commits
-4. Open a pull request with a description of the changes
-
-Please ensure:
-
-* Code builds successfully
-* Tests pass
-* Changes are documented where applicable
-
-== Design Goals
-
-* Local-first and offline-capable
-* Predictable performance via native core
-* Clear separation of concerns
-* Minimal external dependencies
-* Extensibility without fragmentation
+* [ ] FolderOptions serialisation (MessagePack/CBOR) + cross-machine Zone sync
+* [ ] Per-file / per-record encryption
+* [ ] Audio project view: BPM/key classification, sample manager
+* [ ] HTML preview (sandboxed local server)
+* [ ] PDF/DOCX document creation and conversion
+* [ ] Windows packaging
 
 == License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
+MIT — see `LICENSE`.

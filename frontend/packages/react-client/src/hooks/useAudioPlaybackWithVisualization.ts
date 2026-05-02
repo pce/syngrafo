@@ -14,7 +14,7 @@
  *     = useAudioPlaybackWithVisualization();
  */
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -163,5 +163,20 @@ export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
     }
   }, []);
 
+  // Close AudioContext on unmount — prevents the audio graph from leaking
+  // when DocumentViewer is torn down (e.g. navigating away from a zone).
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      try { sourceRef.current?.stop(); } catch { /* already stopped */ }
+      ctxRef.current?.close().catch(() => {});
+      ctxRef.current = null;
+    };
+  }, []);
+
   return { play, stop, isLoading, analyserNode, visualizationData, currentPlayingId, isPlaying };
 }
+
+
+
+

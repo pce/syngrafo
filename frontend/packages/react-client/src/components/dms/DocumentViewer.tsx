@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useDms } from "../../store/dms-store";
 import { useSettings } from "../../store/settings-store";
-import { dms, isImageFile, isDocFile } from "../../services/dms-service";
+import { dms, isImageFile, isDocFile, is3DFile } from "../../services/dms-service";
 import Icon from "../Icon";
+import type { IconName } from "../Icon";
 import { isAudioFile, isVideoFile, isSvgFile, isArchiveFile, isHtmlFile } from "../../services/dms-service";
 import { useAudioPlaybackWithVisualization } from "../../hooks/useAudioPlaybackWithVisualization";
 import SlidingAudioVisualizer from "../audio/SlidingAudioVisualizer";
 import SpectrumAnalyzer from "../audio/SpectrumAnalyzer";
+import ThreeDViewer from "./ThreeDViewer";
+import VideoPlayer   from "./VideoPlayer";
 
 const DocumentViewer: React.FC = () => {
   const { state, dispatch } = useDms();
@@ -27,6 +30,17 @@ const DocumentViewer: React.FC = () => {
   const [mediaError, setMediaError] = useState(false);
   const [fetchKey,   setFetchKey]   = useState(0);
 
+  // ── File-type flags ───────────────────────────────────────────────────────
+  // Declared first so they are available to every hook/expression below.
+  const isImage   = state.viewerPath ? isImageFile(state.viewerPath)   : false;
+  const isPdf     = state.viewerPath ? isDocFile(state.viewerPath)     : false;
+  const isAudio   = state.viewerPath ? isAudioFile(state.viewerPath)   : false;
+  const isArchive = state.viewerPath ? isArchiveFile(state.viewerPath) : false;
+  const isHtml    = state.viewerPath ? isHtmlFile(state.viewerPath)    : false;
+  const isVideo   = state.viewerPath ? isVideoFile(state.viewerPath)   : false;
+  const isSvg     = state.viewerPath ? isSvgFile(state.viewerPath)     : false;
+  const is3D      = state.viewerPath ? is3DFile(state.viewerPath)      : false;
+
   // ── Large-file guard ─────────────────────────────────────────────────────
   // Files above this threshold are not buffered through Web Audio decodeAudioData
   // (which loads the full file into RAM and can freeze the process).
@@ -44,13 +58,6 @@ const DocumentViewer: React.FC = () => {
     });
   }, [state.viewerPath, isAudio, isVideo]);
 
-  const isImage = state.viewerPath ? isImageFile(state.viewerPath) : false;
-  const isPdf   = state.viewerPath ? isDocFile(state.viewerPath)   : false;
-  const isAudio   = state.viewerPath ? isAudioFile(state.viewerPath)   : false;
-  const isArchive = state.viewerPath ? isArchiveFile(state.viewerPath) : false;
-  const isHtml    = state.viewerPath ? isHtmlFile(state.viewerPath)    : false;
-  const isVideo   = state.viewerPath ? isVideoFile(state.viewerPath)   : false;
-  const isSvg   = state.viewerPath ? isSvgFile(state.viewerPath)   : false;
 
   const isInZoneWorkspace = !!(state.zone && state.currentPath &&
     state.currentPath.startsWith(state.zone.out_path));
@@ -154,7 +161,7 @@ const DocumentViewer: React.FC = () => {
     setIsIndexLoading(false);
     if (res.ok) {
       const metaRes = await dms.getMetadata(state.selectedPath);
-      if (metaRes.ok) dispatch({ type: "SET_METADATA", metadata: metaRes.data });
+      if (metaRes.ok) dispatch({ type: "SET_METADATA", metadata: metaRes.data ?? null });
     } else {
       dispatch({ type: "SET_ERROR", error: res.error ?? "Indexing failed" });
     }
@@ -311,7 +318,7 @@ const DocumentViewer: React.FC = () => {
       {/* File header */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0">
         <div className="w-8 h-8 flex items-center justify-center rounded bg-[var(--theme-bg)] text-[var(--theme-text-muted)]">
-          <Icon name={isAudio ? "music" : isSvg ? "image" : isImage ? "image" : isPdf ? "document" : isArchive ? "document" : "file"} size="sm" />
+          <Icon name={(isAudio ? "music" : is3D ? "cube" : isSvg ? "image" : isImage ? "image" : isPdf ? "document" : isArchive ? "archive" : "file") as IconName} size="sm" />
         </div>
         <span className="text-sm text-[var(--theme-text)] truncate flex-1 font-mono">
           {state.viewerPath ?? state.selectedPath}
@@ -353,7 +360,12 @@ const DocumentViewer: React.FC = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-4 relative bg-[var(--theme-bg)]">
-        {isSvg ? (
+        {is3D ? (
+          /* ── 3D model viewer ───────────────────────────────────────── */
+          <div className="flex flex-col items-center justify-center min-h-full h-full gap-2">
+            <ThreeDViewer filePath={state.viewerPath!} className="w-full flex-1 min-h-[400px]" />
+          </div>
+        ) : isSvg ? (
           /* ── Inline SVG preview ────────────────────────────────────── */
           <div className="flex flex-col items-center justify-center min-h-full gap-4">
             {(svgError || svgSizeError) ? (
@@ -492,42 +504,22 @@ const DocumentViewer: React.FC = () => {
           </div>
 
         ) : isVideo ? (
-          /* ── Video player ─────────────────────────────────────────────── */
+          /* ── Video player — custom, ref-controlled for immediate pause ── */
           <div className="flex flex-col items-center justify-center min-h-full gap-4 p-4">
-            {mediaError ? (
-              <div className="flex flex-col items-center gap-3 text-[var(--theme-text-muted)]">
-                <span className="text-4xl opacity-30">🎬</span>
-                <p className="text-sm font-bold">Video could not be loaded</p>
-                <p className="text-[10px] opacity-60">
-                  The format may not be supported by the system WebView.
-                </p>
-                <button
-                  onClick={() => { setMediaError(false); setFetchKey(k => k + 1); }}
-                  className="text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded bg-[var(--theme-primary)]/10 hover:bg-[var(--theme-primary)]/20 text-[var(--theme-primary)] transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <video
-                key={(mediaSrc ?? "") + fetchKey}
-                src={mediaSrc ?? ""}
-                controls
-                onError={() => setMediaError(true)}
-                className="max-w-full max-h-[75vh] rounded-lg border border-[var(--theme-border)] shadow-2xl bg-black"
-                style={{ outline: "none" }}
-              />
-            )}
+            <VideoPlayer
+              src={mediaSrc ?? ""}
+              className="w-full max-w-4xl max-h-[75vh]"
+            />
             <p className="text-[10px] font-medium uppercase tracking-widest text-[var(--theme-text-muted)] text-center bg-[var(--theme-surface)]/50 px-4 py-2 rounded-full border border-[var(--theme-border)]">
-              Video — native playback
+              Video — Space to play/pause · ← → seek 5s · F fullscreen · M mute
             </p>
           </div>
 
         ) : isArchive ? (
           /* ── Archive info panel ──────────────────────────────────────── */
           <div className="flex flex-col items-center justify-center min-h-full gap-4 p-8">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-3xl">
-              📦
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+              <Icon name="archive" size="xl" />
             </div>
             <div className="text-center space-y-1">
               <p className="text-sm font-semibold text-[var(--theme-text)]">

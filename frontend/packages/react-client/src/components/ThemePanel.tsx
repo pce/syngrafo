@@ -11,6 +11,8 @@ import React, { useState } from "react";
 import { useTheme, THEME_PRESETS } from "../store/theme-store";
 import type { ThemePreset } from "../store/theme-store";
 import { useSettings } from "../store/settings-store";
+import { useLocale } from "../store/locale-store";
+import { LOCALES, type SupportedLocale } from "../i18n";
 import Icon from "./Icon";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -102,6 +104,7 @@ const SVG_SIZE_OPTIONS: Array<{ bytes: number; label: string }> = [
 const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
   const { theme, setTheme, saveTheme, isSaving: isSavingTheme } = useTheme();
   const { settings, setSetting, saveSettings, isSaving: isSavingSettings } = useSettings();
+  const { locale, setLocale } = useLocale();
   const isSaving = isSavingTheme || isSavingSettings;
   const [tab, setTab] = useState<Tab>("presets");
   const [saveOk, setSaveOk] = useState(false);
@@ -181,6 +184,37 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
 
   const SettingsTab = () => (
     <div className="p-3 flex flex-col gap-5">
+
+      {/* Language */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
+          Language
+        </h3>
+        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
+          UI language. All catalogs are pre-loaded — switching is instant.
+        </p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {(Object.entries(LOCALES) as [SupportedLocale, string][]).map(([code, label]) => (
+            <button
+              key={code}
+              onClick={() => setLocale(code)}
+              className={`
+                flex flex-col items-center justify-center py-2 px-1 rounded-lg border-2
+                text-[10px] font-black uppercase tracking-wider transition-all gap-0.5
+                ${locale === code
+                  ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"
+                  : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50"
+                }
+              `}
+            >
+              <span className="text-[13px] font-black leading-none tracking-wider uppercase">
+                {code.toUpperCase()}
+              </span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* SVG inline preview size */}
       <section>

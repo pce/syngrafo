@@ -751,19 +751,34 @@ const CODE_EXTS  = new Set([
 const AUDIO_EXTS = new Set([
   ".mp3", ".wav", ".flac", ".m4a", ".ogg", ".aac", ".opus", ".wma",
 ]);
-export const ARCHIVE_EXTS = new Set([
+const MODEL3D_EXTS = new Set([
+  ".ply", ".obj", ".gltf", ".glb", ".stl",
+  ".splat", ".spz",           // Gaussian Splat formats
+  ".xyz", ".pcd",             // Point cloud formats
+]);
+const ARCHIVE_EXTS = new Set([
   ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".tbz2",
 ]);
 export const CSS_EXTS = new Set([".css", ".scss", ".sass", ".less"]);
+
+/** True for any 3D / Gaussian-Splat / point-cloud file. */
+export function is3DModelFile(path: string): boolean { return MODEL3D_EXTS.has(extOf(path)); }
+/** Alias used by the viewer – single canonical name across the codebase. */
+export const is3DFile = is3DModelFile;
 
 // ─── FileKind ─────────────────────────────────────────────────────────────────
 // Canonical file-kind taxonomy — mirrors kind_for_extension() in dms_bindings.hh.
 export type FileKind =
   | "image" | "vector" | "audio" | "video" | "document"
   | "markup" | "style" | "data" | "code"
-  | "archive" | "text" | "other";
+  | "archive" | "text" | "model3d" | "other";
 
-// Human-readable label + emoji for each kind (used in the AnalysisPanel).
+// Icon name subset used for FileKind badges — avoids importing from Icon.tsx (circular).
+export type KindIconName =
+  | "image" | "music" | "video" | "document" | "code" | "style"
+  | "database" | "archive" | "file" | "cube";
+
+// Human-readable label + SVG icon name for each kind (used in the AnalysisPanel).
 export const KIND_LABEL: Record<FileKind, string> = {
   image:    "Image",
   vector:   "Vector",
@@ -776,21 +791,25 @@ export const KIND_LABEL: Record<FileKind, string> = {
   code:     "Code",
   archive:  "Archive",
   text:     "Text",
+  model3d:  "3D Model",
   other:    "File",
 };
-export const KIND_EMOJI: Record<FileKind, string> = {
-  image:    "🖼",
-  vector:   "🔷",
-  audio:    "🎵",
-  video:    "🎬",
-  document: "📄",
-  markup:   "🌐",
-  style:    "🎨",
-  data:     "📊",
-  code:     "⌨",
-  archive:  "📦",
-  text:     "📝",
-  other:    "📎",
+
+/** Maps each FileKind to an SVG icon name (see Icon.tsx). */
+export const KIND_ICON: Record<FileKind, KindIconName> = {
+  image:    "image",
+  vector:   "image",
+  audio:    "music",
+  video:    "video",
+  document: "document",
+  markup:   "code",
+  style:    "style",
+  data:     "database",
+  code:     "code",
+  archive:  "archive",
+  text:     "document",
+  model3d:  "cube",
+  other:    "file",
 };
 
 /** FileStats — always available for any selected file, DB-first then FS fallback. */
@@ -820,6 +839,7 @@ export function isVideoFile(p: string): boolean { return VIDEO_EXTS.has(extOf(p)
 export function isSvgFile(path: string):     boolean { return extOf(path) === ".svg";         }
 export function isArchiveFile(path: string): boolean { return ARCHIVE_EXTS.has(extOf(path)); }
 export function isCssFile(path: string):     boolean { return CSS_EXTS.has(extOf(path));     }
+export function is3DModelFile(path: string): boolean { return MODEL3D_EXTS.has(extOf(path)); }
 export function isHtmlFile(path: string):    boolean {
   return new Set([".html", ".htm", ".xhtml"]).has(extOf(path));
 }
@@ -827,23 +847,24 @@ export function isHtmlFile(path: string):    boolean {
 /** Derive the FileKind for a path purely from its extension. */
 export function fileKind(path: string): FileKind {
   const ext = extOf(path);
-  if (isSvgFile(path))       return "vector";
-  if (isImageFile(path))     return "image";
-  if (isAudioFile(path))     return "audio";
-  if (VIDEO_EXTS.has(ext))   return "video";
-  if (isDocFile(path))       return "document";
-  if (CSS_EXTS.has(ext))     return "style";
-  if (isHtmlFile(path))      return "markup";
+  if (isSvgFile(path))         return "vector";
+  if (isImageFile(path))       return "image";
+  if (isAudioFile(path))       return "audio";
+  if (VIDEO_EXTS.has(ext))     return "video";
+  if (is3DModelFile(path))     return "model3d";
+  if (isDocFile(path))         return "document";
+  if (CSS_EXTS.has(ext))       return "style";
+  if (isHtmlFile(path))        return "markup";
   const DATA = new Set([".json",".yaml",".yml",".toml",".csv",".sql",".ini",".env",".conf",".cfg"]);
-  if (DATA.has(ext))         return "data";
-  if (ARCHIVE_EXTS.has(ext)) return "archive";
-  if (isCodeFile(path))      return "code";
-  if (isTextFile(path))      return "text";
+  if (DATA.has(ext))           return "data";
+  if (ARCHIVE_EXTS.has(ext))   return "archive";
+  if (isCodeFile(path))        return "code";
+  if (isTextFile(path))        return "text";
   return "other";
 }
 
 export function isSupportedFile(path: string): boolean {
   return isTextFile(path)  || isImageFile(path) || isDocFile(path)  ||
          isCodeFile(path)  || isAudioFile(path) || isVideoFile(path) ||
-         isArchiveFile(path) || isCssFile(path);
+         isArchiveFile(path) || isCssFile(path) || is3DModelFile(path);
 }
