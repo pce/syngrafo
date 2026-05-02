@@ -33,16 +33,11 @@
 
 namespace pce::dms {
 
-// ─── Core aliases
-// ──────────────────────────────────────────────────────────────
-
 /// Every DMS operation fails with a human-readable std::string message.
 template <typename T> using Expected = std::expected<T, std::string>;
 
 /// Void-valued expected — for precondition checks with no output.
 using VoidResult = std::expected<void, std::string>;
-
-// ─── require ─────────────────────────────────────────────────────────────────
 
 /// Returns VoidResult{} when cond is true, std::unexpected(msg) when false.
 /// Drop-in guard to replace   if (!cond) return err_str(…);
@@ -60,8 +55,6 @@ using VoidResult = std::expected<void, std::string>;
   return std::unexpected(std::string{msg});
 }
 
-// ─── require_nonnull ─────────────────────────────────────────────────────────
-
 /// Wraps a nullable pointer into Expected<std::reference_wrapper<T>>.
 /// Returns std::ref(*ptr) on success, std::unexpected(msg) when ptr == nullptr.
 ///
@@ -75,7 +68,6 @@ require_nonnull(T *ptr, std::string msg) noexcept(
   return std::unexpected(std::move(msg));
 }
 
-// ─── value_or_error ──────────────────────────────────────────────────────────
 
 /// Lifts std::optional<T> into Expected<T>.
 /// Returns the contained value on success, std::unexpected(msg) when empty.
@@ -90,7 +82,6 @@ template <typename T>
   return std::unexpected(std::move(msg));
 }
 
-// ─── try_invoke ──────────────────────────────────────────────────────────────
 
 /// Wraps a callable F() -> T into Expected<T>, catching std::exception.
 /// std::unexpected holds e.what() when an exception is thrown.
@@ -123,7 +114,6 @@ template <std::invocable Fn>
   }
 }
 
-// ─── from_filesystem_error ───────────────────────────────────────────────────
 
 /// Lifts a std::error_code into VoidResult.
 /// Returns VoidResult{} when ec is not set, std::unexpected when it is.
@@ -136,7 +126,6 @@ from_ec(std::error_code ec, std::string_view context = "") noexcept {
              : std::unexpected(std::format("{}: {}", context, ec.message()));
 }
 
-// ─── map_error ───────────────────────────────────────────────────────────────
 
 /// Transforms the error message of an Expected<T> without touching the value.
 /// Useful for adding context to an error that bubbled up from a lower layer:
@@ -155,7 +144,6 @@ template <typename T, std::invocable<std::string> ErrFn>
   return std::move(r).transform_error(std::forward<ErrFn>(fn));
 }
 
-// ─── flatten ─────────────────────────────────────────────────────────────────
 
 /// Collapses Expected<Expected<T>> → Expected<T>.
 /// Produced naturally when .and_then chains return an Expected themselves and

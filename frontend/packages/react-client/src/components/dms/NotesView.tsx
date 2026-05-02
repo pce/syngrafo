@@ -73,7 +73,9 @@ function applyInline(raw: string): string {
   s = escapeHtml(s);
   // Step 3: restore image tags
   s = s.replace(/\x00IMG(\d+)\x00/g, (_m, idx) => {
-    const { src, alt } = imgs[Number(idx)];
+    const item = imgs[Number(idx)];
+    if (!item) return "";
+    const { src, alt } = item;
     const safeSrc = src.startsWith("/") ? `local:/${src}` : src;
     return (
       `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(alt)}" ` +
@@ -167,8 +169,8 @@ function renderMarkdown(md: string): string {
     // Standalone image line
     const imgMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imgMatch) {
-      const alt = escapeHtml(imgMatch[1]);
-      const src = imgMatch[2];
+      const alt = escapeHtml(imgMatch[1] as string);
+      const src = imgMatch[2] as string;
       const safeSrc = src.startsWith("/") ? `local:/${src}` : src;
       out.push(
         `<img src="${escapeHtml(safeSrc)}" alt="${alt}" loading="lazy" ` +

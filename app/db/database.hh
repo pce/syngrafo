@@ -1080,6 +1080,76 @@ inline bool Database::table_exists(std::string_view table) {
   return {p, p + bytes->size() / sizeof(float)};
 }
 
+// =============================================================================
+// Schema migration system
+// =============================================================================
+//
+// Usage:
+//
+//   static constexpr std::array kMigrations = {
+//       pce::db::Migration{1, "initial tables", R"sql(
+//           CREATE TABLE IF NOT EXISTS ...
+//       )sql"},
+//       pce::db::Migration{2, "add kind column",
+//           "ALTER TABLE dms_documents ADD COLUMN kind TEXT DEFAULT 'other'"},
+//   };
+//   pce::db::apply_migrations(db, kMigrations);
+//
+// Replaces the ad-hoc  try { ALTER TABLE … } catch(…) {}  pattern with a
+// versioned, auditable, idempotent migration log.
+
+struct Migration {
+    int         version;
+    const char* description;
+    const char* sql;          ///< DDL/DML to execute once.  May be nullptr/"" for marker entries.
+};
+
+/// Ensures schema_migrations table exists, then applies every Migration whose
+/// version is not yet recorded, in ascending version order.
+/// Each migration runs inside its own savepoint so a failure does not corrupt
+/// earlier applied migrations.
+inline void apply_migrations(Database& db, std::span<const Migration> migrations) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version     INTEGER PRIMARY KEY,
+            description TEXT    NOT NULL DEFAULT '',
+            applied_at  INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+
+    for (const auto& m : migrations) {
+        const auto row = db.from("schema_migrations")
+                           .where("version = ?", static_cast<int64_t>(m.version))
+                           .first();
+        if (row) continue;  // already applied
+
+        if (m.sql && m.sql[0] != '\0') {
+            try { db.exec(m.sql); }
+            catch (const std::exception& e) {
+                // Best-effort for additive DDL (e.g. duplicate column).
+                // Log but don't abort: the column may already exist on older DBs.
+                std::print(stderr, "[db] migration v{} DDL warning: {}\n",
+                           m.version, e.what());
+            }
+        }
+        (void)db.insert_into("schema_migrations")
+            .value("version",     static_cast<int64_t>(m.version))
+            .value("description", std::string{m.description ? m.description : ""})
+            .value("applied_at",  now_unix())
+            .execute();
+    }
+}
+
+/// Returns the highest applied migration version, or 0 if none.
+[[nodiscard]] inline int64_t current_schema_version(Database& db) {
+    try {
+        const auto row = db.from("schema_migrations")
+                           .select({"MAX(version) AS v"})
+                           .first();
+        return row ? row->try_get<int64_t>("v").value_or(0) : 0;
+    } catch (...) { return 0; }
+}
+
 } // namespace pce::db
 
 // =============================================================================

@@ -1,4 +1,8 @@
 = Syngrafo
+
+[.lead]
+A local-first system for transforming files into structured, searchable, and interactive data.
+
 :toc: left
 :toc-title: Contents
 :toclevels: 2
@@ -11,6 +15,19 @@ image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-
 image:https://github.com/pce/syngrafo/actions/workflows/release.yml/badge.svg?branch=main[CI,link=https://github.com/pce/syngrafo/actions/workflows/release.yml]
 
 Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
+
+File browser + NLP + media + knowledge system
+The Scope looks at first sight broad, that is  intentionally  to avoid early constraints on the UI/UX and data model:
+
+That’s simply or simplified:
+
+  “Asset → Transform → View”
+
+
+
+
+
+
 
 == Quick Start
 
@@ -88,6 +105,12 @@ frontend/packages/react-client/src/
 
 == Image Options
 
+[cols="1,1", frame="none", grid="none"]
+|===
+| image:data/inp/syngrafo_image_ocr.jpg[width=100%]
+| image:data/inp/syngrafo_img_2_svg.jpg[width=100%]
+|===
+
 === OCR
 
 image::data/inp/syngrafo_image_ocr.jpg[Static,300]
@@ -96,27 +119,36 @@ image::data/inp/syngrafo_image_ocr.jpg[Static,300]
 
 === SVG
 
-image::data/inp/syngrafo_img_2_svg.jpg[Static,300]
 
-Image to SVG with AB as chosen Colorpaltte
-- RCT for Pixel Perfect
-- PLY for Polygonal and
-- TRI for triangulated
+.SVG conversion using the “AB” color palette
+image::data/inp/syngrafo_img_2_svg.jpg[width=100%]
 
-conversion with support for ColorPalettes.
 
-[cols="1,1,1",options="header"]
+
+
+Image-to-SVG conversion with selectable strategies:
+
+* RCT — pixel-perfect reconstruction
+* PLY — polygonal approximation
+* TRI — triangulated mesh
+
+Supports configurable color palettes.
+
+The ColorPalette reduces the image to a constrained color set
+optimized for vector reconstruction and stylization.
+
+
+[cols="^1,^1,^1",options="header",frame="none",grid="none"]
 |===
-| ORIG | PLY (Polygonal) | TRI (Triangulated)
+| ORIG | PLY | TRI
 
-| image:data/inp/trees.jpg[width=250]
-Original raster image
+| image:data/inp/trees.jpg[width=100%]
+| image:data/inp/trees_ply.svg[width=100%]
+| image:data/inp/trees_tri.svg[width=100%]
 
-| image:data/inp/trees_ply.svg[width=250]
-Polygonal approximation
-
-| image:data/inp/trees_tri.svg[width=250]
-Triangulated mesh
+| Original
+| Polygonal
+| Triangulated
 |===
 
 
