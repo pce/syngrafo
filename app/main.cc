@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 #include <saucer/embedded/all.hpp>
 #include <saucer/smartview.hpp>
+#include <saucer/systray.hpp>
 
 #ifdef NLP_WITH_ONNX
 #include "nlp/addons/onnx_addon.hh"
@@ -778,6 +779,58 @@ if (typeof window.__dms_progress === 'undefined')
     });
 
     webview->set_url("saucer://embedded/index.html");
+
+    // ── System-tray setup ────────────────────────────────────────────────────
+    //
+    // The tray icon appears when the window is hidden (minimise-to-tray).
+    // • Clicking "Show Syngrafo" (or activating the icon) restores the window.
+    // • Clicking "Quit" allows the window-close event to propagate so that
+    //   co_await app->finish() returns and the process exits cleanly.
+    //
+    // win_raw is valid for the entire lifetime of start() (coroutine frame).
+
+    saucer::systray::NativeSystray tray;
+    tray.set_tooltip("Syngrafo");
+
+    // Raw pointer — safe as long as `window` lives (it does, until co_return).
+    auto* win_raw = (*window).get();
+
+    // Flag that lets the close handler distinguish "hide to tray" from "quit".
+    auto quit_requested = std::make_shared<bool>(false);
+
+    // Callback: left-click / double-click on the tray icon → restore window.
+    tray.set_on_activate([win_raw, &tray] {
+        win_raw->show();
+        tray.hide();
+    });
+
+    tray.add_or_update({
+        .id       = "show",
+        .label    = "Show Syngrafo",
+        .on_click = [win_raw, &tray] { win_raw->show(); tray.hide(); },
+    });
+    tray.add_or_update({
+        .id   = "sep1",
+        .type = saucer::systray::MenuItemType::Separator,
+    });
+    tray.add_or_update({
+        .id       = "quit",
+        .label    = "Quit",
+        .on_click = [win_raw, quit_requested] {
+            *quit_requested = true;
+            win_raw->close();   // triggers close event → handler allows it
+        },
+    });
+
+    // Close-event handler: hide to tray unless an explicit Quit was requested.
+    (*window)->on<saucer::window::event::close>(
+        [win_raw, &tray, quit_requested]() -> saucer::policy {
+            if (*quit_requested)
+                return saucer::policy::allow;  // propagate → co_await finishes
+            win_raw->hide();
+            tray.show();
+            return saucer::policy::block;      // suppress → stay alive in tray
+        });
 
     (*window)->show();
     std::print("[app] window open\n");

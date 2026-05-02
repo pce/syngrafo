@@ -152,6 +152,9 @@ add_custom_target(syngrafo_frontend
 )
 
 
+# ── Systray module ────────────────────────────────────────────────────────────
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/modules/systray")
+
 add_executable(syngrafo
     app/main.cc
 )
@@ -329,6 +332,7 @@ target_link_libraries(syngrafo PRIVATE
     nlp_engine       # NLP core + ONNX (when NLP_WITH_ONNX is defined)
     saucer           # webview + window + application
     saucer::desktop  # cross-platform file/folder picker
+    saucer::systray  # system-tray icon
     SQLite::SQLite3  # DMS persistence layer (db/database.hh)
     ${CMAKE_DL_LIBS}
 )
@@ -522,4 +526,5 @@ if(SQLCIPHER_FOUND)
 else()
     message(STATUS "  Encryption: INACTIVE  (brew install sqlcipher to enable)")
 endif()
+message(STATUS "  Systray:    saucer::systray (external/modules/systray)")
 message(STATUS "")

@@ -146,7 +146,7 @@ const TimelinePage: React.FC = () => {
               onClick={() => setFilter(k)}
               className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide transition-colors ${
                 filter === k
-                  ? "bg-[var(--theme-primary)] text-white"
+                  ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
                   : "text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] hover:text-[var(--theme-text)]"
               }`}
             >
@@ -173,7 +173,7 @@ const TimelinePage: React.FC = () => {
         </button>
       </div>
 
-      {/* ── Zone history pills ──────────────────────────────────────────────── */}
+      {/* Zone history pills ──────────────────────────────────────────────── */}
       {state.zones.length > 0 && (
         <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]/60 shrink-0 overflow-x-auto">
           <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 shrink-0 mr-1">
@@ -189,7 +189,7 @@ const TimelinePage: React.FC = () => {
               title={`${z.in_path} → ${z.out_path}`}
               className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
                 scanPath === z.out_path
-                  ? "bg-[var(--theme-primary)] text-white border-[var(--theme-primary)]"
+                  ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] border-[var(--theme-primary)]"
                   : "bg-[var(--theme-bg)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:border-[var(--theme-primary)]/50"
               }`}
             >
@@ -199,7 +199,7 @@ const TimelinePage: React.FC = () => {
         </div>
       )}
 
-      {/* ── Body ────────────────────────────────────────────────────────────── */}
+      {/*  Body ────────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
 
         {/* Empty / no zone */}

@@ -564,7 +564,7 @@ const DocumentViewer: React.FC = () => {
                 }`}>
                   {/* OCR — primary variant: white icon → sharp black inverse shadow */}
                   <button onClick={doOcr} disabled={isOcrLoading} title="OCR: Extract Text"
-                    className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-primary)] text-white hover:opacity-90">
+                    className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90">
                     {isOcrLoading
                       ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                       : <Icon name="scan" size="sm" className="drop-shadow-[0_1px_1px_rgba(0,0,0,1)]" />}
@@ -624,7 +624,7 @@ const DocumentViewer: React.FC = () => {
                         onClick={doImageToSvg}
                         disabled={isToSvgLoading}
                         title="SVG Rects — saves as {name}_rct.svg"
-                        className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-primary)] text-white hover:opacity-90"
+                        className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90"
                       >
                         {isToSvgLoading
                           ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />

@@ -1,33 +1,33 @@
-= Syngrafo
+= Syngrafo0
 
 [.lead]
 A local-first system for transforming files into structured, searchable, and interactive data.
 
-:toc: left
-:toc-title: Contents
-:toclevels: 2
-:icons: font
-:source-highlighter: highlight.js
+[.text-center]
+  “Asset → Transform → View”
 
 image:https://img.shields.io/badge/status-active-brightgreen[]
 image:https://img.shields.io/badge/license-MIT-blue[]
 image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey[]
 image:https://github.com/pce/syngrafo/actions/workflows/release.yml/badge.svg?branch=main[CI,link=https://github.com/pce/syngrafo/actions/workflows/release.yml]
 
+
+
+
+:toc: auto
+:toc-title: Contents
+:toclevels: 3
+:icons: font
+:source-highlighter: highlight.js
+
+
+
 Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
 
 File browser + NLP + media + knowledge system
 The Scope looks at first sight broad, that is  intentionally  to avoid early constraints on the UI/UX and data model:
 
-That’s simply or simplified:
-
-  “Asset → Transform → View”
-
-
-
-
-
-
+// That’s simply or simplified: “Asset → Transform → View”
 
 == Quick Start
 
@@ -59,78 +59,132 @@ python3 scripts/dev.py debug --use-client -j8
 # run
 ./build/syngrafo.app/Contents/MacOS/syngrafo
 ----
+
+== Concept
+
+Syngrafo treats every file as an asset that can be transformed and viewed in multiple ways.
+
+[cols="1,1,1", frame="none", grid="none"]
+|===
+| *Asset*
+| *Transform*
+| *View*
+
+| Image · Audio · Text
+| OCR · NLP · SVG · Mesh
+| Viewer · Kanban · Notes
+|===
+
 == Architecture
 
-[cols="1,3",options="header"]
-|===
-| Layer | Role
-| *C++ Core* | DMS engine, OCR, NLP pipeline, SQLite/SQLCipher, saucer webview host
-| *IPC* | `window.saucer.exposed.<name>()` — every binding returns `Promise<string>` (JSON envelope `{ok, data?, error?}`)
-| *Frontend* | React 19 + TypeScript, Bun bundler, Tailwind CSS, LinguiJS i18n, Three.js 3D viewer
-|===
+// [cols="1,3",options="header", frame="none"]
+// |===
+// | Layer | Role
+// | *C++ Core* | DMS engine, OCR, NLP pipeline, SQLite/SQLCipher, saucer webview host
+// | *IPC* | `window.saucer.exposed.<name>()` — every binding returns `Promise<string>` (JSON envelope `{ok, data?, error?}`)
+// | *Frontend* | React 19 + TypeScript, Bun bundler, Tailwind CSS, LinguiJS i18n, Three.js 3D viewer
+// |===
 
-Key source layout:
+[cols="1,2", frame="none"]
+|===
+| *C++ Core*
+| DMS engine · OCR · NLP · SQLCipher · saucer
 
-[source]
-----
-app/
-  main.cc                 — startup, saucer expose() bindings
-  dms_bindings.hh         — binding implementations
-  db/database.hh          — LINQ-style SQLite/SQLCipher (C++23, header-only)
-  ocr_mac.mm              — macOS Vision OCR
-frontend/packages/react-client/src/
-  store/                  — dms, theme, settings, locale context stores
-  services/dms-service.ts — typed IPC wrappers + file-kind taxonomy
-  components/dms/         — FileBrowser · DocumentViewer · AnalysisPanel · ZonePanel
-  components/dms/ThreeDViewer.tsx  — Three.js PLY/OBJ/GLTF/GLB/STL viewer
-----
+| *IPC*
+| `window.saucer.exposed.*` JSON bridge
+
+| *Frontend*
+| React · TypeScript · Tailwind · Three.js
+|===
 
 == Features
 
-[cols="1,3"]
+[cols="1,1", frame="none", grid="none"]
 |===
-| *File browser* | Multi-select, keyboard nav, breadcrumb, zone source/workspace toggle
-| *Document viewer* | Image (OCR · rectify · PDF export · SVG conversion), PDF, audio, video, SVG inline, 3D models, text/code
-| *3D preview* | PLY · OBJ (+MTL) · GLTF · GLB · STL — orbit controls (Three.js)
-| *OCR* | macOS Vision framework; Tesseract as Fallback
-| *NLP* | Keywords · NER · sentiment · embeddings — all local ONNX, no cloud
-| *Zones* | Named workspaces with optional AES-256 encryption (SQLCipher + macOS Keychain)
-| *Notes* | Markdown-lite `.notes` folder each zone
-| *Kanban* | `.kanban` board each zone with drag-and-drop lanes and cards
-| *Search* | Semantic (cosine) + keyword fallback
-| *Themes* | 12 colour presets + custom CSS vars, radius/density toggles
-| *i18n* | English · Deutsch · Ελληνικά — switch in *Settings → Language*
+| *File Browser* +
+Multi-select · keyboard nav · zones
+
+| *Document Viewer* +
+OCR · SVG · media · 3D
+
+| *NLP* +
+NER · sentiment · embeddings
+
+| *Zones* +
+Encrypted workspaces
+
+| *Notes & Kanban* +
+Local markdown + boards
+
+| *3D Preview* +
+PLY · OBJ · GLTF · STL
 |===
 
+//
+// [cols="1,3", frame="none"]
+// |===
+// | *File browser* | Multi-select, keyboard nav, breadcrumb, zone source/workspace toggle
+// | *Document viewer* | Image (OCR · rectify · PDF export · SVG conversion), PDF, audio, video, SVG inline, 3D models, text/code
+// | *3D preview* | PLY · OBJ (+MTL) · GLTF · GLB · STL — orbit controls (Three.js)
+// | *OCR* | macOS Vision framework; Tesseract as Fallback
+// | *NLP* | Keywords · NER · sentiment · embeddings — all local ONNX, no cloud
+// | *Zones* | Named workspaces with optional AES-256 encryption (SQLCipher + macOS Keychain)
+// | *Notes* | Markdown-lite `.notes` folder each zone
+// | *Kanban* | `.kanban` board each zone with drag-and-drop lanes and cards
+// | *Search* | Semantic (cosine) + keyword fallback
+// | *Themes* | 12 colour presets + custom CSS vars, radius/density toggles
+// | *i18n* | English · Deutsch · Ελληνικά — switch in *Settings → Language*
+// |===
+//
 
 == Image Options
+
 
 [cols="1,1", frame="none", grid="none"]
 |===
 | image:data/inp/syngrafo_image_ocr.jpg[width=100%]
 | image:data/inp/syngrafo_img_2_svg.jpg[width=100%]
+
+| *OCR Extraction*
+| *SVG Reconstruction (Palette: AB)*
 |===
 
-=== OCR
-
-image::data/inp/syngrafo_image_ocr.jpg[Static,300]
-
-
-
+// [cols="1,1", frame="none", grid="none"]
+// |===
+// | image:data/inp/syngrafo_image_ocr.jpg[width=100%]
+// | image:data/inp/syngrafo_img_2_svg.jpg[width=100%]
+// |===
+//
+// === OCR
+//
+// image::data/inp/syngrafo_image_ocr.jpg[[width=100%]
+//
 === SVG
-
-
-.SVG conversion using the “AB” color palette
-image::data/inp/syngrafo_img_2_svg.jpg[width=100%]
-
-
-
+//
+//
+// .SVG conversion using the “AB” color palette
+// image::data/inp/syngrafo_img_2_svg.jpg[width=100%]
 
 Image-to-SVG conversion with selectable strategies:
 
-* RCT — pixel-perfect reconstruction
-* PLY — polygonal approximation
-* TRI — triangulated mesh
+* RCT: pixel-perfect reconstruction
+* PLY: polygonal approximation
+* TRI: triangulated mesh
+
+[cols="^1,^1,^1",options="header",frame="none",grid="none"]
+|===
+| ORIG | PLY | TRI
+
+| image:data/inp/trees_input.jpg[width=100%]
+| image:data/inp/trees_ply.svg[width=100%]
+| image:data/inp/trees_tri.svg[width=100%]
+
+|===
+
+
+.Image to SVG triangulated
+image::data/inp/syngrafo0_svgImg.jpg[width=100%]
+
 
 Supports configurable color palettes.
 
@@ -138,23 +192,22 @@ The ColorPalette reduces the image to a constrained color set
 optimized for vector reconstruction and stylization.
 
 
-[cols="^1,^1,^1",options="header",frame="none",grid="none"]
+
+[cols="1,1,1",options="header",frame="none",grid="none"]
 |===
-| ORIG | PLY | TRI
+| polygonal approximation | Triangulated (16colors) | TRI (8colors)
 
-| image:data/inp/trees.jpg[width=100%]
-| image:data/inp/trees_ply.svg[width=100%]
-| image:data/inp/trees_tri.svg[width=100%]
+| image:data/inp/syngrafo_img2svg_ply_8.jpg[width=100%]
 
-| Original
-| Polygonal
-| Triangulated
+
+| image:data/inp/syngrafo_img2svg_tri_16.jpg[width=100%]
+
+
+| image:data/inp/syngrafo_img2svg_tri_8.jpg[width=100%]
 |===
 
 
-// image::data/inp/trees.jpg[Static,300]
-// image::data/inp/trees_ply.svg[Static,300]
-// image::data/inp/trees_tri.svg[Static,300]
+
 
 
 == Zones
@@ -173,7 +226,7 @@ python3 scripts/download_models.py download
 python3 scripts/download_models.py check
 ----
 
-[cols="2,3,1,3",options="header"]
+[cols="2,3,1,3",options="header", frame="none"]
 |===
 | File | Model | Size | Purpose
 | `embed.onnx` | all-MiniLM-L6-v2 (int8) | 23 MB | 384-dim sentence embeddings
@@ -228,7 +281,7 @@ Controls: *drag* = rotate · *scroll* = zoom · *right-drag* = pan.
 == Build
 
 .Prerequisites
-[cols="1,1,2",options="header"]
+[cols="1,1,2",options="header", frame="none"]
 |===
 | Tool | Min | Purpose
 | CMake | 3.25 | Build system

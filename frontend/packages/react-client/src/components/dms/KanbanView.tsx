@@ -326,7 +326,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
                 placeholder="Lane name..." value={newLaneName} onChange={(e) => setNewLaneName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") void addLane(); if (e.key === "Escape") { setAddingLane(false); setNewLaneName(""); } }} />
               <div className="flex gap-2">
-                <button onClick={() => void addLane()} className="flex-1 py-1.5 bg-[var(--theme-primary)] text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">Add</button>
+                <button onClick={() => void addLane()} className="flex-1 py-1.5 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">Add</button>
                 <button onClick={() => { setAddingLane(false); setNewLaneName(""); }} className="flex-1 py-1.5 bg-[var(--theme-border)] text-[var(--theme-text)] rounded-lg text-xs hover:bg-[var(--theme-bg)] transition-colors">Cancel</button>
               </div>
             </div>
@@ -456,7 +456,7 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
               onKeyDown={(e) => { if (e.key === "Enter") commitCard(); if (e.key === "Escape") { setAddingCard(false); setNewCardTitle(""); } }}
               placeholder="Card title..." className="w-full bg-transparent text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none mb-2" />
             <div className="flex gap-1.5">
-              <button onClick={commitCard} className="flex-1 py-1 text-xs rounded-md font-semibold text-white bg-[var(--theme-primary)] hover:opacity-90 transition-opacity">Add</button>
+              <button onClick={commitCard} className="flex-1 py-1 text-xs rounded-md font-semibold text-[var(--theme-primary-fg)] bg-[var(--theme-primary)] hover:opacity-90 transition-opacity">Add</button>
               <button onClick={() => { setAddingCard(false); setNewCardTitle(""); }} className="flex-1 py-1 text-xs rounded-md text-[var(--theme-text-muted)] bg-[var(--theme-border)] hover:bg-[var(--theme-surface)] transition-colors">Cancel</button>
             </div>
           </div>
@@ -503,7 +503,7 @@ const CardItem: React.FC<CardItemProps> = ({ card, color, onToggle, onDelete, on
         <button onClick={(e) => { e.stopPropagation(); onToggle(); }}
           className={`mt-0.5 w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${card.done ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]" : "border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-primary)]"}`}
           title={card.done ? "Mark as todo" : "Mark as done"}>
-          {card.done && <Icon name="check" size="xs" className="text-white dark:text-[var(--theme-bg)]" />}
+          {card.done && <Icon name="check" size="xs" className="text-[var(--theme-primary-fg)]" />}
         </button>
 
         {/* Title (click = open detail) */}
@@ -520,16 +520,24 @@ const CardItem: React.FC<CardItemProps> = ({ card, color, onToggle, onDelete, on
         </button>
       </div>
 
-      {/* Meta badges: description indicator + comment count */}
+      {/* Meta badges: description indicator + comment count — right-aligned */}
       {(hasDesc || commentCount > 0) && (
-        <div className="flex items-center gap-2 px-2 pb-1.5 pl-8">
+        <div className="flex items-center justify-end gap-1.5 px-2 pb-1.5">
           {hasDesc && (
-            <span className="flex items-center gap-0.5 text-[10px] text-[var(--theme-text-muted)]" title="Has description">
+            <span
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-semibold
+                         text-[var(--theme-text-muted)] bg-[var(--theme-surface)] border border-[var(--theme-border)]"
+              title="Has description"
+            >
               <Icon name="edit" size="xs" />
             </span>
           )}
           {commentCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px] text-[var(--theme-text-muted)]" title={`${commentCount} comment${commentCount !== 1 ? "s" : ""}`}>
+            <span
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-semibold
+                         text-[var(--theme-text-muted)] bg-[var(--theme-surface)] border border-[var(--theme-border)]"
+              title={`${commentCount} comment${commentCount !== 1 ? "s" : ""}`}
+            >
               <Icon name="paragraph" size="xs" />{commentCount}
             </span>
           )}
@@ -595,7 +603,7 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({
             <button onClick={() => onToggle(laneIdx, card.id)}
               className={`mt-1 shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${card.done ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]" : "border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-primary)]"}`}
               title={card.done ? "Mark as todo" : "Mark as done"}>
-              {card.done && <Icon name="check" size="xs" className="text-white dark:text-[var(--theme-bg)]" />}
+              {card.done && <Icon name="check" size="xs" className="text-[var(--theme-primary-fg)]" />}
             </button>
             <h2 className={`flex-1 text-base font-semibold leading-snug ${card.done ? "line-through opacity-60" : "text-[var(--theme-text)]"}`}>{card.title}</h2>
           </div>
@@ -648,7 +656,7 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({
             placeholder="Write a comment... (Cmd+Enter to post)" rows={2}
             className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl px-3 py-2 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] transition-shadow mb-2" />
           <button onClick={() => void handlePostComment()} disabled={!commentDraft.trim() || saving}
-            className="px-4 py-1.5 text-xs font-bold text-white bg-[var(--theme-primary)] rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity select-none">
+            className="px-4 py-1.5 text-xs font-bold text-[var(--theme-primary-fg)] bg-[var(--theme-primary)] rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity select-none">
             {saving ? "Posting..." : "Post comment"}
           </button>
         </div>

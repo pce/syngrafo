@@ -35,7 +35,7 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({ tracks, onAddTrack }) => 
     </div>
     <button
       onClick={onAddTrack}
-      className="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-opacity"
+      className="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] text-xs font-semibold rounded-lg transition-opacity"
     >
       Add Track
     </button>

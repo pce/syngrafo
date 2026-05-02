@@ -81,7 +81,7 @@ const AudioFilesPage: React.FC = () => {
             className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
               isUploading
                 ? "bg-[var(--theme-border)] text-[var(--theme-text-muted)] cursor-not-allowed"
-                : "bg-[var(--theme-primary)] hover:opacity-90 text-white cursor-pointer"
+                : "bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] cursor-pointer"
             }`}
           >
             {isUploading ? "Uploading…" : "+ Import file"}

@@ -260,7 +260,7 @@ const AnalysisPanel: React.FC = () => {
           <div className="relative group">
             <button
               disabled={isFiling}
-              className="px-2 py-1 text-[10px] bg-[var(--theme-primary)] hover:opacity-90 text-white dark:text-[var(--theme-bg)] rounded shadow-lg transition-colors disabled:opacity-50"
+              className="px-2 py-1 text-[10px] bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] rounded shadow-lg transition-colors disabled:opacity-50"
             >
               {isFiling ? "Filing..." : "File to Zone"}
             </button>

@@ -629,12 +629,12 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
           <PathBreadcrumb path={state.currentPath} navigate={navigate} />
           {!state.zone ? (
             <button onClick={selectInboxFolder}
-              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 text-white dark:text-[var(--theme-bg)] transition-colors shrink-0">
+              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] transition-colors shrink-0">
               Browse…
             </button>
           ) : (
             <button onClick={bulkIndex} disabled={state.indexing} title="Index all files in this folder"
-              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 disabled:opacity-40 text-white dark:text-[var(--theme-bg)] transition-colors shrink-0">
+              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 disabled:opacity-40 text-[var(--theme-primary-fg)] transition-colors shrink-0">
               {state.indexing ? "…" : "Index"}
             </button>
           )}
@@ -743,7 +743,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
                 <li key={entry.path} data-path={entry.path}
                   onClick={(e) => { if (!clickable) return; entry.kind === "dir" ? navigate(entry.path) : selectFile(entry.path, e); }}
                   className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none text-sm ${
-                    isSelected ? "bg-[var(--theme-primary)] text-white dark:text-[var(--theme-bg)]"
+                    isSelected ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
                     : isFocused ? "bg-[var(--theme-bg)] text-[var(--theme-text)]"
                     : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]"
                   } ${!clickable ? "opacity-30 cursor-default" : ""}`}>
@@ -776,7 +776,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
               <li key={entry.path} data-path={entry.path}
                 onClick={(e) => { if (!clickable) return; entry.kind === "dir" ? navigate(entry.path) : selectFile(entry.path, e); }}
                 className={`flex items-center gap-3 px-3 py-2 cursor-pointer select-none text-sm group
-                  ${isSelected ? "bg-[var(--theme-primary)] text-white dark:text-[var(--theme-bg)]" : isFocused ? "bg-[var(--theme-bg)] text-[var(--theme-text)]" : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]"}
+                  ${isSelected ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]" : isFocused ? "bg-[var(--theme-bg)] text-[var(--theme-text)]" : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]"}
                   ${isFocused && !isSelected ? "ring-1 ring-inset ring-[var(--theme-primary)]/25" : ""}
                   ${!clickable ? "opacity-30 cursor-default" : ""}`}>
                 <span className="shrink-0 flex items-center justify-center"><FileIcon entry={entry} /></span>

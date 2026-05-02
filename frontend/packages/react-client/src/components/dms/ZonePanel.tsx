@@ -5,7 +5,7 @@ import type { ZoneHistoryItem } from "../../services/dms-service";
 
 interface Props { onClose: () => void; }
 
-// ── Network-path helpers ───────────────────────────────────────────────────────
+// Network-path helpers
 
 /** Schemes that require special resolution before use as a filesystem path. */
 const NETWORK_SCHEMES = ["smb://", "afp://", "cifs://", "nfs://", "ftp://", "ftps://", "ssh://", "sftp://"];
@@ -505,7 +505,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
           </button>
           <button
             onClick={apply}
-            className="px-4 py-2 bg-[var(--theme-primary)] hover:opacity-90 text-white dark:text-[var(--theme-bg)] rounded-lg text-sm font-bold transition-colors"
+            className="px-4 py-2 bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] rounded-lg text-sm font-bold transition-colors"
           >
             {isEditing ? "Save Changes" : "Create Zone"}
           </button>

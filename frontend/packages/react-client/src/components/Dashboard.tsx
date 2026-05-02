@@ -221,7 +221,7 @@ const CreateDirModal: React.FC<{
         </button>
         <button
           onClick={onConfirm}
-          className="px-4 py-2 text-xs font-bold bg-[var(--theme-primary)] hover:opacity-90 text-white dark:text-[var(--theme-bg)] rounded-lg transition-colors"
+          className="px-4 py-2 text-xs font-bold bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] rounded-lg transition-colors"
         >
           Create workspace
         </button>
@@ -230,7 +230,6 @@ const CreateDirModal: React.FC<{
   </div>
 );
 
-// ── Dashboard ────────────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
   const { state, dispatch } = useDms();
@@ -411,7 +410,7 @@ const Dashboard: React.FC = () => {
                 onClick={() => setActiveView(v)}
                 className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide transition-colors ${
                   activeView === v
-                    ? "bg-[var(--theme-primary)] text-white"
+                    ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
                     : "text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] hover:text-[var(--theme-text)]"
                 }`}
               >

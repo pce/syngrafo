@@ -61,7 +61,7 @@ const SearchResults: React.FC = () => {
                 className={`
                   w-full flex flex-col gap-1 p-3 rounded-xl text-left transition-all group
                   ${state.selectedPath === result.path 
-                    ? "bg-[var(--theme-primary)] text-white dark:text-[var(--theme-bg)] shadow-md" 
+                    ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] shadow-md" 
                     : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)] border border-transparent hover:border-[var(--theme-border)]"}
                 `}
               >

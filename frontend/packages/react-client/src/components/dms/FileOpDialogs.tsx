@@ -380,7 +380,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={nativeShare}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--theme-primary)] hover:opacity-90 text-white text-xs font-bold transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] text-xs font-bold transition-colors"
           >
             <Icon name="share" size="xs" />
             Share

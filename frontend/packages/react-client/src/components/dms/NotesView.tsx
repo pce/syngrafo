@@ -506,16 +506,16 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
           "group relative flex items-center gap-2 py-2 cursor-pointer transition-colors select-none",
           indent ? "pl-6 pr-3" : "px-3",
           isSelected
-            ? "bg-[var(--theme-primary)] text-white"
+            ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
             : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]",
         ].join(" ")}
       >
         <div className="flex-1 min-w-0">
-          <div className={`text-xs font-medium truncate ${isSelected ? "text-white" : "text-[var(--theme-text)]"}`}>
+          <div className={`text-xs font-medium truncate ${isSelected ? "text-[var(--theme-primary-fg)]" : "text-[var(--theme-text)]"}`}>
             {label}
           </div>
           {note.modified != null && (
-            <div className={`text-[10px] mt-0.5 ${isSelected ? "text-white/70" : "text-[var(--theme-text-muted)]"}`}>
+            <div className={`text-[10px] mt-0.5 ${isSelected ? "text-[var(--theme-primary-fg)]/70" : "text-[var(--theme-text-muted)]"}`}>
               {fmtDate(note.modified)}
             </div>
           )}
@@ -526,7 +526,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
           className={[
             "shrink-0 w-5 h-5 flex items-center justify-center rounded transition-all",
             isSelected
-              ? "text-white/60 hover:text-white hover:bg-white/20"
+              ? "text-[var(--theme-primary-fg)]/60 hover:text-[var(--theme-primary-fg)] hover:bg-[var(--theme-primary-fg)]/20"
               : "text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-red-500/10",
             isSelected
               ? "opacity-100"
@@ -544,7 +544,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--theme-bg)]">
 
-      {/* ══ Left pane ══════════════════════════════════════════════════════════ */}
+      {/* Left pane ══════════════════════════════════════════════════════════ */}
       <div
         className="flex flex-col shrink-0 border-r border-[var(--theme-border)] bg-[var(--theme-surface)]"
         style={{ width: 240 }}
@@ -591,7 +591,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
             />
             <div className="flex gap-1 mt-1.5">
               <button onClick={() => void createCollection()} disabled={!newCollectionName.trim()}
-                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
+                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 disabled:opacity-40 transition-opacity">
                 Create
               </button>
               <button onClick={() => { setCreatingCollection(false); setNewCollectionName(""); }}
@@ -629,7 +629,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
             )}
             <div className="flex gap-1">
               <button onClick={() => void commitNewNote()} disabled={!newNoteTitle.trim()}
-                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
+                className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 disabled:opacity-40 transition-opacity">
                 Create
               </button>
               <button onClick={() => { setCreatingNote(false); setNewNoteTitle(""); }}
