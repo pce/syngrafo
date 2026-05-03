@@ -35,7 +35,7 @@ if(TARGET saucer)
     )
 endif()
 
-# ── Platform sources & link ───────────────────────────────────────────────────
+# Platform sources & link
 # Each platform compiles exactly one adapter translation unit.
 # The header-only CRTP layer (systray.hpp, systray_controller.hpp,
 # systray_core.hpp) requires no compilation of its own.

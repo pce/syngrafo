@@ -336,8 +336,14 @@ inline std::string extract_svg_text(const std::string& svg) {
     std::error_code ec;
     const auto ft = fs::last_write_time(p,ec);
     if (ec) return 0;
+    // clock_cast is C++20 but not yet in all libc++ builds (e.g. Apple Clang).
+    // Portable workaround: compute the delta from file_clock::now() and apply
+    // it to system_clock::now().  Accurate to within a few microseconds.
+    const auto sys = std::chrono::system_clock::now() +
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(
+            ft - fs::file_time_type::clock::now());
     return std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::file_clock::to_sys(ft).time_since_epoch()).count();
+        sys.time_since_epoch()).count();
 }
 
 [[nodiscard]] inline Expected<std::string>
@@ -382,8 +388,19 @@ cosine_similarity(std::span<const float> a, std::span<const float> b) noexcept {
 
 // §7  Schema bootstrap
 
+inline void bootstrap_preferences_schema(pce::db::Database& db) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS app_preferences (
+            key        TEXT    PRIMARY KEY,
+            value      TEXT    NOT NULL DEFAULT '',
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+}
+
 inline void bootstrap_global_schema(pce::db::Database& db) {
     bootstrap_zone_schema(db);
+    bootstrap_preferences_schema(db);
     db.exec(R"sql(
         CREATE TABLE IF NOT EXISTS dms_ocr_cache (
             path        TEXT    PRIMARY KEY,
@@ -447,7 +464,7 @@ inline void bootstrap_palette_schema(pce::db::Database& db) {
 /// Versioned migration list — applied at most once per DB (recorded in schema_migrations).
 /// Versions 1–4 cover what the old try-catch ALTER TABLE pattern already achieved.
 /// Version 5+ introduces new schema objects.
-inline const std::array<pce::db::Migration, 9> kDmsMigrations{{
+inline const std::array<pce::db::Migration, 10> kDmsMigrations{{
     {1, "baseline dms + nlp + zone schema",         nullptr},
     {2, "dms_documents: add content_blob",
         "ALTER TABLE dms_documents ADD COLUMN content_blob BLOB;"},
@@ -481,6 +498,14 @@ inline const std::array<pce::db::Migration, 9> kDmsMigrations{{
         CREATE INDEX IF NOT EXISTS idx_dms_doc_mime    ON dms_documents(mime_type);
         CREATE INDEX IF NOT EXISTS idx_dms_doc_mtime   ON dms_documents(mtime DESC);
         )sql"},
+    {10, "app_preferences table",
+        R"sql(
+        CREATE TABLE IF NOT EXISTS app_preferences (
+            key        TEXT    PRIMARY KEY,
+            value      TEXT    NOT NULL DEFAULT '',
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+        )sql"},
 }};
 
 // §9  DMSHandle
@@ -504,15 +529,23 @@ struct DMSHandle {
     std::jthread                                         bulk_thread;
     pce::nlp::NLPEngine*                                 engine{nullptr};
     std::shared_ptr<pce::nlp::onnx::IOnnxService>        embed_svc;
+#ifdef NLP_WITH_ONNX
     std::shared_ptr<pce::nlp::RectifierAddon>            rectifier;
+#endif
     std::atomic<saucer::webview*>                        wv_ptr{nullptr};
 
     //  Construction
     explicit DMSHandle(pce::nlp::NLPEngine& eng,
-                       std::shared_ptr<pce::nlp::onnx::IOnnxService> embed = nullptr,
-                       std::shared_ptr<pce::nlp::RectifierAddon> rect = nullptr)
+                       std::shared_ptr<pce::nlp::onnx::IOnnxService> embed = nullptr
+#ifdef NLP_WITH_ONNX
+                       , std::shared_ptr<pce::nlp::RectifierAddon> rect = nullptr
+#endif
+                       )
         : db(open_db_()), engine(&eng),
-          embed_svc(std::move(embed)), rectifier(std::move(rect))
+          embed_svc(std::move(embed))
+#ifdef NLP_WITH_ONNX
+          , rectifier(std::move(rect))
+#endif
     {
         bootstrap_global_schema(db);
         bootstrap_dms_schema(db);

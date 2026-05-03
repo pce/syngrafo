@@ -3,7 +3,7 @@
 
 using namespace saucer::systray;
 
-// ── SystrayState — POD defaults ───────────────────────────────────────────────
+// SystrayState — POD defaults
 
 TEST_CASE("SystrayState: defaults are sane", "[systray][core]")
 {
@@ -15,7 +15,7 @@ TEST_CASE("SystrayState: defaults are sane", "[systray][core]")
     REQUIRE_FALSE(s.on_activate);
 }
 
-// ── MenuItem ──────────────────────────────────────────────────────────────────
+// MenuItem
 
 TEST_CASE("MenuItem: default type is Action", "[systray][menu]")
 {
@@ -25,7 +25,7 @@ TEST_CASE("MenuItem: default type is Action", "[systray][menu]")
     REQUIRE_FALSE(mi.on_click);
 }
 
-// ── Systray<Adapter> construction ─────────────────────────────────────────────
+// Systray<Adapter> construction
 //
 // On CI / headless builds AppKit / AppIndicator may not be available.
 // We only verify that the object can be constructed and destroyed and that the
@@ -65,7 +65,7 @@ TEST_CASE("NativeSystray: set_icon updates state", "[systray]")
     REQUIRE(t.state().icon_path == "/tmp/icon.png");
 }
 
-// ── SystrayController mutations ───────────────────────────────────────────────
+// SystrayController mutations
 
 TEST_CASE("NativeSystray: add_or_update inserts new item", "[systray][menu]")
 {

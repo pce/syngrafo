@@ -1,12 +1,11 @@
-// app/main.cc ─────────────────────────────────────────────────────────────────
 // Syngrafo desktop app over saucer::smartview bindings wired directly to
-// NLPEngine and ONNXAddon.  No bridge class or wrapper header.
+// NLPEngine and ONNXAddon.
 //
 // JSON envelope (every exposed function returns Promise<string>):
 //   ok  path  → { "ok": true,  "data": <payload> }
 //   err path  → { "ok": false, "error": "<message>" }
 //
-// ─────────────────────────────────────────────────────────────────────────────
+//
 
 #include <coco/stray/stray.hpp>
 #include <nlohmann/json.hpp>
@@ -211,7 +210,10 @@ private:
       std::print("[nlp] using NLP_DATA_DIR={}\n", v);
       return fs::path(v);
     }
-    return fs::path("data");
+    // Delegate to the module-level data_dir() which is macOS-bundle-aware:
+    // it returns <bundle>/Contents/Resources/data when running from an .app,
+    // and falls back to a sibling "data/" directory otherwise.
+    return fs::path(::data_dir());
   }
 
 public:
@@ -576,7 +578,16 @@ if (typeof window.__dms_progress === 'undefined')
     // Wire all JS ↔ C++ bindings directly — no bridge class.
     register_bindings(*webview, nlp);
     saucer::modules::desktop desk{app};
-    pce::dms::register_dms_bindings(*webview, dms, desk);
+
+    // Model downloader — manages NLP/LLM model files.
+    // Models are stored in <data_dir>/models/  (bundle-aware on macOS).
+    const std::string models_dir = (fs::path(data_dir()) / "models").string();
+    saucer::model_downloader::ModelDownloader model_dl{
+        { .models_dir = models_dir, .user_agent = "Syngrafo/" SYNGRAFO_VERSION }
+    };
+    std::print("[models] model store: {}\n", models_dir);
+
+    pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);
 
 #ifndef NDEBUG
     webview->set_dev_tools(true);
@@ -709,7 +720,7 @@ if (typeof window.__dms_progress === 'undefined')
           {"Cross-Origin-Resource-Policy", "cross-origin"},
       };
 
-      // ── Range request (HTTP 206 Partial Content) ──────────────────────────
+      // Range request (HTTP 206 Partial Content)
       // Required for <video>/<audio> seeking and for streaming large files
       // without buffering the entire content upfront.
       const auto req_headers = request.headers();
@@ -761,7 +772,7 @@ if (typeof window.__dms_progress === 'undefined')
         }
       }
 
-      // ── Full response ─────────────────────────────────────────────────────
+      // Full response
       std::vector<std::uint8_t> data(file_size);
       file.read(reinterpret_cast<char*>(data.data()),
                 static_cast<std::streamsize>(file_size));

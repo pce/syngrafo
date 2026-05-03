@@ -4,7 +4,8 @@
  * Applies theme by toggling CSS classes on <html>. All colour values live
  * in index.css as .theme-* rules; radius/density as .radius-* / .density-*.
  *
- * Persists to localStorage immediately and optionally syncs to the app DB.
+ * Persists to the global SQLite DB via dms.savePreference (key: "syngrafo_theme").
+ * No localStorage / IndexedDB is used — the DB is the single source of truth.
  */
 
 import React, {
@@ -109,13 +110,8 @@ function applyTheme(theme: ThemeTokens): void {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeTokens>(() => {
-    try {
-      const saved = localStorage.getItem(PREF_KEY);
-      if (saved) return { ...DEFAULT_THEME, ...JSON.parse(saved) };
-    } catch {/* ignore */}
-    return DEFAULT_THEME;
-  });
+  // Start with the built-in default — will be replaced by DB value on mount.
+  const [theme, setThemeState] = useState<ThemeTokens>(DEFAULT_THEME);
   const [isSaving, setIsSaving] = useState(false);
 
   // Apply on mount and every change
@@ -123,24 +119,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(theme);
   }, [theme]);
 
-  // On first mount, try to load from DB (async — may override localStorage)
+  // On first mount: load persisted theme from the DB.
   useEffect(() => {
     dms.loadPreference(PREF_KEY).then((val) => {
       if (!val) return;
       try {
         const stored = JSON.parse(val) as Partial<ThemeTokens>;
         setThemeState((prev) => ({ ...prev, ...stored }));
-      } catch {/* ignore */}
+      } catch {/* ignore malformed JSON */}
     });
   }, []);
 
   const setTheme = useCallback((partial: Partial<ThemeTokens>) => {
-    setThemeState((prev) => {
-      const next = { ...prev, ...partial };
-      // Persist to localStorage immediately
-      localStorage.setItem(PREF_KEY, JSON.stringify(next));
-      return next;
-    });
+    setThemeState((prev) => ({ ...prev, ...partial }));
   }, []);
 
   const saveTheme = useCallback(async () => {

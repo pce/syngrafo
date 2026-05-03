@@ -1,8 +1,9 @@
 /**
  * locale-store.tsx — locale selection context.
  *
- * Persists the chosen language to localStorage and loads the corresponding
- * LinguiJS message catalog.  Wrap the app with <LocaleProvider> to activate.
+ * Persists the chosen language to the global SQLite DB via dms.savePreference
+ * (key: "syngrafo_locale").  No localStorage / IndexedDB is used.
+ * All catalogs are pre-loaded at startup so switching is instant.
  *
  * Usage:
  *   const { locale, setLocale, availableLocales } = useLocale();
@@ -17,15 +18,16 @@ import React, {
   useState,
 } from "react";
 import { loadCatalog, detectLocale, LOCALES, type SupportedLocale } from "../i18n";
+import { dms } from "../services/dms-service";
 
-const STORAGE_KEY = "syngrafo_locale";
+const PREF_KEY = "syngrafo_locale";
 
 interface LocaleCtx {
   /** Active locale code, e.g. "de" */
   locale: SupportedLocale;
-  /** Whether the catalog is still loading */
+  /** Whether the initial DB load is still in progress */
   loading: boolean;
-  /** Switch to a different language (loads catalog + persists choice) */
+  /** Switch to a different language — activates catalog + persists to DB */
   setLocale: (locale: SupportedLocale) => void;
   /** All supported locales with their display names */
   availableLocales: typeof LOCALES;
@@ -34,21 +36,35 @@ interface LocaleCtx {
 const LocaleContext = createContext<LocaleCtx | null>(null);
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<SupportedLocale>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY) as SupportedLocale | null;
-    return saved && saved in LOCALES ? saved : detectLocale();
-  });
+  // Start with the browser's detected locale — will be replaced by DB value on mount.
+  const [locale, setLocaleState] = useState<SupportedLocale>(detectLocale);
   const [loading, setLoading] = useState(true);
 
-  // Load catalog whenever locale changes.
+  // On first mount: load persisted locale from the DB.
   useEffect(() => {
     setLoading(true);
-    loadCatalog(locale).finally(() => setLoading(false));
-  }, [locale]);
+    dms.loadPreference(PREF_KEY)
+      .then((val) => {
+        const stored = val as SupportedLocale | null;
+        const next = stored && stored in LOCALES ? stored : detectLocale();
+        setLocaleState(next);
+        loadCatalog(next);
+      })
+      .catch(() => {
+        // DB not yet ready (dev mode / first launch) — keep detected locale.
+        loadCatalog(locale);
+      })
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setLocale = useCallback((next: SupportedLocale) => {
-    localStorage.setItem(STORAGE_KEY, next);
     setLocaleState(next);
+    loadCatalog(next);
+    // Persist to DB — fire-and-forget (no await needed, locale is cheap to re-read)
+    dms.savePreference(PREF_KEY, next).catch((e) => {
+      console.warn("[locale] savePreference failed:", e);
+    });
   }, []);
 
   const ctx = useMemo<LocaleCtx>(
@@ -64,4 +80,3 @@ export function useLocale(): LocaleCtx {
   if (!ctx) throw new Error("useLocale must be used inside <LocaleProvider>");
   return ctx;
 }
-

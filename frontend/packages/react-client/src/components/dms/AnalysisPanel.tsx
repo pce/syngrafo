@@ -407,8 +407,8 @@ const AnalysisPanel: React.FC = () => {
         </section>
       )}
 
-      {/* ── Stored DB Metadata ── */}
-      {state.metadata && (
+      {/* ── Stored DB Metadata — only shown when the file is truly indexed (indexed_at > 0) ── */}
+      {state.metadata && state.metadata.indexedAt > 0 && (
         <section className="border-t border-[var(--theme-border)] pt-4 space-y-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>

@@ -59,6 +59,7 @@ if(APPLE)
         "-framework CoreImage"
         "-framework CoreGraphics"
         "-framework ImageIO"
+        "-framework PDFKit"
     )
 else()
     target_sources(nlp_engine PRIVATE

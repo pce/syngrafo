@@ -1,11 +1,15 @@
-/** AudioRecordingDocument — stored in IndexedDB by audioStorage */
+/**
+ * AudioRecordingDocument — represents a recorded or imported audio file.
+ * The audio data lives on disk inside the active Zone's folder.
+ * The path is stored in SQLite; no browser storage (IndexedDB / localStorage) is used.
+ */
 export interface AudioRecordingDocument {
-  id?:        number;
-  name:       string;
-  blob:       Blob;
-  mimeType:   string;
-  duration?:  number;
-  createdAt?: number;
+  id?:        number;   // DB row id
+  name:       string;   // display name
+  path:       string;   // absolute path to the audio file on disk
+  mimeType:   string;   // e.g. "audio/webm" | "audio/mp4"
+  duration?:  number;   // seconds
+  createdAt?: number;   // Unix ms
 }
 
 /** Track playback mode for the step-sequencer */

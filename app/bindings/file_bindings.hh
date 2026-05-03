@@ -3,7 +3,8 @@
  * @file bindings/file_bindings.hh
  * @author Patrick Engel
  * @brief File-I/O domain bindings: scan, read, write, copy, move, delete,
- *        directory picker, path helpers, network path resolution.
+ *        directory picker, path helpers, network path resolution,
+ *        preferences (save/load to global SQLite DB).
  *
  * All exposed functions use the standard JSON envelope:
  *   success → { "ok": true,  "data": <payload> }
@@ -13,6 +14,9 @@
 #pragma once
 #include "../dms_handle.hh"
 #include <saucer/modules/desktop.hpp>
+
+// Platform services give us reveal_in_finder (NSWorkspace on macOS, stub elsewhere).
+#include "../../external/nlp/addons/platform_services.hh"
 
 namespace pce::dms {
 
@@ -322,57 +326,54 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
     });
 
     // dms_share_file
+    // Reveals the file in the native Finder/Explorer window.
+    // macOS: delegates to NSWorkspace.shared.activateFileViewerSelectingURLs (no child process).
+    // Other platforms: not yet supported.
     wv.expose("dms_share_file", [](string path) -> string {
-#ifdef __APPLE__
-        const auto cmd=std::format("open -R \"{}\" 2>&1", path);
-        if (int rc=std::system(cmd.c_str()); rc==0)
-            return DMSHandle::ok_str(json{{"shared",true}});
-        return DMSHandle::err_str("Failed to reveal file in Finder");
-#else
-        (void)path;
-        return DMSHandle::err_str("Share not supported on this platform");
-#endif
+        const bool ok = pce::nlp::platform::reveal_in_finder(path);
+        if (!ok) return DMSHandle::err_str(
+            "Reveal in file manager is not supported on this platform");
+        return DMSHandle::ok_str(json{{"shared", true}});
     });
 
-    // dms_resolve_network_path
-    wv.expose("dms_resolve_network_path", [](string raw) -> string {
-        auto trim=[](const std::string& s)->std::string{
-            size_t b=s.find_first_not_of(" \t\r\n");
-            if(b==std::string::npos) return "";
-            return s.substr(b,s.find_last_not_of(" \t\r\n")-b+1);
-        };
-        const std::string path=trim(raw);
-        static const std::array<std::string,5> SCHEMES{"smb://","afp://","cifs://","nfs://","ftp://"};
-        std::string scheme,rest;
-        for (const auto& sc : SCHEMES) {
-            if (path.size()>sc.size()&&path.substr(0,sc.size())==sc){
-                scheme=sc.substr(0,sc.size()-3);rest=path.substr(sc.size());break;}
+    // ── dms_save_preference ────────────────────────────────────────────────────
+    // Persists an app-level string preference in the global SQLite DB.
+    // Keys are owned by the frontend (e.g. "syngrafo_theme", "syngrafo_locale").
+    // Thread-safe; uses db_mutex.  Zone DBs are intentionally NOT used — preferences
+    // are global to the installation, not per-zone.
+    wv.expose("dms_save_preference", [&dms](string key, string value) -> string {
+        if (key.empty()) return DMSHandle::err_str("key must not be empty");
+        if (key.size() > 256) return DMSHandle::err_str("key too long (max 256 chars)");
+        try {
+            const auto now = pce::db::now_unix();
+            std::lock_guard lk{dms.db_mutex};
+            (void)dms.db
+                .insert_into("app_preferences")
+                .value("key",        key)
+                .value("value",      value)
+                .value("updated_at", now)
+                .on_conflict_replace()
+                .execute();
+        } catch (const std::exception& e) {
+            return DMSHandle::err_str(std::format("save_preference: {}", e.what()));
         }
-        if (scheme.empty())
-            return DMSHandle::ok_str(json{{"resolved",path},{"mounted",true},{"scheme",""}});
-        const size_t s1=rest.find('/');
-        const std::string host=(s1==std::string::npos)?rest:rest.substr(0,s1);
-        const std::string after=(s1==std::string::npos)?"":rest.substr(s1+1);
-        const size_t s2=after.find('/');
-        const std::string share=(s2==std::string::npos)?after:after.substr(0,s2);
-        const std::string subpath=(s2==std::string::npos)?"":after.substr(s2+1);
-        if (share.empty())
-            return DMSHandle::err_str("Malformed network URL: "+path);
-        const std::string hint="/Volumes/"+share;
-        std::vector<std::string> cands{subpath.empty()?hint:hint+"/"+subpath,
-            "/Volumes/"+host+"-"+share+(subpath.empty()?"":"/"+subpath)};
-        if (const char* uid=std::getenv("UID"))
-            cands.push_back("/run/user/"+std::string(uid)+
-                "/gvfs/smb-share:server="+host+",share="+share+
-                (subpath.empty()?"":"/"+subpath));
-        std::error_code ec;
-        for (const auto& c : cands)
-            if (fs::exists(fs::path{c},ec))
-                return DMSHandle::ok_str(json{{"resolved",c},{"mounted",true},
-                    {"scheme",scheme},{"host",host},{"share",share},{"mount_hint",hint}});
-        return DMSHandle::ok_str(json{{"resolved",""},{"mounted",false},
-            {"scheme",scheme},{"host",host},{"share",share},
-            {"mount_hint",hint},{"open_url",path}});
+        return DMSHandle::ok_str(json{{"saved", true}, {"key", key}});
+    });
+
+    // ── dms_load_preference ────────────────────────────────────────────────────
+    // Returns { "value": "<string>" } or { "value": null } when key not found.
+    wv.expose("dms_load_preference", [&dms](string key) -> string {
+        if (key.empty()) return DMSHandle::err_str("key must not be empty");
+        std::optional<pce::db::Row> row;
+        {
+            std::lock_guard lk{dms.db_mutex};
+            row = dms.db
+                      .from("app_preferences")
+                      .where("key = ?", key)
+                      .first();
+        }
+        if (!row) return DMSHandle::ok_str(json{{"value", nullptr}});
+        return DMSHandle::ok_str(json{{"value", row->get<std::string>("value")}});
     });
 }
 

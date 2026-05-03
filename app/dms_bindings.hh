@@ -34,6 +34,7 @@
 #include "bindings/nlp_bindings.hh"
 #include "bindings/archive_bindings.hh"
 #include "bindings/palette_bindings.hh"
+#include "bindings/model_bindings.hh"
 
 namespace pce::dms {
 
@@ -143,16 +144,49 @@ inline Expected<json> DMSHandle::index_document(std::string_view path_str) {
         .and_then([&]()->VoidResult{
             return require(!fs::is_directory(p,ec),std::format("'{}' is a directory",path_str));
         })
-        .and_then([&]()->VoidResult{
-            if (is_indexable_text(mime)) return {};
-            std::string hint;
-            if      (mime.starts_with("image/")) hint=std::format("'{}' is an image \u2014 use OCR to extract text.",p.filename().string());
-            else if (mime.starts_with("audio/")||mime.starts_with("video/")) hint=std::format("'{}' ({}) is a media file.",p.filename().string(),mime);
-            else if (mime=="application/zip"||mime.starts_with("application/x-")) hint=std::format("'{}' is a binary/archive.",p.filename().string());
-            else hint=std::format("'{}' (MIME:{}) is not indexable text.",p.filename().string(),mime);
-            return std::unexpected(hint);
-        })
         .and_then([&]()->Expected<json>{
+            // ── PDF: platform text extraction → Vision AI / Tesseract OCR ──────────
+            // Pipeline:  PDFKit embedded text (macOS) → Vision AI per-page (scanned)
+            //            Tesseract/Leptonica (Linux/Windows, first page via Ghostscript)
+            if (mime == "application/pdf") {
+                if (!engine)
+                    return std::unexpected(std::format(
+                        "'{}': PDF indexing requires the NLP engine (not initialised).",
+                        p.filename().string()));
+                const std::string text = engine->extract_text_from_pdf(p.string());
+                if (text.empty())
+                    return std::unexpected(std::format(
+                        "'{}': PDF text extraction returned no content. "
+                        "The file may be encrypted, image-only without OCR support, or corrupt.",
+                        p.filename().string()));
+                const auto quality = ocr_quality(text);
+                if (quality == "garbage")
+                    return std::unexpected(std::format(
+                        "'{}': PDF OCR output quality is '{}' (too many non-alpha chars). "
+                        "Try dms_ocr_document for manual OCR review.",
+                        p.filename().string(), quality));
+                std::print("[dms] PDF '{}' → {} chars, quality='{}'\n",
+                           p.filename().string(), text.size(), quality);
+                return index_one_file_(p, text);
+            }
+            // ── Images: redirect to OCR via dms_ocr_document ──────────────────────
+            if (mime.starts_with("image/") && mime != "image/svg+xml") {
+                return std::unexpected(std::format(
+                    "'{}' is an image — use dms_ocr_document to extract and index its text.",
+                    p.filename().string()));
+            }
+            // ── Media / archives: not indexable ───────────────────────────────────
+            if (mime.starts_with("audio/")||mime.starts_with("video/"))
+                return std::unexpected(std::format(
+                    "'{}' ({}) is a media file — no text to index.",
+                    p.filename().string(), mime));
+            if (mime=="application/zip"||mime.starts_with("application/x-"))
+                return std::unexpected(std::format(
+                    "'{}' is a binary/archive — not indexable.", p.filename().string()));
+            if (!is_indexable_text(mime))
+                return std::unexpected(std::format(
+                    "'{}' (MIME:{}) is not indexable text.", p.filename().string(), mime));
+            // ── Plain text, HTML, SVG, JSON, etc. ─────────────────────────────────
             return safe_read_text(p,1u<<20).and_then([&](std::string content)->Expected<json>{
                 if (mime=="text/html"||mime=="text/htm"||mime=="text/xhtml+xml")
                     content=strip_html_tags(content);
@@ -179,7 +213,10 @@ inline Expected<json> DMSHandle::bulk_index_start(std::string_view dir_path) {
     for(const auto& e:fs::recursive_directory_iterator(root,skip,ec)){
         if(ec){ec.clear();continue;}
         if(!e.is_regular_file()) continue;
-        if(is_indexable_text(mime_for_extension(e.path().extension().string())))
+        const auto m=mime_for_extension(e.path().extension().string());
+        // Include plain-text types always; include PDFs when OCR engine is ready.
+        if(is_indexable_text(m) ||
+           (m=="application/pdf" && engine && engine->has_ocr()))
             candidates.push_back(e.path());
     }
     const int64_t total=(int64_t)candidates.size();
@@ -339,6 +376,7 @@ inline Expected<json> DMSHandle::get_metadata(std::string_view path_str) {
 // ── rectify_document ──────────────────────────────────────────────────────────
 inline Expected<json> DMSHandle::rectify_document(std::string_view path_str,
                                                     std::optional<std::string> out_opt) {
+#ifdef NLP_WITH_ONNX
     const fs::path src{path_str}; std::error_code ec;
     return require(fs::exists(src,ec),std::format("'{}' does not exist",path_str))
         .and_then([&]()->Expected<json>{
@@ -351,6 +389,10 @@ inline Expected<json> DMSHandle::rectify_document(std::string_view path_str,
             (void)index_document(out.string());
             return json{{"success",true},{"outPath",out.string()}};
         });
+#else
+    (void)path_str; (void)out_opt;
+    return std::unexpected(std::string{"Rectifier addon unavailable (built without ONNX)"});
+#endif
 }
 
 // ── get_zones ─────────────────────────────────────────────────────────────────
@@ -482,12 +524,14 @@ inline Expected<json> DMSHandle::import_to_zone(std::string path, std::string zo
     json meta=json::object();
     meta["import_date"]=pce::db::now_unix();
     meta["original_source"]=path;
+#ifdef NLP_WITH_ONNX
     if (scan&&rectifier){
         std::print("[dms] Rectifying {}\n",dest.string());
         std::string rf=(out_dir/(src.stem().string()+".rectified"+src.extension().string())).string();
         if(rectifier->rectify(dest.string(),rf)){fs::remove(dest);dest=fs::path(rf);meta["applied_scan"]=true;}
         else std::print(stderr,"[dms] Rectifier failed\n");
     }
+#endif
     if (compress){std::print("[dms] Compress placeholder\n");meta["applied_compression"]=true;}
     auto r=index_document(dest.string());
     if(r){
@@ -737,22 +781,24 @@ inline void DMSHandle::push_progress_(nlohmann::json ev) const {
 }
 
 // =============================================================================
-// register_dms_bindings — wire all five domain modules
+// register_dms_bindings — wire all domain modules
 // =============================================================================
 
 inline void register_dms_bindings(saucer::smartview& wv, DMSHandle& dms,
-                                   saucer::modules::desktop& desk) {
+                                   saucer::modules::desktop& desk,
+                                   saucer::model_downloader::ModelDownloader& model_dl) {
     // Store webview pointer once, before any jthread work starts.
     dms.wv_ptr.store(&wv, std::memory_order_release);
 
-    register_file_bindings   (wv, dms, desk);   //  file / dir / picker / copy / move
-    register_image_bindings  (wv, dms, desk);   //  SVG / mesh / OCR / EXIF / rectify
-    register_nlp_bindings    (wv, dms, desk);   //  index / search / zones / bulk
-    register_archive_bindings(wv, dms, desk);   //  create_archive / compress_file
-    register_palette_bindings(wv, dms, desk);   //  zone/brand/project ColorPalettes
+    register_file_bindings   (wv, dms, desk);      //  file / dir / picker / copy / move
+    register_image_bindings  (wv, dms, desk);      //  SVG / mesh / OCR / EXIF / rectify
+    register_nlp_bindings    (wv, dms, desk);      //  index / search / zones / bulk
+    register_archive_bindings(wv, dms, desk);      //  create_archive / compress_file
+    register_palette_bindings(wv, dms, desk);      //  zone/brand/project ColorPalettes
+    register_model_bindings  (wv, model_dl);       //  model list/download/cancel/delete
 
-    std::print("[dms] 4 domain binding modules registered "
-               "(file / image / nlp / archive)\n");
+    std::print("[dms] 6 domain binding modules registered "
+               "(file / image / nlp / archive / palette / model)\n");
 }
 
 } // namespace pce::dms

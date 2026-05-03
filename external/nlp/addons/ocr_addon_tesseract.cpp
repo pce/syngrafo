@@ -7,7 +7,7 @@
  * Supported languages by default (if tessdata files are present):
  *   eng — English
  *   deu — German  (apt: tesseract-ocr-deu  | brew: tesseract-lang)
- *   ell — Greek   (apt: tesseract-ocr-ell  | brew: tesseract-lang)
+ *   ell — Greek   (apt: tesseract-ocr-ell)
  *
  * tessdata lookup order:
  *   1. TESSDATA_PREFIX environment variable
@@ -177,5 +177,13 @@ std::string extract_text(const std::string& input_path) {
     return result;
 }
 
-}  // namespace pce::nlp::platform
+std::string extract_text_from_pdf(const std::string& input_path) {
+    // Use Leptonica pixRead() which can decode a single-page or first-page PDF
+    // when Ghostscript (gs) is installed on the system.
+    // For multi-page PDFs only the first page is read this way.
+    // A proper multi-page solution requires a PDF page-rendering library (future work).
+    return extract_text(input_path);
+}
+
+} // namespace pce::nlp::platform
 

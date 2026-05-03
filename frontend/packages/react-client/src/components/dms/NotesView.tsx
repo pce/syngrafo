@@ -284,6 +284,11 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   // ── Refs ──────────────────────────────────────────────────────────────────────
   const contentRef      = useRef<string>("");
   const selectedPathRef = useRef<string | null>(null);
+  // saveTargetRef tracks which path the *current content* belongs to.
+  // It is only advanced after a note's content is successfully read, so the
+  // flush-on-switch logic always saves to the correct (old) path even though
+  // selectedPathRef is updated to the new path during the same render.
+  const saveTargetRef   = useRef<string | null>(null);
   const saveTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   contentRef.current      = content;
@@ -339,20 +344,32 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   // ── Load content when selection changes ───────────────────────────────────────
 
   useEffect(() => {
-    if (!selectedPath) { setContent(""); setSaveStatus("idle"); return; }
+    if (!selectedPath) {
+      saveTargetRef.current = null;
+      setContent("");
+      setSaveStatus("idle");
+      return;
+    }
 
+    // Flush any unsaved content for the *previous* note.
+    // Use saveTargetRef (the path the current content belongs to) — NOT
+    // selectedPathRef, which has already been updated to the new path by the
+    // time this effect runs.
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
-      const p = selectedPathRef.current;
+      const prevPath = saveTargetRef.current;
       const c = contentRef.current;
-      if (p) void dms.writeFile(p, c);
+      if (prevPath && prevPath !== selectedPath) void dms.writeFile(prevPath, c);
     }
+
     setSaveStatus("idle");
 
     let cancelled = false;
     dms.readFile(selectedPath).then((res) => {
       if (cancelled) return;
+      // Advance saveTargetRef only after we know content for this path is loaded.
+      saveTargetRef.current = selectedPath;
       setContent(res.ok && res.data?.content != null ? res.data.content : "");
     });
     return () => { cancelled = true; };

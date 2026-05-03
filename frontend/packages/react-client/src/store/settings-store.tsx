@@ -1,8 +1,8 @@
 /**
  * settings-store.tsx — App-level preference context.
  *
- * Persists to localStorage immediately; optionally syncs to the app DB via
- * dms.savePreference / dms.loadPreference (same pattern as theme-store).
+ * Persists to the global SQLite DB via dms.savePreference / dms.loadPreference.
+ * No localStorage / IndexedDB is used — the DB is the single source of truth.
  */
 
 import React, {
@@ -46,16 +46,11 @@ const SettingsContext = createContext<SettingsCtx | null>(null);
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettingsState] = useState<AppSettings>(() => {
-    try {
-      const saved = localStorage.getItem(SETTINGS_KEY);
-      if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
-    } catch { /* ignore */ }
-    return DEFAULT_SETTINGS;
-  });
+  // Start with defaults — will be replaced by DB value on mount.
+  const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
 
-  // On first mount, load from DB (may override localStorage value).
+  // On first mount, load from DB.
   useEffect(() => {
     dms.loadPreference(SETTINGS_KEY).then((val) => {
       if (!val) return;
@@ -67,11 +62,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setSetting = useCallback((partial: Partial<AppSettings>) => {
-    setSettingsState((prev) => {
-      const next = { ...prev, ...partial };
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-      return next;
-    });
+    setSettingsState((prev) => ({ ...prev, ...partial }));
   }, []);
 
   const saveSettings = useCallback(async () => {

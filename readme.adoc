@@ -21,11 +21,10 @@ image:https://github.com/pce/syngrafo/actions/workflows/release.yml/badge.svg?br
 :source-highlighter: highlight.js
 
 
-
-Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
-
-File browser + NLP + media + knowledge system
-The Scope looks at first sight broad, that is  intentionally  to avoid early constraints on the UI/UX and data model:
+// Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
+//
+// File browser + NLP + media + knowledge system
+// The Scope looks at first sight broad, that is  intentionally  to avoid early constraints on the UI/UX and data model:
 
 // That’s simply or simplified: “Asset → Transform → View”
 
@@ -159,8 +158,10 @@ PLY · OBJ · GLTF · STL
 //
 // image::data/inp/syngrafo_image_ocr.jpg[[width=100%]
 //
+
+
 === SVG
-//
+// TODO Move this section to a dedicated SVG chapter, expand on the strategies and palette options.
 //
 // .SVG conversion using the “AB” color palette
 // image::data/inp/syngrafo_img_2_svg.jpg[width=100%]
@@ -171,15 +172,6 @@ Image-to-SVG conversion with selectable strategies:
 * PLY: polygonal approximation
 * TRI: triangulated mesh
 
-[cols="^1,^1,^1",options="header",frame="none",grid="none"]
-|===
-| ORIG | PLY | TRI
-
-| image:data/inp/trees_input.jpg[width=100%]
-| image:data/inp/trees_ply.svg[width=100%]
-| image:data/inp/trees_tri.svg[width=100%]
-
-|===
 
 
 .Image to SVG triangulated
@@ -214,11 +206,13 @@ optimized for vector reconstruction and stylization.
 
 A Zone pairs a **source folder** (original documents) with a **workspace folder** (index and processed files).
 
-Default workspace path: `{source}/.papiere/{zone-slug}/`
+Default workspace path: `{source}/.syngrafo/{zone-slug}/`
 
 Zones support **AES-256 encryption** via SQLCipher. Passphrase → PBKDF2 key → macOS Keychain. Locked zones expose no index data; full search/NLP resumes on unlock.
 
 == NLP Models
+
+Optional ONNXAddon
 
 [source,bash]
 ----

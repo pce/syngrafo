@@ -23,6 +23,18 @@ std::string extract_text(const std::string& /*input_path*/) {
 }
 #endif
 
+std::string extract_text_from_pdf(const std::string& input_path) {
+    // On Linux/Windows: best-effort forward to Tesseract/Leptonica.
+    // pixRead() in Leptonica can decode single-page PDFs if Ghostscript is installed.
+    // For multi-page PDFs this only covers the first page; proper multi-page support
+    // requires a dedicated PDF renderer (e.g. poppler / saucer/pdf — future work).
+    return extract_text(input_path);
+}
+
+bool reveal_in_finder(const std::string& /*path*/) {
+    return false; // Not supported outside macOS
+}
+
 std::string extract_exif(const std::string& /*input_path*/) {
     return "{}";
 }

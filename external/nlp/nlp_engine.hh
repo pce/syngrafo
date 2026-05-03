@@ -583,6 +583,12 @@ public:
 
   /** @name OCR methods */
   std::string extract_text_from_image(const std::string& path);
+  /// Extract all text from a PDF document.
+  /// macOS:         PDFKit (embedded text) → Vision AI per-page (scanned PDFs).
+  /// Linux/Windows: Tesseract/Leptonica via extract_text() — first page only
+  ///                unless Ghostscript is installed for multi-page rendering.
+  /// Returns UTF-8 text, or empty string if OCR is unavailable.
+  std::string extract_text_from_pdf(const std::string& path);
 
 private:
   mutable std::shared_mutex        engine_mutex_; ///< Protects service pointers

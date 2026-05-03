@@ -16,8 +16,12 @@
  *   dms_ocr_document          (path: string, zone: string)          → { text, cached, quality }
  *   dms_get_exif              (path: string)                        → ExifData
  *   dms_rectify_document      (path: string, outPath?: string)      → { success, outPath }
- *   dms_export_pdf            (srcPath: string, outPath: string)    → { success, outPath }
- *   dms_extract_pdf_text      (path: string)                        → { text, method }
+ *   dms_export_pdf            (srcPath: string, outPath: string)    → stub — pending saucer/pdf integration
+ *   dms_extract_pdf_text      (path: string)                        → stub — pending saucer/pdf integration
+ *
+ * NOTE: PDF extraction and export use the saucer/pdf library (https://github.com/saucer/pdf).
+ *       Process-spawning (sips, pdftotext, pdftoppm) is explicitly forbidden in this codebase.
+ *       macOS uses Vision AI (VNRecognizeTextRequest) and CoreImage where possible.
  */
 
 #include "../dms_handle.hh"
@@ -374,58 +378,23 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
     });
 
     // ── dms_export_pdf ───────────────────────────────────────────────────────
-    wv.expose("dms_export_pdf", [](string src_path, string out_path) -> string {
-        if (!fs::exists(fs::path{src_path}))
-            return DMSHandle::err_str(std::format("'{}' not found",src_path));
-#ifdef __APPLE__
-        const std::string cmd=std::format(
-            "sips -s format pdf \"{}\" --out \"{}\" > /dev/null 2>&1",src_path,out_path);
-        if (int rc=std::system(cmd.c_str()); rc==0 && fs::exists(out_path))
-            return DMSHandle::ok_str(json{{"success",true},{"outPath",out_path}});
-#endif
-        return DMSHandle::err_str("Export to PDF failed or not supported on this platform");
+    // TODO: integrate saucer/pdf (https://github.com/saucer/pdf) for self-contained
+    //       PDF export.  On macOS, PDFKit / CGPDFContext are the correct APIs.
+    //       No process spawning (sips, cupsfilter, etc.) is permitted.
+    wv.expose("dms_export_pdf", [](string /*src_path*/, string /*out_path*/) -> string {
+        return DMSHandle::err_str(
+            "PDF export is not yet available — pending saucer/pdf integration. "
+            "See: https://github.com/saucer/pdf");
     });
 
     // ── dms_extract_pdf_text ─────────────────────────────────────────────────
-    // Fast path: pdftotext.  Slow path: pdftoppm + per-page OCR.
-    wv.expose("dms_extract_pdf_text", [&dms](string path) -> string {
-        const fs::path p{path};
-        if (!fs::exists(p)) return DMSHandle::err_str(std::format("'{}' does not exist",path));
-        {
-            std::string out;
-            const std::string cmd=std::format("pdftotext -layout \"{}\" -",p.string());
-            if (FILE* pipe=popen(cmd.c_str(),"r")) {
-                std::array<char,4096> buf;
-                while (size_t n=fread(buf.data(),1,buf.size(),pipe)) out.append(buf.data(),n);
-                if (int rc=pclose(pipe); rc==0 && !out.empty())
-                    return DMSHandle::ok_str(json{{"text",out},{"method","pdftotext"}});
-            }
-        }
-        if (!dms.engine||!dms.engine->has_ocr())
-            return DMSHandle::err_str("pdftotext unavailable and OCR engine not loaded");
-        const fs::path tmp=fs::temp_directory_path()/
-            std::format("papiere_pdf_{}",std::hash<std::string>{}(p.string()));
-        fs::create_directories(tmp);
-        const std::string cmd2=std::format("pdftoppm -png \"{}\" \"{}\"",p.string(),(tmp/"page").string());
-        if (int rc=std::system(cmd2.c_str()); rc!=0){
-            try{fs::remove_all(tmp);}catch(...){};
-            return DMSHandle::err_str("pdftoppm failed to rasterize PDF pages");
-        }
-        std::vector<fs::path> pages;
-        for (const auto& e:fs::directory_iterator(tmp))
-            if (e.path().extension()==".png") pages.push_back(e.path());
-        std::sort(pages.begin(),pages.end());
-        std::string combined;
-        for (const auto& pg:pages) {
-            try {
-                const auto j=json::parse(dms.ocr_document(pg.string()));
-                if (j.value("ok",false) && j["data"].contains("text"))
-                    combined+=j["data"]["text"].get<std::string>()+"\n\n";
-            } catch (...) {}
-        }
-        try{fs::remove_all(tmp);}catch(...){};
-        if (combined.empty()) return DMSHandle::err_str("failed to extract text from PDF");
-        return DMSHandle::ok_str(json{{"text",combined},{"method","ocr"}});
+    // TODO: integrate saucer/pdf (https://github.com/saucer/pdf) for self-contained
+    //       PDF text extraction.  macOS can use PDFKit's PDFDocument API.
+    //       No process spawning (pdftotext, pdftoppm, etc.) is permitted.
+    wv.expose("dms_extract_pdf_text", [](string /*path*/) -> string {
+        return DMSHandle::err_str(
+            "PDF text extraction is not yet available — pending saucer/pdf integration. "
+            "See: https://github.com/saucer/pdf");
     });
 }
 

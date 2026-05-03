@@ -59,7 +59,7 @@ msgstr "Laden…"
 msgid "Empty folder"
 msgstr "Leerer Ordner"
 
-# ── DocumentViewer ────────────────────────────────────────────────────────────
+# DocumentViewer
 msgid "Run OCR"
 msgstr "Texterkennung starten"
 
@@ -69,7 +69,7 @@ msgstr "Texterkennung läuft…"
 msgid "No document selected"
 msgstr "Kein Dokument ausgewählt"
 
-# ── AnalysisPanel ─────────────────────────────────────────────────────────────
+# AnalysisPanel
 msgid "Keywords"
 msgstr "Schlagwörter"
 
@@ -91,7 +91,7 @@ msgstr "Positiv"
 msgid "Negative"
 msgstr "Negativ"
 
-# ── OCR / processing ──────────────────────────────────────────────────────────
+# OCR / processing
 msgid "Indexing…"
 msgstr "Wird indiziert…"
 

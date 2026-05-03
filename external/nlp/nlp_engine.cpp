@@ -154,6 +154,11 @@ std::string NLPEngine::extract_text_from_image(const std::string& path) {
     return ocr_->extract_text(path);
 }
 
+std::string NLPEngine::extract_text_from_pdf(const std::string& path) {
+    if (!has_ocr()) return "";
+    return pce::nlp::platform::extract_text_from_pdf(path);
+}
+
 LanguageProfile NLPEngine::detect_language(const std::string& text) {
     LanguageProfile profile{.language = "en", .confidence = 0.0f};
     if (text.empty() || !model_) return profile;
