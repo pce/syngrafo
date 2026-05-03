@@ -65,25 +65,57 @@ else()
     target_sources(nlp_engine PRIVATE
         addons/platform_services_stub.cpp
     )
+endif()
 
-    # ── Tesseract OCR (cross-platform fallback) ──────────────────────────────
-    # Provides a real multi-language OCR implementation for Linux / Windows.
-    # Install tessdata language packs separately:
-    #   Linux:   sudo apt-get install tesseract-ocr-deu tesseract-ocr-ell
-    #   vcpkg:   vcpkg install tesseract
-    #   custom:  python3 scripts/download_models.py download --models tessdata
-    option(DISABLE_TESSERACT "Disable Tesseract OCR fallback" OFF)
-    if(NOT DISABLE_TESSERACT)
-        find_package(Tesseract QUIET)
-        if(Tesseract_FOUND OR TARGET Tesseract::libtesseract)
-            message(STATUS "[nlp] Tesseract found (${Tesseract_VERSION}) — multilingual OCR enabled (eng+deu+ell)")
-            target_sources(nlp_engine PRIVATE addons/ocr_addon_tesseract.cpp)
-            target_compile_definitions(nlp_engine PUBLIC NLP_WITH_TESSERACT)
-            target_link_libraries(nlp_engine PRIVATE Tesseract::libtesseract)
-        else()
-            message(STATUS "[nlp] Tesseract NOT found — OCR fallback disabled on this platform")
-            message(STATUS "      Install: sudo apt-get install libtesseract-dev  OR  vcpkg install tesseract")
+# ── OCR backend — compile-time selection ─────────────────────────────────────
+#
+# Apple (default):  Apple Vision — zero extra deps, fastest on Apple Silicon.
+#                   Set NLP_APPLE_VISION=OFF to use Tesseract instead (e.g. CI parity).
+#
+# Non-Apple:        Tesseract always — find_package first, fetch from source if not found.
+#
+if(APPLE)
+    option(NLP_APPLE_VISION "Use Apple Vision OCR on macOS" ON)
+    if(NLP_APPLE_VISION)
+        message(STATUS "[nlp] OCR: Apple Vision")
+        target_compile_definitions(nlp_engine PUBLIC NLP_APPLE_VISION)
+    else()
+        message(STATUS "[nlp] OCR: Tesseract (NLP_APPLE_VISION=OFF)")
+    endif()
+endif()
+
+# Tesseract — built when: non-Apple, or Apple with NLP_APPLE_VISION=OFF
+if(NOT APPLE OR NOT NLP_APPLE_VISION)
+    find_package(Tesseract QUIET)
+    if(NOT Tesseract_FOUND AND NOT TARGET Tesseract::libtesseract)
+        set(BUILD_PROG           OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            leptonica
+            URL https://github.com/DanBloomberg/leptonica/archive/refs/tags/1.84.1.tar.gz
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        )
+        FetchContent_MakeAvailable(leptonica)
+
+        set(DISABLE_TIFF         ON  CACHE BOOL "" FORCE)
+        set(DISABLE_CURL         ON  CACHE BOOL "" FORCE)
+        set(BUILD_TRAINING_TOOLS OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            tesseract_src
+            URL https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.0.tar.gz
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        )
+        FetchContent_MakeAvailable(tesseract_src)
+        if(TARGET libtesseract AND NOT TARGET Tesseract::libtesseract)
+            add_library(Tesseract::libtesseract ALIAS libtesseract)
         endif()
+        set(Tesseract_FOUND TRUE)
+    endif()
+
+    if(Tesseract_FOUND OR TARGET Tesseract::libtesseract)
+        message(STATUS "[nlp] Tesseract — NLP_WITH_TESSERACT enabled")
+        target_sources(nlp_engine PRIVATE addons/ocr_addon_tesseract.cpp)
+        target_compile_definitions(nlp_engine PUBLIC NLP_WITH_TESSERACT)
+        target_link_libraries(nlp_engine PRIVATE Tesseract::libtesseract)
     endif()
 endif()
 

@@ -1,8 +1,9 @@
 /**
- * ocr_addon_tesseract.cpp — cross-platform OCR via libtesseract.
+ * ocr_addon_tesseract.cpp — OCR via libtesseract.
  *
- * Compiled on non-Apple platforms when Tesseract is found by CMake.
- * Implements pce::nlp::platform::extract_text() with multi-language support.
+ * Compiled when NLP_WITH_TESSERACT is defined (non-Apple by default;
+ * Apple with NLP_APPLE_VISION=OFF).
+ * Provides extract_text() and extract_text_from_pdf() for the platform layer.
  *
  * Supported languages by default (if tessdata files are present):
  *   eng — English
@@ -148,7 +149,8 @@ tesseract::TessBaseAPI* get_tess() {
 
 }  // namespace
 
-std::string extract_text(const std::string& input_path) {
+// ── extract_text ──────────────────────────────────────────────────────────────
+std::string extract_text_tesseract(const std::string& input_path) {
     tesseract::TessBaseAPI* tess = get_tess();
     if (!tess) {
         return "[OCR error: Tesseract initialisation failed — "
@@ -166,24 +168,24 @@ std::string extract_text(const std::string& input_path) {
     std::string result = raw ? raw : "";
     delete[] raw;
 
-    tess->Clear();  // release image data, keep model loaded
+    tess->Clear();
     pixDestroy(&pix);
 
-    // Trim trailing newlines that Tesseract appends
-    while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
         result.pop_back();
-    }
 
     return result;
 }
 
-std::string extract_text_from_pdf(const std::string& input_path) {
-    // Use Leptonica pixRead() which can decode a single-page or first-page PDF
-    // when Ghostscript (gs) is installed on the system.
-    // For multi-page PDFs only the first page is read this way.
-    // A proper multi-page solution requires a PDF page-rendering library (future work).
-    return extract_text(input_path);
+std::string extract_text(const std::string& input_path) {
+    return extract_text_tesseract(input_path);
 }
+
+std::string extract_text_from_pdf(const std::string& input_path) {
+    // Leptonica pixRead() handles single-page / first-page PDFs when Ghostscript is present.
+    return extract_text_tesseract(input_path);
+}
+
 
 } // namespace pce::nlp::platform
 

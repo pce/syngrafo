@@ -10,15 +10,17 @@ const SearchResults: React.FC = () => {
   }
 
   const handleClose = () => {
-    dispatch({ type: "SET_SEARCH_QUERY", query: "" });
-    dispatch({ type: "SET_SEARCH_RESULTS", results: [] });
+    dispatch({ type: "SET_SEARCH_QUERY",   query:    ""    });
+    dispatch({ type: "SET_SEARCH_RESULTS", results:  []    });
+    dispatch({ type: "SET_SEARCHING",      searching: false });
   };
 
   const handleSelect = (path: string) => {
     dispatch({ type: "SELECT_FILE", path });
-    // Keep results open or close? User might want to click multiple.
-    // Let's keep them for now but allow closing.
+    handleClose();
   };
+
+  const scopeLabel = state.zone ? `Zone · ${state.zone.name}` : "Global Index";
 
   return (
     <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl z-50 flex flex-col max-h-[70vh] overflow-hidden">
@@ -26,10 +28,20 @@ const SearchResults: React.FC = () => {
         <div className="flex items-center gap-2">
           <Icon name="search" size="xs" className="text-[var(--theme-text-muted)]" />
           <span className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
-            Search Results for "{state.searchQuery}"
+            Results for "{state.searchQuery}"
           </span>
           <span className="px-1.5 py-0.5 rounded-full bg-[var(--theme-primary)]/10 text-[var(--theme-primary)] text-[10px] font-bold">
-            {state.searchResults.length}
+            {state.searching ? "…" : state.searchResults.length}
+          </span>
+          <span
+            className={`hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+              state.zone
+                ? "bg-[var(--theme-primary)]/10 border-[var(--theme-primary)]/30 text-[var(--theme-primary)]"
+                : "bg-[var(--theme-border)]/50 border-[var(--theme-border)] text-[var(--theme-text-muted)]"
+            }`}
+            title={state.zone ? `Searched in zone: ${state.zone.name}` : "Searched global user index"}
+          >
+            {scopeLabel}
           </span>
         </div>
         <button

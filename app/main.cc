@@ -146,7 +146,7 @@ struct EngineHandle {
 #endif
   std::shared_ptr<OCRAddon> ocr_addon;
 
-  EngineHandle() {
+  explicit EngineHandle() {
     ensure_models_present();
 
     model = load_model();
@@ -202,31 +202,14 @@ struct EngineHandle {
     }
 #endif
 
-    // OCR Addon
+    // ── OCR Addon ──────────────────────────────────────────────────────────
+    // Backend is compile-time: NLP_APPLE_VISION → Apple Vision; NLP_WITH_TESSERACT → libtesseract.
     ocr_addon = std::make_shared<OCRAddon>();
-
-    // For non-Apple platforms, we need to load an ONNX model for the OCR addon.
-#ifndef __APPLE__
-#ifdef NLP_WITH_ONNX
-    const fs::path ocr_model = resolve_model_dir() / "ocr.onnx";
-    if (fs::exists(ocr_model)) {
-      auto svc = std::make_shared<onnx::ONNXAddon>();
-      onnx::ONNXAddon::Config ocr_cfg;
-      ocr_cfg.model_path = ocr_model;
-      // PP-OCRv3 uses a character list instead of a WordPiece vocab.
-      // These would normally be loaded from a file, but we'll use the default
-      // labels for now.
-      if (svc->load_model(std::move(ocr_cfg))) {
-        ocr_addon->set_onnx(svc);
-        std::print("[nlp] OCR ONNX model loaded\n");
-      }
-    }
-#endif
-#endif
-
     if (ocr_addon->initialize()) {
       engine->set_ocr_service(ocr_addon);
-      std::print("[nlp] OCR addon loaded\n");
+      std::print("[nlp] OCR addon ready\n");
+    } else {
+      std::print(stderr, "[nlp] OCR addon failed to initialize\n");
     }
 
     if (!engine->has_onnx()) {
@@ -558,6 +541,7 @@ window.__nlp = {{
     hasToxicity:  {},
     hasNer:       {},
     hasOcr:       {},
+    ocrEngine:    "{}",
     version:      "{}",
 }};
 window.__dms = {{
@@ -571,7 +555,13 @@ if (typeof window.__dms_progress === 'undefined')
             nlp.engine->has_sentiment_model() ? "true" : "false",
             nlp.engine->has_toxicity_model() ? "true" : "false",
             nlp.engine->has_ner_model() ? "true" : "false",
-            nlp.engine->has_ocr() ? "true" : "false", NLP_ENGINE_VERSION,
+            nlp.engine->has_ocr() ? "true" : "false",
+#ifdef NLP_APPLE_VISION
+            "vision",
+#else
+            "tesseract",
+#endif
+            NLP_ENGINE_VERSION,
             nlp.engine->has_onnx() ? "true" : "false"),
         .run_at = saucer::script::time::creation,
     });

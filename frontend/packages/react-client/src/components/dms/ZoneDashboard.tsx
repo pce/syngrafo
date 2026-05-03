@@ -1,0 +1,538 @@
+/**
+ * ZoneDashboard.tsx — Zone Landing Page.
+ *
+ * Displayed when a user enters a Zone (clicks the Zone button / compass icon).
+ * A beautifully arranged responsive widget grid showing:
+ *   • Today's date & greeting
+ *   • Bookmarks / Shortcuts
+ *   • Recent files
+ *   • Zone info & stats
+ *   • Color palette (brand / project styleguide)
+ */
+
+import React, { useState, useEffect } from "react";
+import { useDms } from "../../store/dms-store";
+import { dms, type Bookmark } from "../../services/dms-service";
+import Icon from "../Icon";
+import type { IconName } from "../Icon";
+
+// Workaround: cast newly added icon names until TS language server re-indexes Icon.tsx
+const IC = (n: string) => n as IconName;
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+const DAYS   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS = ["January","February","March","April","May","June",
+                "July","August","September","October","November","December"];
+
+function fmtDate(d: Date) {
+  return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+function fmtTime(d: Date) {
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${m} ${ampm}`;
+}
+function greeting(d: Date) {
+  const h = d.getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+// ── Widget wrapper ────────────────────────────────────────────────────────────
+
+const Widget: React.FC<{
+  title?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  accent?: string;
+}> = ({ title, icon, children, className = "", accent }) => (
+  <div
+    className={`rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface)] overflow-hidden flex flex-col ${className}`}
+    style={accent ? { borderColor: `${accent}40` } : undefined}
+  >
+    {title && (
+      <div
+        className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--theme-border)] shrink-0"
+        style={accent ? { borderBottomColor: `${accent}30`, background: `${accent}08` } : undefined}
+      >
+        {icon && <span className="opacity-70">{icon}</span>}
+        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
+          {title}
+        </span>
+      </div>
+    )}
+    <div className="flex-1 p-4">{children}</div>
+  </div>
+);
+
+// ── DateTimeWidget ────────────────────────────────────────────────────────────
+
+const DateTimeWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <Widget className="col-span-2 row-span-1" accent="var(--theme-primary)">
+      <div className="flex flex-col gap-1">
+        <p className="text-[11px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">
+          {greeting(now)}
+        </p>
+        <p className="text-2xl font-black text-[var(--theme-text)] leading-tight tracking-tight">
+          {fmtTime(now)}
+        </p>
+        <p className="text-xs text-[var(--theme-text-muted)]">{fmtDate(now)}</p>
+        {zoneName && (
+          <span className="mt-2 inline-flex items-center gap-1.5 self-start px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
+          style={{ background: "var(--theme-primary)", color: "var(--theme-primary-fg)" }}>
+          <Icon name={IC("map-pin")} size="xs" />
+            {zoneName}
+          </span>
+        )}
+      </div>
+    </Widget>
+  );
+};
+
+// ── ZoneInfoWidget ────────────────────────────────────────────────────────────
+
+const ZoneInfoWidget: React.FC<{
+  zone: { name: string; description: string; taxonomy_domain: string; in_path: string; out_path: string };
+  onEdit: () => void;
+}> = ({ zone, onEdit }) => (
+  <Widget title="Zone" icon={<Icon name={IC("layers")} size="xs" />}>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-black text-[var(--theme-text)] truncate">{zone.name}</p>
+          {zone.taxonomy_domain && zone.taxonomy_domain !== "General" && (
+            <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] opacity-70">
+              {zone.taxonomy_domain}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onEdit}
+          className="shrink-0 p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] transition-colors"
+          title="Edit Zone"
+        >
+          <Icon name="edit" size="xs" />
+        </button>
+      </div>
+      {zone.description && (
+        <p className="text-[11px] text-[var(--theme-text-muted)] leading-relaxed line-clamp-3">
+          {zone.description}
+        </p>
+      )}
+      <div className="mt-1 flex flex-col gap-0.5">
+        <div className="flex items-center gap-1.5 text-[9px] text-[var(--theme-text-muted)] font-mono truncate">
+          <Icon name="folder" size="xs" />
+          <span className="truncate">{zone.in_path}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[9px] text-[var(--theme-text-muted)] font-mono truncate">
+          <Icon name="database" size="xs" />
+          <span className="truncate">{zone.out_path}</span>
+        </div>
+      </div>
+    </div>
+  </Widget>
+);
+
+// ── BookmarksWidget ───────────────────────────────────────────────────────────
+
+const BookmarksWidget: React.FC<{
+  bookmarks: Bookmark[];
+  zoneName: string;
+  onNavigate: (path: string) => void;
+  onManage: () => void;
+}> = ({ bookmarks, zoneName, onNavigate, onManage }) => {
+  const handleGoTo = async (bm: Bookmark) => {
+    const res = await dms.bookmark.resolve(zoneName, bm.target);
+    if (res.ok && res.data?.abs_path) onNavigate(res.data.abs_path);
+  };
+
+  return (
+    <Widget
+      title="Bookmarks"
+      icon={<Icon name="bookmark" size="xs" />}
+      className="col-span-2"
+    >
+      {bookmarks.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <Icon name="bookmark" size="md" className="text-[var(--theme-text-muted)] opacity-30" />
+          <p className="text-[11px] text-[var(--theme-text-muted)]">No bookmarks yet.</p>
+          <button onClick={onManage} className="text-[10px] font-bold text-[var(--theme-primary)] hover:underline">
+            Manage Bookmarks →
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {bookmarks.slice(0, 6).map((bm) => (
+            <button
+              key={bm.id}
+              onClick={() => handleGoTo(bm)}
+              className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-[var(--theme-bg)] transition-colors text-left group"
+            >
+              <span className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center"
+                style={{ background: "var(--theme-primary)", opacity: 0.15 }}>
+                <Icon
+                  name={bm.kind === "folder" ? "folder" : "file"}
+                  size="xs"
+                  className="text-[var(--theme-primary)]"
+                  style={{ opacity: 1 }}
+                />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-[var(--theme-text)] truncate">{bm.label}</p>
+                <p className="text-[9px] font-mono text-[var(--theme-text-muted)] truncate">{bm.target}</p>
+              </div>
+              <Icon
+                name="arrow-right"
+                size="xs"
+                className="shrink-0 text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity"
+              />
+            </button>
+          ))}
+          <button
+            onClick={onManage}
+            className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold text-[var(--theme-primary)] hover:bg-[var(--theme-bg)] transition-colors"
+          >
+            <Icon name="list" size="xs" />
+            Manage all {bookmarks.length > 6 ? `${bookmarks.length} ` : ""}Bookmarks
+          </button>
+        </div>
+      )}
+    </Widget>
+  );
+};
+
+// ── StatsWidget ───────────────────────────────────────────────────────────────
+
+const StatsWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
+  const [stats, setStats] = useState<{
+    total: number; indexed: number; lastIndexed?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!zoneName) return;
+    dms.indexStatus().then((r) => {
+      if (r.ok && r.data) {
+        setStats({
+          total:       r.data.totalDocs,
+          indexed:     r.data.totalDocs,
+          lastIndexed: r.data.lastIndexedAt,
+        });
+      }
+    });
+  }, [zoneName]);
+
+  return (
+    <Widget title="Overview" icon={<Icon name={IC("trending-up")} size="xs" />}>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-2xl font-black text-[var(--theme-text)]">{stats?.total ?? "–"}</span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">Docs indexed</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-2xl font-black text-[var(--theme-text)]">{stats?.indexed ?? "–"}</span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">Searchable</span>
+        </div>
+        {stats?.lastIndexed && stats.lastIndexed > 0 && (
+          <div className="col-span-2 flex items-center gap-1.5 mt-1">
+            <Icon name={IC("clock")} size="xs" className="text-[var(--theme-text-muted)]" />
+            <span className="text-[9px] text-[var(--theme-text-muted)]">
+              Last indexed {new Date(stats.lastIndexed).toLocaleDateString()}
+            </span>
+          </div>
+        )}
+      </div>
+    </Widget>
+  );
+};
+
+// ── ColorPaletteWidget ────────────────────────────────────────────────────────
+
+/**
+ * Zone color palette — stores brand / project styleguide colors per zone.
+ * Persisted to localStorage keyed by zone name (future: zone DB).
+ */
+const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
+  const storageKey = `zone_palette_${zoneName}`;
+
+  const [colors, setColors] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [picker, setPicker] = useState(false);
+  const [newColor, setNewColor] = useState("#6366f1");
+
+  const persist = (next: string[]) => {
+    setColors(next);
+    localStorage.setItem(storageKey, JSON.stringify(next));
+  };
+
+  const addColor = () => {
+    if (!colors.includes(newColor)) persist([...colors, newColor]);
+    setPicker(false);
+  };
+
+  const removeColor = (c: string) => persist(colors.filter((x) => x !== c));
+
+  return (
+    <Widget
+      title="Color Palette"
+      icon={<Icon name={IC("color-swatch")} size="xs" />}
+      className="col-span-2"
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-[10px] text-[var(--theme-text-muted)] leading-relaxed">
+          Brand / project styleguide colours saved to this Zone.
+        </p>
+
+        {/* Colour swatches */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {colors.map((c) => (
+            <div key={c} className="relative group">
+              <div
+                className="w-9 h-9 rounded-xl border-2 border-transparent group-hover:border-[var(--theme-text-muted)]/40 transition-all cursor-pointer shadow-sm"
+                style={{ background: c }}
+                title={c}
+              />
+              <button
+                onClick={() => removeColor(c)}
+                className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[var(--theme-danger)] text-white text-[8px] hidden group-hover:flex items-center justify-center leading-none"
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+
+          {/* Add colour button */}
+          {picker ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="color"
+                value={newColor}
+                onChange={(e) => setNewColor(e.target.value)}
+                className="w-9 h-9 rounded-xl border border-[var(--theme-border)] cursor-pointer"
+              />
+              <button
+                onClick={addColor}
+                className="px-2 py-1 text-[9px] font-black rounded-lg bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 transition-opacity"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => setPicker(false)}
+                className="px-2 py-1 text-[9px] font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setPicker(true)}
+              className="w-9 h-9 rounded-xl border-2 border-dashed border-[var(--theme-border)] hover:border-[var(--theme-primary)]/60 flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
+              title="Add colour"
+            >
+              <Icon name="plus" size="xs" />
+            </button>
+          )}
+        </div>
+
+        {/* Hex values */}
+        {colors.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {colors.map((c) => (
+              <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded"
+                style={{ background: `${c}20`, color: c, border: `1px solid ${c}40` }}>
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </Widget>
+  );
+};
+
+// ── ZoneModeBadge  ────────────────────────────────────────────────────────────
+
+const ZONE_MODE_LABELS: Record<string, { label: string; icon: string }> = {
+  "general":              { label: "General",               icon: "layers"  },
+  "document-management":  { label: "Document Management",   icon: "document" },
+  "creative-workbench":   { label: "Creative Workbench",    icon: "sparkles" },
+  "game-assets-2d":       { label: "Game Assets — 2D Zone", icon: "grid"    },
+  "game-assets-3d":       { label: "Game Assets — 3D Zone", icon: "cube"    },
+  "social-media":         { label: "Social Media Studio",   icon: "share"   },
+  "photography":          { label: "Photography",           icon: "image"   },
+};
+
+const ZoneModeBadge: React.FC<{ mode: string }> = ({ mode }) => {
+  const meta = ZONE_MODE_LABELS[mode] ?? ZONE_MODE_LABELS["general"];
+  if (!meta) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest"
+      style={{ background: "var(--theme-border)", color: "var(--theme-text-muted)" }}>
+      <Icon name={IC(meta.icon)} size="xs" />
+      {meta.label}
+    </span>
+  );
+};
+
+// ── QuickActionsWidget ────────────────────────────────────────────────────────
+
+const QuickActionsWidget: React.FC<{
+  onManageBookmarks: () => void;
+  onEditZone: () => void;
+  onTheme: () => void;
+}> = ({ onManageBookmarks, onEditZone, onTheme }) => {
+  const actions = [
+    { icon: "bookmark" as const, label: "Bookmarks",  action: onManageBookmarks  },
+    { icon: "edit"     as const, label: "Edit Zone",   action: onEditZone        },
+    { icon: "sparkles" as const, label: "Theme",       action: onTheme           },
+  ];
+  return (
+    <Widget title="Quick Actions" icon={<Icon name={IC("star")} size="xs" />}>
+      <div className="flex flex-col gap-1">
+        {actions.map(({ icon, label, action }) => (
+          <button
+            key={label}
+            onClick={action}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-[var(--theme-bg)] transition-colors text-left group"
+          >
+            <Icon name={icon} size="xs" className="text-[var(--theme-text-muted)] group-hover:text-[var(--theme-primary)] transition-colors" />
+            <span className="text-xs font-semibold text-[var(--theme-text)]">{label}</span>
+            <Icon name="chevron-right" size="xs" className="ml-auto text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+        ))}
+      </div>
+    </Widget>
+  );
+};
+
+// ── Main ZoneDashboard ────────────────────────────────────────────────────────
+
+interface ZoneDashboardProps {
+  onNavigate:        (absPath: string) => void;
+  onManageBookmarks: () => void;
+  onEditZone:        () => void;
+  onTheme:           () => void;
+  onClose?:          () => void;
+}
+
+const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
+  onNavigate,
+  onManageBookmarks,
+  onEditZone,
+  onTheme,
+  onClose,
+}) => {
+  const { state } = useDms();
+  const zone = state.zone;
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+
+  // Zone Mode persisted to localStorage
+  const modeKey = `zone_mode_${zone?.name ?? ""}`;
+  const [zoneMode] = useState<string>(() => {
+    try { return localStorage.getItem(modeKey) ?? "general"; } catch { return "general"; }
+  });
+
+  useEffect(() => {
+    if (!zone?.name) return;
+    dms.bookmark.list(zone.name).then((r) => {
+      if (r.ok && r.data) setBookmarks(r.data);
+    });
+  }, [zone?.name]);
+
+  if (!zone) return null;
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-[var(--theme-bg)] p-6">
+      {/* Page title */}
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1">
+            <h1 className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-0.5">
+              Zone Dashboard
+            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl font-black text-[var(--theme-text)]">{zone.name}</span>
+              <ZoneModeBadge mode={zoneMode} />
+            </div>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="Close dashboard"
+              className="p-1.5 rounded-lg hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
+            >
+              <Icon name="close" size="xs" />
+            </button>
+          )}
+        </div>
+
+        {/* Widget grid — responsive 3-col layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-auto">
+
+          {/* [ col 0-1 ] Date & Time — spans 2 cols */}
+          <div className="sm:col-span-2 lg:col-span-2">
+            <DateTimeWidget zoneName={zone.name} />
+          </div>
+
+          {/* [ col 2 ] Zone Info */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <ZoneInfoWidget
+              zone={zone}
+              onEdit={onEditZone}
+            />
+          </div>
+
+          {/* Bookmarks — spans 2 */}
+          <div className="sm:col-span-2 lg:col-span-2">
+            <BookmarksWidget
+              bookmarks={bookmarks}
+              zoneName={zone.name}
+              onNavigate={onNavigate}
+              onManage={onManageBookmarks}
+            />
+          </div>
+
+          {/* Quick actions */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <QuickActionsWidget
+              onManageBookmarks={onManageBookmarks}
+              onEditZone={onEditZone}
+              onTheme={onTheme}
+            />
+          </div>
+
+          {/* Stats */}
+          <div className="sm:col-span-1 lg:col-span-1">
+            <StatsWidget zoneName={zone.name} />
+          </div>
+
+          {/* Color Palette — spans 2 */}
+          <div className="sm:col-span-2 lg:col-span-2">
+            <ColorPaletteWidget zoneName={zone.name} />
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export { ZoneDashboard, ZONE_MODE_LABELS };
+export type { ZoneDashboardProps };
+export default ZoneDashboard;
+

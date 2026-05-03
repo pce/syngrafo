@@ -9,7 +9,13 @@
 
 namespace pce::nlp::platform {
 
-// ── extract_text (single image via Vision AI) ─────────────────────────────────
+// OCR backend is selected at compile time via NLP_APPLE_VISION / NLP_WITH_TESSERACT.
+// No runtime dispatch — extract_text() and extract_text_from_pdf() are provided
+// either here (NLP_APPLE_VISION) or by ocr_addon_tesseract.cpp (NLP_WITH_TESSERACT).
+
+#ifdef NLP_APPLE_VISION
+
+// ── extract_text (single image) — Apple Vision ───────────────────────────────
 std::string extract_text(const std::string& input) {
     @autoreleasepool {
         NSString* path = [NSString stringWithUTF8String:input.c_str()];
@@ -165,6 +171,8 @@ std::string extract_text_from_pdf(const std::string& input_path) {
         return ocr_result;
     }
 }
+
+#endif // NLP_APPLE_VISION
 
 // ── reveal_in_finder ─────────────────────────────────────────────────────────
 // Uses NSWorkspace to select (highlight) the file in a Finder window.

@@ -138,12 +138,22 @@ MODELS: dict[str, ModelSpec] = {
         activation="sigmoid",
     ),
     # ── Tesseract OCR language data ──────────────────────────────────────────
-    # Only required on Linux / Windows (macOS uses Apple Vision built-in).
-    # Source: https://github.com/tesseract-ocr/tessdata_best (LSTM "best" models)
-    # macOS (brew):   brew install tesseract tesseract-lang  (all languages)
-    # Ubuntu/Debian:  sudo apt-get install tesseract-ocr-deu tesseract-ocr-jpn …
+    # Tesseract is compiled into the app as a linked library (libtesseract),
+    # NOT as a subprocess/CLI tool.  CMake finds it via find_package(Tesseract):
+    #   macOS:          brew install tesseract
+    #                   cmake -DCMAKE_PREFIX_PATH=$(brew --prefix) …
+    #   Ubuntu/Debian:  sudo apt-get install libtesseract-dev
+    #   Windows:        vcpkg install tesseract
+    #   Any platform:   cmake -DTESSERACT_FETCH=ON  (builds from source in _deps/)
     #
-    # Use the 'tessdata' alias to download all language packs at once:
+    # On Apple: Apple Vision is the default backend; Tesseract must be linked at
+    # build time for the "tesseract" backend option to appear in Settings.
+    # On Linux/Windows: Tesseract is always the OCR engine when found.
+    #
+    # Language data (tessdata) — needed separately on all platforms:
+    #   brew install tesseract-lang              # macOS — all languages at once
+    #   sudo apt-get install tesseract-ocr-deu   # Ubuntu — per language
+    # Or download tessdata_best (higher accuracy than the default system tessdata):
     #   python3 scripts/download_models.py download --models tessdata
     **{
         f"tessdata-{code}": ModelSpec(

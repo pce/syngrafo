@@ -5,6 +5,29 @@ import type { ZoneHistoryItem } from "../../services/dms-service";
 
 interface Props { onClose: () => void; }
 
+// ── Zone domain categories ─────────────────────────────────────────────────────
+
+const TAXONOMY_DOMAINS = [
+  { group: "General",    values: ["General", "Personal", "Work"] },
+  { group: "Documents",  values: ["Finance", "Legal", "Medical", "Research", "Education"] },
+  { group: "Creative",   values: ["Photography", "Illustration", "Design", "Architecture", "Music / Audio", "Video / Film"] },
+  { group: "Tech",       values: ["Computer Science", "Game Dev", "Web / App Dev", "Data Science", "Security"] },
+  { group: "Social",     values: ["Social Media", "Marketing", "E-Commerce"] },
+  { group: "Nature",     values: ["Botany", "Biology", "Geology"] },
+];
+
+// ── Zone modes ────────────────────────────────────────────────────────────────
+
+const ZONE_MODES = [
+  { value: "general",             label: "General"               },
+  { value: "document-management", label: "Document Management"   },
+  { value: "creative-workbench",  label: "Creative Workbench"    },
+  { value: "game-assets-2d",      label: "Game Assets — 2D Zone" },
+  { value: "game-assets-3d",      label: "Game Assets — 3D Zone" },
+  { value: "social-media",        label: "Social Media Studio"   },
+  { value: "photography",         label: "Photography"           },
+];
+
 // Network-path helpers
 
 /** Schemes that require special resolution before use as a filesystem path. */
@@ -32,13 +55,21 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
   const [error,   setError]   = useState("");
   const [history, setHistory] = useState<ZoneHistoryItem[]>([]);
 
-  // ── SMB / network-path state ───────────────────────────────────────────────
+  // Zone mode — stored in localStorage keyed by zone name (future: persist to DB)
+  const [zoneMode, setZoneMode] = useState<string>(() => {
+    try { return localStorage.getItem(`zone_mode_${state.zone?.name ?? ""}`) ?? "general"; } catch { return "general"; }
+  });
+  const persistMode = (mode: string, zoneName: string) => {
+    try { localStorage.setItem(`zone_mode_${zoneName}`, mode); } catch { /* ignore */ }
+  };
+
+  // SMB / network-path state
   const [inPathResolved,  setInPathResolved]  = useState<string>(""); // local path after resolving
   const [inNetworkStatus, setInNetworkStatus] = useState<"idle"|"resolving"|"mounted"|"unmounted">("idle");
   const [inMountHint,     setInMountHint]     = useState<string>("");
   const [inOpenUrl,       setInOpenUrl]       = useState<string>("");
 
-  // ── Encryption state ───────────────────────────────────────────────────────
+  // Encryption state
   const [existingIsEncrypted, setExistingIsEncrypted] = useState(false);
   const [keychainMissing,     setKeychainMissing]     = useState(false);
   const [encryptZone,     setEncryptZone]     = useState(false);
@@ -51,6 +82,17 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
       if (res.ok && res.data) setHistory(res.data);
     });
   }, []);
+
+  // When editing an existing zone, reflect its encryption status from history
+  useEffect(() => {
+    if (!state.zone || history.length === 0) return;
+    const histEntry = history.find(h => h.name === state.zone!.name);
+    if (histEntry) {
+      const wasEncrypted = !!histEntry.is_encrypted;
+      setExistingIsEncrypted(wasEncrypted);
+      setEncryptZone(wasEncrypted);
+    }
+  }, [history, state.zone]);
 
   // Auto-update workspace path as name / source changes (only when in auto mode)
   useEffect(() => {
@@ -162,6 +204,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
     }
 
     dispatch({ type: "SET_ZONE", zone });
+    persistMode(zoneMode, zone.name);
     onClose();
   };
 
@@ -194,9 +237,11 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
     // Reflect the encryption status of the loaded zone.
     const wasEncrypted = !!z.is_encrypted;
     setExistingIsEncrypted(wasEncrypted);
-    setEncryptZone(wasEncrypted);   // show the badge if it was encrypted
+    setEncryptZone(wasEncrypted);
     setPassword("");
     setConfirmPassword("");
+    // Load saved zone mode
+    try { setZoneMode(localStorage.getItem(`zone_mode_${z.name}`) ?? "general"); } catch { /* ignore */ }
   };
 
   const isEditing = !!state.zone;
@@ -261,26 +306,36 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
               value={taxonomyDomain}
               onChange={e => setTaxonomyDomain(e.target.value)}
             >
-              <option value="General">General</option>
-              <option value="Finance">Finance</option>
-              <option value="Legal">Legal</option>
-              <option value="Medical">Medical</option>
-              <option value="Personal">Personal</option>
-              <option value="Work">Work</option>
-              <option value="Botany">Botany</option>
-              <option value="Computer Science">Computer Science</option>
+              {TAXONOMY_DOMAINS.map(({ group, values }) => (
+                <optgroup key={group} label={group}>
+                  {values.map(v => <option key={v} value={v}>{v}</option>)}
+                </optgroup>
+              ))}
             </select>
           </label>
           <label className="block">
-            <span className="text-xs font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">Description</span>
-            <input
-              className="mt-1 w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
-              placeholder="Optional short description"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-            />
+            <span className="text-xs font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">Zone Mode</span>
+            <select
+              className="mt-1 w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+              value={zoneMode}
+              onChange={e => setZoneMode(e.target.value)}
+            >
+              {ZONE_MODES.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
           </label>
         </div>
+
+        <label className="block mb-4">
+          <span className="text-xs font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">Description</span>
+          <input
+            className="mt-1 w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+            placeholder="Optional short description"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          />
+        </label>
 
         {/* Source folder */}
         <label className="block mb-4">

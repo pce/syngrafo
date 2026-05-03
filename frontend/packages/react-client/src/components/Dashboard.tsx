@@ -14,10 +14,12 @@ import SearchResults from "./dms/SearchResults";
 import FilePanel from "./dms/FilePanel";
 import CommandBar from "./dms/CommandBar";
 import ThemePanel from "./ThemePanel";
+import BookmarksView from "./collections/BookmarksView";
 import Icon from "./Icon";
 import TimelinePage from "./dms/TimelinePage";
+import ZoneDashboard from "./dms/ZoneDashboard";
 
-// ── Zone avatar colour (stable hash) ─────────────────────────────────────────
+// Zone avatar colour (stable hash)
 const PALETTE = [
   "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500",
   "bg-rose-500",  "bg-cyan-500",    "bg-orange-500", "bg-pink-500",
@@ -29,10 +31,13 @@ function zoneColor(name: string): string {
   return PALETTE[Math.abs(h) % PALETTE.length] ?? "bg-blue-500";
 }
 
-// ── Zone profile dropdown ─────────────────────────────────────────────────────
+// Zone profile dropdown?
 // Appears top-right, like an account/profile menu in typical apps.
-// Lets the user switch between zones, create a new one, or leave the active zone.
-const ZoneDropdown: React.FC<{ onNewZone: () => void; onEditZone: () => void }> = ({
+// Lets switch between zones, create a new one, or leave the active zone.
+const ZoneDropdown: React.FC<{
+  onNewZone: () => void;
+  onEditZone: () => void;
+}> = ({
   onNewZone,
   onEditZone,
 }) => {
@@ -194,7 +199,7 @@ const ZoneDropdown: React.FC<{ onNewZone: () => void; onEditZone: () => void }> 
   );
 };
 
-// ── Missing workspace directory modal ─────────────────────────────────────────
+// Missing workspace directory modal
 const CreateDirModal: React.FC<{
   path:      string;
   onConfirm: () => void;
@@ -236,6 +241,8 @@ const Dashboard: React.FC = () => {
   const [showZone,   setShowZone]   = useState(false);
   const [showTheme,  setShowTheme]  = useState(false);
   const [activeView, setActiveView] = useState<"dms" | "timeline">("dms");
+  // "bookmarks" and "zone-dashboard" override the path-based center panel routing
+  const [centerView, setCenterView] = useState<"default" | "bookmarks" | "zone-dashboard">("default");
   const [missingDir, setMissingDir] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState("–");
   const [engineOk,      setEngineOk]      = useState<boolean | null>(null);
@@ -259,6 +266,12 @@ const Dashboard: React.FC = () => {
 
   // Sync leftPath with store's currentPath (FileBrowser updates store)
   useEffect(() => { setLeftPath(state.currentPath); }, [state.currentPath]);
+
+  // Auto-show Zone Dashboard when entering a new zone
+  useEffect(() => {
+    if (state.zone) setCenterView("zone-dashboard");
+    else setCenterView("default");
+  }, [state.zone?.name]);
 
   // ── Drag-resize ──────────────────────────────────────────────────────────
   const resizeDragRef = useRef<{
@@ -311,6 +324,11 @@ const Dashboard: React.FC = () => {
       if (res.ok && res.data) dispatch({ type: "SET_ZONES", zones: res.data });
     });
   }, []);
+
+  // File selected → dismiss zone dashboard so the viewer appears
+  useEffect(() => {
+    if (state.selectedPath) setCenterView("default");
+  }, [state.selectedPath]);
 
   // Auto-load file content + metadata on file selection
   useEffect(() => {
@@ -408,7 +426,11 @@ const Dashboard: React.FC = () => {
             {(["dms", "timeline"] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setActiveView(v)}
+                onClick={() => {
+                  setActiveView(v);
+                  // DMS = home: if a zone is active, the dashboard is the landing page
+                  if (v === "dms" && state.zone) setCenterView("zone-dashboard");
+                }}
                 className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide transition-colors ${
                   activeView === v
                     ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
@@ -558,12 +580,32 @@ const Dashboard: React.FC = () => {
           </>
         )}
 
-        {/* ── 2. Document viewer / Notes / Kanban ──────────────────────────── */}
+        {/* ── 2. Document viewer / Notes / Kanban / Bookmarks ──────────────── */}
         <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[var(--theme-bg)]">
+          {/* Path-specific views take priority over overlay centerView */}
           {state.zone && leftPath.startsWith(state.zone.out_path + "/.notes") ? (
             <NotesView notesDir={state.zone.out_path + "/.notes"} />
           ) : state.zone && leftPath.startsWith(state.zone.out_path + "/.kanban") ? (
             <KanbanView kanbanDir={state.zone.out_path + "/.kanban"} />
+          ) : centerView === "zone-dashboard" ? (
+            <ZoneDashboard
+              onNavigate={(absPath) => {
+                setCenterView("default");
+                dispatch({ type: "SELECT_FILE", path: absPath });
+              }}
+              onManageBookmarks={() => setCenterView("bookmarks")}
+              onEditZone={() => setShowZone(true)}
+              onTheme={() => setShowTheme(true)}
+              onClose={() => setCenterView("default")}
+            />
+          ) : centerView === "bookmarks" ? (
+            <BookmarksView
+              onNavigate={(absPath) => {
+                setCenterView("default");
+                dispatch({ type: "SELECT_FILE", path: absPath });
+              }}
+              onClose={() => setCenterView("default")}
+            />
           ) : (
             <DocumentViewer />
           )}
