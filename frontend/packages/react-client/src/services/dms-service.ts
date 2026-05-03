@@ -68,6 +68,8 @@ export interface SearchResult {
   path:      string;
   filename:  string;
   score:     number;
+  /** How the document was matched: "filename" | "snippet" | "keyword" | "fulltext" | "semantic" | "hybrid" */
+  match:     string;
   snippet:   string;
   mimeType:  string;
   keywords:  Keyword[];
@@ -408,6 +410,7 @@ function mapSearchResult(raw: any): SearchResult {
     path:      String(raw.path ?? ""),
     filename:  String(raw.filename ?? ""),
     score:     Number(raw.score ?? 0),
+    match:     String(raw.match ?? ""),
     snippet:   String(raw.snippet ?? ""),
     mimeType:  String(raw.mime_type ?? ""),
     keywords:  mapKeywords(raw.keywords),

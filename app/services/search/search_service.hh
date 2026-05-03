@@ -68,6 +68,7 @@ public:
     [[nodiscard]] Expected<json> search(std::string_view query, int top_k);
 
     [[nodiscard]] static json build_result_json(int64_t doc_id, float score,
+                                                 const std::string& match,
                                                  const pce::db::Row& doc,
                                                  const std::optional<pce::db::Row>& note);
 
@@ -79,169 +80,102 @@ private:
     std::shared_ptr<pce::nlp::onnx::IOnnxService> embed_svc_;
 };
 
-// ─── Implementations ──────────────────────────────────────────────────────────
-
 inline Expected<json> SearchService::search(std::string_view query_sv, int top_k) {
     if (top_k <= 0 || top_k > 500) top_k = 10;
     const std::string query{query_sv};
 
-    // ── Semantic path ─────────────────────────────────────────────────────────
-    if (const auto qemb = embed_text(query_sv); qemb) {
+    /**
+     * Unified candidate map: doc_id → {score, match_type}.
+     * match values: "filename" | "snippet" | "keyword" | "fulltext" | "semantic" | "hybrid"
+     *
+     * The keyword pass always runs first so that exact filename / content matches are
+     * guaranteed to surface regardless of whether an embedding exists for the document.
+     * The semantic pass (when available) then merges its cosine scores: if a document
+     * exists in both, the higher score wins; a new semantic-only candidate is added only
+     * when cosine_sim > 0.15 (noise floor).
+     */
+    struct Cand { int64_t doc_id; float score; std::string match; };
+    std::unordered_map<int64_t, Cand> merged;
 
-        struct Candidate { int64_t doc_id; float score; };
-
-        // Pipeline: embed → scan → boost → assemble
-        return std::vector<float>{*qemb}   // raw value: kick off the chain
-
-            | stage([&](std::vector<float> qvec) -> Expected<std::vector<Candidate>> {
-                // Scan all stored embeddings, compute cosine similarity
-                std::vector<pce::db::Row> rows;
-                {
-                    std::lock_guard lk{db_mutex_};
-                    rows = active_db_().from("nlp_embeddings")
-                               .where("row_type = ?", std::string{"dms_doc"}).execute();
-                }
-                std::vector<Candidate> cands;
-                cands.reserve(rows.size());
-                for (const auto& row : rows) {
-                    const auto id  = row.try_get<int64_t>("row_id").value_or(0);
-                    const auto vec = pce::db::try_blob_to_floats(row["vector"]);
-                    if (id == 0 || vec.empty()) continue;
-                    cands.push_back({id, cosine_similarity(
-                        {qvec.data(), qvec.size()}, {vec.data(), vec.size()})});
-                }
-                // Take 2× top_k for hybrid re-ranking headroom
-                const auto keep = std::min(size_t(top_k) * 2, cands.size());
-                std::ranges::partial_sort(cands, cands.begin() + (std::ptrdiff_t)keep,
-                    [](const Candidate& a, const Candidate& b){ return a.score > b.score; });
-                cands.resize(keep);
-                return cands;
-            })
-
-            | stage([&](std::vector<Candidate> cands) -> Expected<std::vector<Candidate>> {
-                // Hybrid boost: if any query token appears in stored NLP keywords, +0.12
-                std::vector<std::string> q_tokens;
-                {
-                    std::string cur;
-                    for (char c : query) {
-                        if (c == ' ' || c == '\t' || c == '\n') {
-                            if (cur.size() >= 3) q_tokens.push_back(cur);
-                            cur.clear();
-                        } else {
-                            cur += (char)std::tolower((unsigned char)c);
-                        }
-                    }
-                    if (cur.size() >= 3) q_tokens.push_back(cur);
-                }
-                if (q_tokens.empty()) return cands;
-
-                for (auto& c : cands) {
-                    std::optional<pce::db::Row> nr;
-                    {
-                        std::lock_guard lk{db_mutex_};
-                        nr = active_db_().from("nlp_notes")
-                                 .where("row_type = ?", std::string{"dms_doc"})
-                                 .where("row_id   = ?", c.doc_id)
-                                 .order_by("created_at", false).first();
-                    }
-                    if (!nr) continue;
-                    auto kw = nr->try_get<std::string>("keywords").value_or("");
-                    for (auto& ch : kw) ch = (char)std::tolower((unsigned char)ch);
-                    for (const auto& tok : q_tokens) {
-                        if (kw.find(tok) != std::string::npos) {
-                            c.score = std::min(1.0f, c.score + 0.12f);
-                            break;
-                        }
-                    }
-                }
-                return cands;
-            })
-
-            | stage([&](std::vector<Candidate> cands) -> Expected<json> {
-                // Fetch doc rows, build result JSON, final sort + trim
-                struct Entry { float score; json data; };
-                std::vector<Entry> entries;
-                entries.reserve(cands.size());
-
-                for (const auto& c : cands) {
-                    if (c.score < 0.10f) continue;
-                    std::optional<pce::db::Row> dr, nr;
-                    {
-                        std::lock_guard lk{db_mutex_};
-                        dr = active_db_().from("dms_documents").where("id = ?", c.doc_id).first();
-                        nr = active_db_().from("nlp_notes")
-                                 .where("row_type = ?", std::string{"dms_doc"})
-                                 .where("row_id   = ?", c.doc_id)
-                                 .order_by("created_at", false).first();
-                    }
-                    if (!dr) continue;
-                    entries.push_back({c.score, build_result_json(c.doc_id, c.score, *dr, nr)});
-                }
-
-                std::ranges::sort(entries, [](const Entry& a, const Entry& b){
-                    return a.score > b.score;
-                });
-                if ((int)entries.size() > top_k) entries.resize(top_k);
-
-                json results = json::array();
-                for (auto& e : entries) results.push_back(std::move(e.data));
-                return json{{"strategy", "semantic"}, {"query", query}, {"results", std::move(results)}};
-            });
-    }
-
-    //  Keyword fallback ──────────────────────────────────────────────────────
-    // scoring: filename (0.85) > snippet (0.75) > keyword (0.65) > full-text (0.60)
+    // Keyword pass — scoring tiers: filename(0.85) > snippet(0.75) > keyword(0.65) > fulltext(0.60)
     const std::string q_like = "%" + query + "%";
-    struct KwCand { int64_t doc_id; float score; };
-    std::unordered_map<int64_t, KwCand> kw_map;
     {
         std::lock_guard lk{db_mutex_};
         for (const auto& row : active_db_().from("dms_documents")
                  .where("filename LIKE ?", q_like).limit(int64_t(top_k) * 2).execute()) {
             const auto id = row.try_get<int64_t>("id").value_or(0);
-            if (id) kw_map[id] = {id, 0.85f};
+            if (id) merged[id] = {id, 0.85f, "filename"};
         }
         for (const auto& row : active_db_().from("dms_documents")
                  .where("snippet LIKE ?", q_like).limit(int64_t(top_k) * 2).execute()) {
             const auto id = row.try_get<int64_t>("id").value_or(0);
             if (!id) continue;
-            auto it = kw_map.find(id);
-            if (it == kw_map.end()) kw_map[id] = {id, 0.75f};
-            else it->second.score = std::max(it->second.score, 0.75f);
+            auto it = merged.find(id);
+            if (it == merged.end()) merged[id] = {id, 0.75f, "snippet"};
+            else if (it->second.score < 0.75f) { it->second.score = 0.75f; it->second.match = "snippet"; }
         }
         for (const auto& row : active_db_().from("nlp_notes")
                  .where("row_type = ?", std::string{"dms_doc"})
-                 .where("keywords LIKE ?", q_like)
-                 .limit(int64_t(top_k) * 2).execute()) {
+                 .where("keywords LIKE ?", q_like).limit(int64_t(top_k) * 2).execute()) {
             const auto id = row.try_get<int64_t>("row_id").value_or(0);
             if (!id) continue;
-            auto it = kw_map.find(id);
-            if (it == kw_map.end()) kw_map[id] = {id, 0.65f};
-            else it->second.score = std::max(it->second.score, 0.65f);
+            auto it = merged.find(id);
+            if (it == merged.end()) merged[id] = {id, 0.65f, "keyword"};
+            else if (it->second.score < 0.65f) { it->second.score = 0.65f; it->second.match = "keyword"; }
         }
-        // Full-text fallback: search the stored document/OCR text in note_text.
-        // This catches documents (especially OCR-indexed images) whose search term
-        // appears beyond the 280-char snippet and was not extracted as a keyword.
-        // Score 0.60 — below snippet (0.75) and keyword (0.65) matches.
         for (const auto& row : active_db_().from("nlp_notes")
                  .where("row_type = ?", std::string{"dms_doc"})
-                 .where("note_text LIKE ?", q_like)
-                 .limit(int64_t(top_k) * 2).execute()) {
+                 .where("note_text LIKE ?", q_like).limit(int64_t(top_k) * 2).execute()) {
             const auto id = row.try_get<int64_t>("row_id").value_or(0);
             if (!id) continue;
-            auto it = kw_map.find(id);
-            if (it == kw_map.end()) kw_map[id] = {id, 0.60f};
-            else it->second.score = std::max(it->second.score, 0.60f);
+            auto it = merged.find(id);
+            if (it == merged.end()) merged[id] = {id, 0.60f, "fulltext"};
+            else if (it->second.score < 0.60f) { it->second.score = 0.60f; it->second.match = "fulltext"; }
         }
     }
-    std::vector<KwCand> kw_cands;
-    kw_cands.reserve(kw_map.size());
-    for (auto& [id, c] : kw_map) kw_cands.push_back(c);
-    std::ranges::sort(kw_cands, [](const KwCand& a, const KwCand& b){ return a.score > b.score; });
-    if ((int)kw_cands.size() > top_k) kw_cands.resize(top_k);
+
+    // Semantic pass — optional, merges cosine-similarity scores into the candidate map.
+    // Scores are capped at 0.97 so that semantic similarity never triggers the "exact"
+    // label in the UI — "exact" is reserved for verified keyword/filename matches.
+    bool used_semantic = false;
+    if (const auto qemb = embed_text(query_sv); qemb) {
+        used_semantic = true;
+        std::vector<std::pair<int64_t, float>> sem_scores;
+        {
+            std::lock_guard lk{db_mutex_};
+            const auto rows = active_db_().from("nlp_embeddings")
+                                  .where("row_type = ?", std::string{"dms_doc"}).execute();
+            sem_scores.reserve(rows.size());
+            for (const auto& row : rows) {
+                const auto id  = row.try_get<int64_t>("row_id").value_or(0);
+                const auto vec = pce::db::try_blob_to_floats(row["vector"]);
+                if (id == 0 || vec.empty()) continue;
+                sem_scores.push_back({id, cosine_similarity(
+                    {qemb->data(), qemb->size()}, {vec.data(), vec.size()})});
+            }
+        }
+        for (auto& [id, score] : sem_scores) {
+            if (score < 0.15f) continue;
+            score = std::min(score, 0.97f);
+            auto it = merged.find(id);
+            if (it == merged.end()) {
+                merged[id] = {id, score, "semantic"};
+            } else if (score > it->second.score) {
+                it->second.score = score;
+                it->second.match = (it->second.match == "semantic") ? "semantic" : "hybrid";
+            }
+        }
+    }
+
+    // Sort, trim to top_k, fetch doc rows, and build the result array.
+    std::vector<Cand> cands;
+    cands.reserve(merged.size());
+    for (auto& [id, c] : merged) cands.push_back(c);
+    std::ranges::sort(cands, [](const Cand& a, const Cand& b){ return a.score > b.score; });
+    if ((int)cands.size() > top_k) cands.resize(top_k);
 
     json results = json::array();
-    for (const auto& c : kw_cands) {
+    for (const auto& c : cands) {
         std::optional<pce::db::Row> dr, nr;
         {
             std::lock_guard lk{db_mutex_};
@@ -251,16 +185,17 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
                      .where("row_id   = ?", c.doc_id).order_by("created_at", false).first();
         }
         if (!dr) continue;
-        auto rj = build_result_json(c.doc_id, c.score, *dr, nr);
-        // Context snippet centred on the query match
+        auto rj = build_result_json(c.doc_id, c.score, c.match, *dr, nr);
         const auto ctx = make_context_snippet(dr->get<std::string>("snippet"), query);
         if (!ctx.empty()) rj["snippet"] = ctx;
         results.push_back(std::move(rj));
     }
-    return json{{"strategy", "keyword"}, {"query", query}, {"results", std::move(results)}};
+    const std::string strategy = used_semantic ? "hybrid" : "keyword";
+    return json{{"strategy", strategy}, {"query", query}, {"results", std::move(results)}};
 }
 
 inline json SearchService::build_result_json(int64_t doc_id, float score,
+                                              const std::string& match,
                                               const pce::db::Row& doc,
                                               const std::optional<pce::db::Row>& note) {
     auto pa = [](std::string_view s) -> json {
@@ -272,6 +207,7 @@ inline json SearchService::build_result_json(int64_t doc_id, float score,
         {"path",      doc.get<std::string>("path")},
         {"filename",  doc.get<std::string>("filename")},
         {"score",     score},
+        {"match",     match},
         {"snippet",   doc.get<std::string>("snippet")},
         {"mime_type", doc.get<std::string>("mime_type")},
         {"keywords",  pa(kw)},

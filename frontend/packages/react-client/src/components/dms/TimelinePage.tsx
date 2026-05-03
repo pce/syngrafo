@@ -168,29 +168,18 @@ const TimelinePage: React.FC = () => {
         </button>
       </div>
 
-      {/* Zone history pills ──────────────────────────────────────────────── */}
-      {state.zones.length > 0 && (
-        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]/60 shrink-0 overflow-x-auto">
+      {/** Active-zone indicator — read-only pill showing the currently open zone. */}
+      {state.zone && (
+        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]/60 shrink-0">
           <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 shrink-0 mr-1">
-            Zones
+            Zone
           </span>
-          {state.zones.slice(0, 8).map((z) => (
-            <button
-              key={z.name}
-              onClick={() => {
-                setScanPath(z.out_path);
-                load(z.out_path);
-              }}
-              title={`${z.in_path} → ${z.out_path}`}
-              className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
-                scanPath === z.out_path
-                  ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] border-[var(--theme-primary)]"
-                  : "bg-[var(--theme-bg)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:border-[var(--theme-primary)]/50"
-              }`}
-            >
-              {z.name}
-            </button>
-          ))}
+          <span
+            title={`${state.zone.in_path} → ${state.zone.out_path}`}
+            className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] border-[var(--theme-primary)]"
+          >
+            {state.zone.name}
+          </span>
         </div>
       )}
 

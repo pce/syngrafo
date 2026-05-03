@@ -1,9 +1,13 @@
 import React from "react";
 import { useDms } from "../../store/dms-store";
-import type { SearchResult } from "../../services/dms-service";
+import type { SearchResult } from "@/services/dms-service.ts";
 import Icon from "../Icon";
 
-/** Highlight every occurrence of `query` inside `text`. */
+/**
+ * Highlight every occurrence of `query` inside `text`.
+ * @param text - The full string to render.
+ * @param query - The search term to highlight.
+ */
 function SnippetText({ text, query }: { text: string; query: string }) {
   if (!text) return null;
   if (!query) return <>{text}</>;
@@ -20,7 +24,12 @@ function SnippetText({ text, query }: { text: string; query: string }) {
   );
 }
 
-/** Detect special folder prefixes in search result paths. */
+/**
+ * Classify a search result path into its display category.
+ * @param path - Absolute path of the result.
+ * @param zone - Active zone, used to detect `.notes` / `.kanban` subdirs.
+ * @returns `"notes"` | `"kanban"` | `"file"`
+ */
 function pathKind(path: string, zone: { out_path: string } | null): "notes" | "kanban" | "file" {
   if (zone) {
     if (path.startsWith(zone.out_path + "/.notes")) return "notes";
@@ -74,7 +83,7 @@ const SearchResults: React.FC = () => {
 
   return (
     <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl z-50 flex flex-col max-h-[70vh] overflow-hidden">
-      {/* Header */}
+      {/** Search results header: query string, hit count, scope badge. */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/50">
         <div className="flex items-center gap-2">
           <Icon name="search" size="xs" className="text-[var(--theme-text-muted)]" />
@@ -103,7 +112,7 @@ const SearchResults: React.FC = () => {
         </button>
       </div>
 
-      {/* Results list */}
+      {/** Scrollable results list. */}
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
         {state.searching ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
@@ -121,14 +130,12 @@ const SearchResults: React.FC = () => {
             {state.searchResults.map((result, i) => {
               const kind     = pathKind(result.path, state.zone ?? null);
               const isActive = state.selectedPath === result.path;
-              const kindIcon = kind === "notes" ? "edit" : kind === "kanban" ? "view_kanban" : (
+              const kindIcon = kind === "notes" ? "edit" : kind === "kanban" ? "columns" : (
                 result.path.toLowerCase().endsWith(".pdf") ? "document"
                   : result.mimeType.startsWith("image/") ? "image" : "file"
               );
-              const scoreLabel =
-                result.score >= 0.99 ? "exact"
-                : result.score >= 0.80 ? `${Math.round(result.score * 100)}%`
-                : `${Math.round(result.score * 100)}%`;
+              // "exact" only for verified keyword filename matches; everything else shows %.
+              const scoreLabel = result.match === "filename" ? "exact" : `${Math.round(result.score * 100)}%`;
 
               return (
                 <button
@@ -157,8 +164,10 @@ const SearchResults: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                      isActive ? "bg-white/20" : "bg-[var(--theme-bg)] text-[var(--theme-text-muted)]"
+                    <span className={`text-[9px] font-mono tabular-nums px-1.5 py-0.5 rounded ${
+                      isActive
+                        ? "text-white/40"
+                        : "text-[var(--theme-text-muted)]/50"
                     }`}>
                       {scoreLabel}
                     </span>
