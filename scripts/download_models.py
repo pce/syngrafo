@@ -94,6 +94,19 @@ MODELS: dict[str, ModelSpec] = {
         output_node="logits",
         activation="softmax",
     ),
+    # bert-base-NER uses bert-base-CASED (28,996 tokens), which is a DIFFERENT
+    # vocabulary from all-MiniLM-L6-v2 (30,522 tokens).  We must download its
+    # own vocab so the tokenizer index range matches the model's embedding matrix.
+    "ner_vocab": ModelSpec(
+        filename="ner_vocab.txt",
+        url=(
+            "https://huggingface.co/dslim/bert-base-NER/"
+            "resolve/main/vocab.txt"
+        ),
+        size_hint="~213 kB",
+        description="bert-base-cased vocabulary (28,996 tokens) required by ner.onnx",
+        required=False,
+    ),
     "ner": ModelSpec(
         filename="ner.onnx",
         url=(

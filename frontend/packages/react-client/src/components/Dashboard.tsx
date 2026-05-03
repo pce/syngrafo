@@ -245,7 +245,8 @@ const Dashboard: React.FC = () => {
   const [rightPanelWidth, setRightPanelWidth] = useState(260);
   const [analysisWidth,   setAnalysisWidth]   = useState(288);
 
-  // Visibility — left is always visible; right file panel + analysis are togglable
+  // Visibility — all three side panels are independently togglable
+  const [leftOpen,       setLeftOpen]       = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [analysisOpen,   setAnalysisOpen]   = useState(true);
 
@@ -501,25 +502,61 @@ const Dashboard: React.FC = () => {
       >
 
         {/* ── 1. Left file browser ──────────────────────────────────────────── */}
-        <aside
-          className="shrink-0 border-r border-[var(--theme-border)] overflow-hidden flex flex-col bg-[var(--theme-surface)] transition-[width] duration-150"
-          style={{ width: leftWidth }}
-        >
-          <FileBrowser
-            onSelectionChange={handleLeftSelectionChange}
-            onFocus={handleLeftFocus}
-            onPathChange={handleLeftPathChange}
-          />
-        </aside>
+        {/* Collapsed stripe */}
+        {!leftOpen && (
+          <button
+            onClick={() => setLeftOpen(true)}
+            title="Open file browser"
+            className="w-5 shrink-0 flex flex-col items-center justify-center gap-0.5 border-r border-[var(--theme-border)] bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]"
+          >
+            <Icon name="chevron-right" size="xs" />
+            <span
+              className="text-[8px] font-black uppercase tracking-widest"
+              style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+            >
+              Files
+            </span>
+          </button>
+        )}
 
-        {/* Resize handle — left panel */}
-        <div
-          onMouseDown={startResize("left")}
-          className="w-1 shrink-0 cursor-col-resize hover:bg-[var(--theme-primary)]/30 active:bg-[var(--theme-primary)]/50 transition-colors group relative"
-          title="Drag to resize"
-        >
-          <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-[var(--theme-primary)]/10" />
-        </div>
+        {/* Open panel */}
+        {leftOpen && (
+          <>
+            <aside
+              className="shrink-0 border-r border-[var(--theme-border)] overflow-hidden flex flex-col bg-[var(--theme-surface)] transition-[width] duration-150"
+              style={{ width: leftWidth }}
+            >
+              {/* Panel header with close button — mirrors Analysis / Second Panel style */}
+              <div className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0">
+                <Icon name="folder" size="xs" className="text-[var(--theme-text-muted)]" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 flex-1">
+                  Files
+                </span>
+                <button
+                  onClick={() => setLeftOpen(false)}
+                  title="Close file browser"
+                  className="p-0.5 rounded hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] transition-colors"
+                >
+                  <Icon name="close" size="xs" />
+                </button>
+              </div>
+              <FileBrowser
+                onSelectionChange={handleLeftSelectionChange}
+                onFocus={handleLeftFocus}
+                onPathChange={handleLeftPathChange}
+              />
+            </aside>
+
+            {/* Resize handle — left panel */}
+            <div
+              onMouseDown={startResize("left")}
+              className="w-1 shrink-0 cursor-col-resize hover:bg-[var(--theme-primary)]/30 active:bg-[var(--theme-primary)]/50 transition-colors group relative"
+              title="Drag to resize"
+            >
+              <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-[var(--theme-primary)]/10" />
+            </div>
+          </>
+        )}
 
         {/* ── 2. Document viewer / Notes / Kanban ──────────────────────────── */}
         <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[var(--theme-bg)]">

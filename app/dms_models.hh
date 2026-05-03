@@ -19,7 +19,7 @@
  *   │    MeshVertex  MeshData  MeshExportOptions                          │
  *   │    Block   BlockType   BlockMetadata   StyleRef                     │
  *   │    Document   NLPResult   Entity   Keyword                          │
- *   │    Zone                                                              │
+ *   │    Zone   Bookmark                                                   │
  *   │    Stage<F>   pipeline operator|                                    │
  *   └─────────────────────────────────────────────────────────────────────┘
  *
@@ -42,7 +42,7 @@
  * @endcode
  */
 
-// ── Core value types ───────────────────────────────────────────────────────────
+// Core value types
 #include "core/image.hh"      // Image, ImageView, PixelFormat, pal::*
 #include "core/mesh.hh"       // MeshVertex, MeshData, MeshMode, MeshExportOptions,
                               //   build_mesh, save_as_ply, generate_depth_map
@@ -53,5 +53,5 @@
 #include "core/zone.hh"       // Zone
 #include "core/pipeline.hh"   // Stage<F>, stage(), operator|
 
-// ── Monadic helpers ────────────────────────────────────────────────────────────
+//  Monadic helpers
 #include "dms_monadic.hh"     // Expected<T>, VoidResult, require, try_invoke, …

@@ -2,8 +2,7 @@ import React from "react";
 import { I18nProvider } from "@lingui/react";
 import { DmsProvider } from "./store/dms-store";
 import { ThemeProvider } from "./store/theme-store";
-import { SettingsProvider } from "./store/settings-store";
-import { LocaleProvider, useLocale } from "./store/locale-store";
+import { SettingsProvider, useSettings } from "./store/settings-store";
 import { i18n } from "./i18n";
 import Dashboard from "./components/Dashboard";
 import "./index.css";
@@ -45,18 +44,16 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-/** Inner wrapper — waits for catalog load before rendering to avoid flash of untranslated text. */
+/** Inner wrapper — waits for settings (incl. locale) to load before rendering. */
 function I18nApp() {
-  const { loading } = useLocale();
-  if (loading) return null;  // catalog not yet active — brief blank frame
+  const { settingsLoaded } = useSettings();
+  if (!settingsLoaded) return null;
   return (
     <I18nProvider i18n={i18n}>
       <ThemeProvider>
-        <SettingsProvider>
-          <DmsProvider>
-            <Dashboard />
-          </DmsProvider>
-        </SettingsProvider>
+        <DmsProvider>
+          <Dashboard />
+        </DmsProvider>
       </ThemeProvider>
     </I18nProvider>
   );
@@ -65,9 +62,9 @@ function I18nApp() {
 export function App() {
   return (
     <ErrorBoundary>
-      <LocaleProvider>
+      <SettingsProvider>
         <I18nApp />
-      </LocaleProvider>
+      </SettingsProvider>
     </ErrorBoundary>
   );
 }

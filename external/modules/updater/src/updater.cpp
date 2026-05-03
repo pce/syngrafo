@@ -7,7 +7,13 @@
 
 #include <saucer/updater.hpp>
 
+// saucer/smartview.hpp brings in the full coco::task<T> template definition
+// and transitively includes <coroutine>.  Without this, the co_return /
+// co_await expressions below fail with "undefined template coco::task".
+#include <saucer/smartview.hpp>
+
 #include <array>
+#include <coroutine>
 #include <cstdio>
 #include <filesystem>
 #include <glaze/glaze.hpp>

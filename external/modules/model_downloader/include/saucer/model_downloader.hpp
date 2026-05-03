@@ -61,9 +61,27 @@ namespace saucer::model_downloader
 
     struct ModelDownloaderConfig
     {
-        std::string models_dir;                                  ///< Directory where model files are stored (required)
-        std::string user_agent = "PDFEditor-ModelDownloader/1.0"; ///< User-Agent for HTTP requests
+        std::string            models_dir;                                  ///< Directory where model files are stored (required)
+        std::string            user_agent = "ModelDownloader/1.0"; ///< User-Agent for HTTP requests
+        /// Model catalog exposed to the UI.  If empty the downloader serves an
+        /// empty list — no models are offered for download.  Keeping the catalog
+        /// in the caller (main.cc) means adding / removing models never requires
+        /// recompiling the module; the list can also be loaded from a JSON file
+        /// or fetched from a remote manifest at runtime.
+        std::vector<ModelInfo> catalog;
     };
+
+    /**
+     * Parse a JSON array string into a catalog vector.
+     * Returns an empty vector on any parse failure.
+     */
+    std::vector<ModelInfo> load_catalog_from_json(const std::string& json_text);
+
+    /**
+     * Read the file at `path` and parse it as a JSON catalog.
+     * Logs a warning and returns an empty vector when the file is missing or malformed.
+     */
+    std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path);
 
 
     class ModelDownloader
@@ -105,8 +123,9 @@ namespace saucer::model_downloader
         [[nodiscard]] std::string get_model_path(const std::string& model_id) const;
 
       private:
-        std::string m_models_dir;
-        std::string m_user_agent;
+        std::string            m_models_dir;
+        std::string            m_user_agent;
+        std::vector<ModelInfo> m_catalog;
 
         struct Impl;
         std::unique_ptr<Impl> m_impl;

@@ -199,8 +199,15 @@ optimized for vector reconstruction and stylization.
 |===
 
 
+== 3D Preview
+
+Three.js renders PLY, OBJ (+MTL auto-detection), GLTF, GLB, and STL files in the Document Viewer through the saucer `local://` scheme.
+
+image::data/inp/syngrafo_3d_2026-05-02at2.27PM.jpg[3d preview]
 
 
+
+Controls: *drag* = rotate · *scroll* = zoom · *right-drag* = pan.
 
 == Zones
 
@@ -245,32 +252,7 @@ auto rows = db.from("dms_zones")
               .limit(10).execute();
 ----
 
-== i18n / Language
 
-Switch language in-app: **Theme & Settings → Settings tab → Language**.
-
-To add a locale:
-
-[source,bash]
-----
-bun run i18n:extract          # scan src/ → update .po files
-# translate src/locales/<lang>/messages.po in POEdit
-bun run i18n:compile          # .po → .ts catalogs
-# register the new code in src/i18n/index.ts → LOCALES
-bun run build.ts
-----
-
-Catalogs are statically imported so Bun can tree-shake unused ones at build time.
-
-== 3D Preview
-
-Three.js renders PLY, OBJ (+MTL auto-detection), GLTF, GLB, and STL files in the Document Viewer through the saucer `local://` scheme.
-
-image::data/inp/syngrafo_3d_2026-05-02at2.27PM.jpg[3d preview]
-
-
-
-Controls: *drag* = rotate · *scroll* = zoom · *right-drag* = pan.
 
 == Build
 

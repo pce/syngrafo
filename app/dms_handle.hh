@@ -442,7 +442,28 @@ inline void bootstrap_dms_schema(pce::db::Database& db) {
     db.exec("CREATE INDEX IF NOT EXISTS idx_dms_doc_mtime   ON dms_documents(mtime DESC);");
 }
 
-// §8  Palette schema + migration list
+/// §8a  Bookmark schema bootstrap (global DB)
+
+inline void bootstrap_bookmark_schema(pce::db::Database& db) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS zone_bookmarks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            zone_name   TEXT    NOT NULL,
+            label       TEXT    NOT NULL DEFAULT '',
+            target      TEXT    NOT NULL,
+            kind        TEXT    NOT NULL DEFAULT 'file',
+            line_from   INTEGER NOT NULL DEFAULT 0,
+            line_to     INTEGER NOT NULL DEFAULT 0,
+            created_at  INTEGER NOT NULL DEFAULT 0,
+            updated_at  INTEGER NOT NULL DEFAULT 0,
+            sort_order  INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_zone_bookmarks_zone "
+            "ON zone_bookmarks (zone_name, sort_order);");
+}
+
+/// §8  Palette schema + migration list
 
 /// Creates the zone_palettes table (idempotent).
 inline void bootstrap_palette_schema(pce::db::Database& db) {
@@ -464,7 +485,7 @@ inline void bootstrap_palette_schema(pce::db::Database& db) {
 /// Versioned migration list — applied at most once per DB (recorded in schema_migrations).
 /// Versions 1–4 cover what the old try-catch ALTER TABLE pattern already achieved.
 /// Version 5+ introduces new schema objects.
-inline const std::array<pce::db::Migration, 10> kDmsMigrations{{
+inline const std::array<pce::db::Migration, 12> kDmsMigrations{{
     {1, "baseline dms + nlp + zone schema",         nullptr},
     {2, "dms_documents: add content_blob",
         "ALTER TABLE dms_documents ADD COLUMN content_blob BLOB;"},
@@ -506,6 +527,24 @@ inline const std::array<pce::db::Migration, 10> kDmsMigrations{{
             updated_at INTEGER NOT NULL DEFAULT 0
         );
         )sql"},
+    {11, "zone_bookmarks table",
+        R"sql(
+        CREATE TABLE IF NOT EXISTS zone_bookmarks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            zone_name   TEXT    NOT NULL,
+            label       TEXT    NOT NULL DEFAULT '',
+            target      TEXT    NOT NULL,
+            kind        TEXT    NOT NULL DEFAULT 'file',
+            line_from   INTEGER NOT NULL DEFAULT 0,
+            line_to     INTEGER NOT NULL DEFAULT 0,
+            created_at  INTEGER NOT NULL DEFAULT 0,
+            updated_at  INTEGER NOT NULL DEFAULT 0,
+            sort_order  INTEGER NOT NULL DEFAULT 0
+        );
+        )sql"},
+    {12, "zone_bookmarks: zone index",
+        "CREATE INDEX IF NOT EXISTS idx_zone_bookmarks_zone "
+        "ON zone_bookmarks (zone_name, sort_order);"},
 }};
 
 // §9  DMSHandle
@@ -551,6 +590,7 @@ struct DMSHandle {
         bootstrap_dms_schema(db);
         pce::db::bootstrap_nlp_schema(db);
         bootstrap_palette_schema(db);
+        bootstrap_bookmark_schema(db);
         pce::db::apply_migrations(db, kDmsMigrations);
         (void)scan_dir("data", false);
         std::print("[dms] global database ready: '{}' (schema v{})\n",
@@ -600,6 +640,26 @@ struct DMSHandle {
     [[nodiscard]] Expected<json> file_to_zone(std::string path, std::string zone_name);
 
     std::string ocr_document(std::string path, std::string zone_name="");
+
+    // ── Bookmark CRUD ─────────────────────────────────────────────────────────
+    /// Add a bookmark to a zone.  `target` is a zone-relative path, optionally
+    /// with a `?<from>:<to>` suffix for file line ranges.
+    [[nodiscard]] Expected<json> bookmark_add(std::string_view zone_name,
+                                               std::string_view label,
+                                               std::string_view target);
+    /// List all bookmarks for a zone, ordered by sort_order ASC, id ASC.
+    [[nodiscard]] Expected<json> bookmark_list(std::string_view zone_name);
+    /// Delete a single bookmark by id.
+    [[nodiscard]] Expected<json> bookmark_delete(int64_t id);
+    /// Update label, target, and/or sort_order of an existing bookmark.
+    [[nodiscard]] Expected<json> bookmark_update(int64_t id,
+                                                  std::string_view label,
+                                                  std::string_view target,
+                                                  int64_t sort_order);
+    /// Resolve a zone-relative `target` to an absolute filesystem path.
+    /// Returns { "abs_path": "…", "line_from": n, "line_to": n, "kind": "…" }
+    [[nodiscard]] Expected<json> bookmark_resolve(std::string_view zone_name,
+                                                   std::string_view target);
 
     // ── Internal helpers ──────────────────────────────────────────────────────
     [[nodiscard]] Expected<std::vector<float>> embed_text_(std::string_view text) const;

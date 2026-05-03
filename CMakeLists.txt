@@ -1,5 +1,33 @@
-# 3.25 = minimum supported; 3.31 = highest policy version understood.
-cmake_minimum_required(VERSION 3.25...3.31)
+# Ubuntu 24.04 ships CMake 3.28; all modern CI runners have ≥ 3.28.
+# 3.31 = highest policy version we understand (activates all 3.31 policies).
+cmake_minimum_required(VERSION 3.28...3.31)
+
+# ─── Policy defaults for transitive dependencies ──────────────────────────────
+# These must be set before any add_subdirectory / include / FetchContent call.
+#
+# CMP0135 (CMake 3.24): use current timestamp for extracted archives so that
+#   rebuilds are not triggered by stale mtime from the zip/tarball.
+# CMP0175 (CMake 3.31): add_custom_command(TARGET) rejects unknown keyword
+#   DEPENDS.  Set OLD so third-party code (simdutf, etc.) isn't broken;
+#   the resulting dev-warnings are suppressed by passing -Wno-dev to CI.
+set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0175 OLD)
+
+# ─── FetchContent bootstrap ───────────────────────────────────────────────────
+# Must be set BEFORE any FetchContent/CPM call — including transitive ones
+# inside external/nlp and the local modules.
+#
+# FETCHCONTENT_TRY_FIND_PACKAGE_MODE NEVER prevents FetchContent from calling
+# find_package(<dep>) as an optimisation step.  Without this, vcpkg intercepts
+# the call and its handler recurses into itself on CMake 3.31 + Windows CI.
+#
+# NOTE: URL-based CPMAddPackage() declarations in cmake/fetch_deps.cmake do NOT
+# call find_package(Git) at all, so there is no vcpkg recursion for those.
+# This guard protects any remaining GIT_REPOSITORY-based fetches (e.g. from
+# the nlp engine's own cmake files that we don't control).
+include(FetchContent)
+set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE NEVER)
+set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_deps")
 
 # ─── Standalone vs monorepo build ────────────────────────────────────────────
 # When included by the nlp_engine monorepo the nlp_engine target already exists.

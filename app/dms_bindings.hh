@@ -35,6 +35,7 @@
 #include "bindings/archive_bindings.hh"
 #include "bindings/palette_bindings.hh"
 #include "bindings/model_bindings.hh"
+#include "bindings/bookmark_bindings.hh"
 
 namespace pce::dms {
 
@@ -43,7 +44,6 @@ namespace pce::dms {
 // (declared in dms_handle.hh, defined here so all helpers are in scope)
 // =============================================================================
 
-// ── scan_dir ──────────────────────────────────────────────────────────────────
 inline Expected<json> DMSHandle::scan_dir(std::string_view path_str, bool recursive) {
     std::string actual{path_str};
     if (actual=="global"||actual=="input"||actual.empty())
@@ -89,7 +89,6 @@ inline Expected<json> DMSHandle::scan_dir(std::string_view path_str, bool recurs
         });
 }
 
-// ── read_file ─────────────────────────────────────────────────────────────────
 inline Expected<json> DMSHandle::read_file(std::string_view path_str) {
     const fs::path p{path_str}; std::error_code ec;
     if (!fs::exists(p,ec)){
@@ -136,7 +135,6 @@ inline Expected<json> DMSHandle::read_file(std::string_view path_str) {
         });
 }
 
-// ── index_document ────────────────────────────────────────────────────────────
 inline Expected<json> DMSHandle::index_document(std::string_view path_str) {
     const fs::path p{path_str}; std::error_code ec;
     const auto mime=mime_for_extension(p.extension().string());
@@ -145,7 +143,7 @@ inline Expected<json> DMSHandle::index_document(std::string_view path_str) {
             return require(!fs::is_directory(p,ec),std::format("'{}' is a directory",path_str));
         })
         .and_then([&]()->Expected<json>{
-            // ── PDF: platform text extraction → Vision AI / Tesseract OCR ──────────
+            // PDF: platform text extraction → Vision AI / Tesseract OCR
             // Pipeline:  PDFKit embedded text (macOS) → Vision AI per-page (scanned)
             //            Tesseract/Leptonica (Linux/Windows, first page via Ghostscript)
             if (mime == "application/pdf") {
@@ -169,13 +167,13 @@ inline Expected<json> DMSHandle::index_document(std::string_view path_str) {
                            p.filename().string(), text.size(), quality);
                 return index_one_file_(p, text);
             }
-            // ── Images: redirect to OCR via dms_ocr_document ──────────────────────
+            //  Images: redirect to OCR via dms_ocr_document ──────────────────────
             if (mime.starts_with("image/") && mime != "image/svg+xml") {
                 return std::unexpected(std::format(
                     "'{}' is an image — use dms_ocr_document to extract and index its text.",
                     p.filename().string()));
             }
-            // ── Media / archives: not indexable ───────────────────────────────────
+            //  Media / archives: not indexable
             if (mime.starts_with("audio/")||mime.starts_with("video/"))
                 return std::unexpected(std::format(
                     "'{}' ({}) is a media file — no text to index.",
@@ -186,7 +184,7 @@ inline Expected<json> DMSHandle::index_document(std::string_view path_str) {
             if (!is_indexable_text(mime))
                 return std::unexpected(std::format(
                     "'{}' (MIME:{}) is not indexable text.", p.filename().string(), mime));
-            // ── Plain text, HTML, SVG, JSON, etc. ─────────────────────────────────
+            //  Plain text, HTML, SVG, JSON, etc.
             return safe_read_text(p,1u<<20).and_then([&](std::string content)->Expected<json>{
                 if (mime=="text/html"||mime=="text/htm"||mime=="text/xhtml+xml")
                     content=strip_html_tags(content);
@@ -756,7 +754,7 @@ inline Expected<json> DMSHandle::index_one_file_(const fs::path& p,
         {"dimensions",(int64_t)dims},{"indexed_at",now},{"unchanged",false}};
 }
 
-// ── build_result_json_ ────────────────────────────────────────────────────────
+//build_result_json_
 inline json DMSHandle::build_result_json_(int64_t doc_id, float score,
                                            const pce::db::Row& doc,
                                            const std::optional<pce::db::Row>& note) {
@@ -770,7 +768,7 @@ inline json DMSHandle::build_result_json_(int64_t doc_id, float score,
         {"lang",note?note->try_get<std::string>("lang").value_or("en"):std::string{"en"}}};
 }
 
-// ── push_progress_ ────────────────────────────────────────────────────────────
+//  push_progress_
 inline void DMSHandle::push_progress_(nlohmann::json ev) const {
     saucer::webview* wv=wv_ptr.load(std::memory_order_acquire);
     if(!wv) return;
@@ -778,6 +776,175 @@ inline void DMSHandle::push_progress_(nlohmann::json ev) const {
         wv->execute(std::format("if(typeof window.__dms_progress==='function')"
                                 "{{window.__dms_progress({})}}",ev.dump()));
     } catch(...) {}
+}
+
+// =============================================================================
+// ── Bookmark CRUD implementations ──────────────────────────────────────────
+// =============================================================================
+
+namespace {
+/// Helper: serialise a zone_bookmarks DB row to JSON.
+// eslint-disable-next-line (C++ not TS — just a comment marker)
+inline json bm_row_to_json(const pce::db::Row& row) {
+    return json{
+        {"id",         row.get<int64_t>    ("id")},
+        {"zone_name",  row.get<std::string>("zone_name")},
+        {"label",      row.get<std::string>("label")},
+        {"target",     row.get<std::string>("target")},
+        {"kind",       row.get<std::string>("kind")},
+        {"line_from",  row.get<int64_t>    ("line_from")},
+        {"line_to",    row.get<int64_t>    ("line_to")},
+        {"sort_order", row.get<int64_t>    ("sort_order")},
+        {"created_at", row.get<int64_t>    ("created_at")},
+        {"updated_at", row.get<int64_t>    ("updated_at")},
+    };
+}
+} // anonymous namespace
+
+inline Expected<json> DMSHandle::bookmark_add(std::string_view zone_name,
+                                               std::string_view label,
+                                               std::string_view target) {
+    if (zone_name.empty()) return std::unexpected("zone_name must not be empty");
+    if (target.empty())    return std::unexpected("target must not be empty");
+
+    // Parse line range from target
+    int64_t line_from{0}, line_to{0};
+    const std::string bare = pce::dms::Bookmark::parse_target(target, line_from, line_to);
+    const std::string kind = pce::dms::Bookmark::infer_kind(bare);
+
+    const auto now = pce::db::now_unix();
+    int64_t new_id{0};
+    try {
+        std::lock_guard lk{db_mutex};
+        // sort_order = MAX(sort_order)+1 for this zone
+        int64_t next_ord{0};
+        auto rows = db.from("zone_bookmarks")
+                       .where("zone_name = ?", std::string{zone_name})
+                       .select({"MAX(sort_order) AS max_ord"})
+                       .execute();
+        if (!rows.empty()) {
+            next_ord = rows[0].try_get<int64_t>("max_ord").value_or(0) + 1;
+        }
+        new_id = db.insert_into("zone_bookmarks")
+                     .value("zone_name",  std::string{zone_name})
+                     .value("label",      std::string{label})
+                     .value("target",     std::string{target})
+                     .value("kind",       kind)
+                     .value("line_from",  line_from)
+                     .value("line_to",    line_to)
+                     .value("created_at", now)
+                     .value("updated_at", now)
+                     .value("sort_order", next_ord)
+                     .execute();
+    } catch (const std::exception& e) {
+        return std::unexpected(std::format("bookmark_add: {}", e.what()));
+    }
+    // Return the newly created row
+    std::lock_guard lk{db_mutex};
+    auto row = db.from("zone_bookmarks").where("id = ?", new_id).first();
+    if (!row) return std::unexpected("bookmark_add: could not re-read new row");
+    return bm_row_to_json(*row);
+}
+
+inline Expected<json> DMSHandle::bookmark_list(std::string_view zone_name) {
+    if (zone_name.empty()) return std::unexpected("zone_name must not be empty");
+    std::vector<pce::db::Row> rows;
+    {
+        std::lock_guard lk{db_mutex};
+        rows = db.from("zone_bookmarks")
+                  .where("zone_name = ?", std::string{zone_name})
+                  .order_by("sort_order")
+                  .order_by("id")
+                  .execute();
+    }
+    json arr = json::array();
+    for (const auto& r : rows) arr.push_back(bm_row_to_json(r));
+    return arr;
+}
+
+inline Expected<json> DMSHandle::bookmark_delete(int64_t id) {
+    if (id <= 0) return std::unexpected("invalid bookmark id");
+    try {
+        std::lock_guard lk{db_mutex};
+        const int affected = db.delete_from("zone_bookmarks").where("id = ?", id).execute();
+        if (affected == 0)
+            return std::unexpected(std::format("bookmark_delete: no bookmark with id={}", id));
+    } catch (const std::exception& e) {
+        return std::unexpected(std::format("bookmark_delete: {}", e.what()));
+    }
+    return json{{"deleted", true}, {"id", id}};
+}
+
+inline Expected<json> DMSHandle::bookmark_update(int64_t id,
+                                                   std::string_view label,
+                                                   std::string_view target,
+                                                   int64_t sort_order) {
+    if (id <= 0) return std::unexpected("invalid bookmark id");
+    if (target.empty()) return std::unexpected("target must not be empty");
+
+    int64_t line_from{0}, line_to{0};
+    const std::string bare = pce::dms::Bookmark::parse_target(target, line_from, line_to);
+    const std::string kind = pce::dms::Bookmark::infer_kind(bare);
+    const auto now = pce::db::now_unix();
+    try {
+        std::lock_guard lk{db_mutex};
+        const int affected = db.update("zone_bookmarks")
+          .set("label",      std::string{label})
+          .set("target",     std::string{target})
+          .set("kind",       kind)
+          .set("line_from",  line_from)
+          .set("line_to",    line_to)
+          .set("sort_order", sort_order)
+          .set("updated_at", now)
+          .where("id = ?", id)
+          .execute();
+        if (affected == 0)
+            return std::unexpected(std::format("bookmark_update: no bookmark with id={}", id));
+    } catch (const std::exception& e) {
+        return std::unexpected(std::format("bookmark_update: {}", e.what()));
+    }
+    std::lock_guard lk{db_mutex};
+    auto row = db.from("zone_bookmarks").where("id = ?", id).first();
+    if (!row) return std::unexpected("bookmark_update: row not found after update");
+    return bm_row_to_json(*row);
+}
+
+inline Expected<json> DMSHandle::bookmark_resolve(std::string_view zone_name,
+                                                    std::string_view target) {
+    if (zone_name.empty()) return std::unexpected("zone_name must not be empty");
+    if (target.empty())    return std::unexpected("target must not be empty");
+
+    // Look up zone in_path
+    std::string in_path;
+    {
+        std::lock_guard lk{db_mutex};
+        auto row = db.from("dms_zones")
+                      .where("name = ?", std::string{zone_name})
+                      .first();
+        if (!row) return std::unexpected(
+            std::format("zone '{}' not found", zone_name));
+        in_path = row->get<std::string>("in_path");
+    }
+
+    int64_t line_from{0}, line_to{0};
+    const std::string bare = pce::dms::Bookmark::parse_target(target, line_from, line_to);
+    const std::string kind = pce::dms::Bookmark::infer_kind(bare);
+
+    // Compose absolute path — bare may end with '/' for folders
+    fs::path abs_path = fs::path{in_path} / bare;
+    // Normalise trailing slash for dirs: keep the path as-is (std::filesystem handles it)
+    std::error_code ec;
+    const bool exists = fs::exists(abs_path, ec);
+
+    return json{
+        {"abs_path",  abs_path.string()},
+        {"line_from", line_from},
+        {"line_to",   line_to},
+        {"kind",      kind},
+        {"exists",    exists},
+        {"zone_name", std::string{zone_name}},
+        {"target",    std::string{target}},
+    };
 }
 
 // =============================================================================
@@ -796,9 +963,10 @@ inline void register_dms_bindings(saucer::smartview& wv, DMSHandle& dms,
     register_archive_bindings(wv, dms, desk);      //  create_archive / compress_file
     register_palette_bindings(wv, dms, desk);      //  zone/brand/project ColorPalettes
     register_model_bindings  (wv, model_dl);       //  model list/download/cancel/delete
+    register_bookmark_bindings(wv, dms);           //  zone bookmarks (quick jump targets)
 
-    std::print("[dms] 6 domain binding modules registered "
-               "(file / image / nlp / archive / palette / model)\n");
+    std::print("[dms] 7 domain binding modules registered "
+               "(file / image / nlp / archive / palette / model / bookmark)\n");
 }
 
 } // namespace pce::dms

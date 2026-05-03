@@ -10,7 +10,7 @@
 #
 # This file is only included on Apple platforms.
 
-# ── ONNX Runtime ──────────────────────────────────────────────────────────────
+# ONNX Runtime ──────────────────────────────────────────────────────────────
 if(NOT DISABLE_ONNX)
     set(_ORT_DYLIB
         "${FETCHCONTENT_BASE_DIR}/onnxruntime-src/lib/libonnxruntime.1.17.3.dylib")
@@ -33,17 +33,17 @@ if(NOT DISABLE_ONNX)
     unset(_ORT_DYLIB)
 endif()
 
-# ── NLP models / data ─────────────────────────────────────────────────────────
+# NLP models / data
 add_custom_command(TARGET syngrafo POST_BUILD
     COMMAND ${CMAKE_COMMAND}
-        -DSRC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
-        -DDST_DIR="$<TARGET_BUNDLE_DIR:syngrafo>/Contents/Resources/data"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_data_if_exists.cmake"
+        -DSRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}/data
+        -DDST_DIR=$<TARGET_BUNDLE_DIR:syngrafo>/Contents/Resources/data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_data_if_exists.cmake
     COMMENT "[syngrafo] Bundling data/ → .app/Contents/Resources/data/"
     VERBATIM
 )
 
-# ── SQLCipher dylib ──────────────────────────────────────────────────────────
+# SQLCipher dylib
 if(SQLCIPHER_FOUND)
     execute_process(
         COMMAND otool -D "${SQLCIPHER_LIBRARIES}"

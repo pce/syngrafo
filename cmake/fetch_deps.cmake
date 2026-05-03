@@ -1,42 +1,61 @@
-# cmake/fetch_deps.cmake — FetchContent / CPM declarations for third-party deps.
+# cmake/fetch_deps.cmake — Third-party dependencies via plain FetchContent.
 #
-# Included after project() and before add_subdirectory() calls.
-# Pulls saucer + saucer::desktop from GitHub at the pinned tags.
+# Design principles
+# ─────────────────
+# • URL tarballs only — no GIT_REPOSITORY.  FetchContent with GIT_REPOSITORY
+#   triggers find_package(Git) inside ExternalProject; on Windows CI vcpkg
+#   intercepts that call and recurses >1000 levels (fatal CMake error).
+#
+# • We do NOT use CPM ourselves.  Saucer v8 uses CPM internally for its own
+#   deps (lockpp, coco, …), and we can't avoid that.  Setting CPM_MODULE_PATH
+#   to the build tree keeps saucer's generated FindXxx.cmake files out of the
+#   source directory.
+#
+# • saucer_prefer_remote ON → CPM_DOWNLOAD_ALL ON inside saucer.  This makes
+#   saucer's CPM always download without calling find_package(), which is the
+#   safest choice on Windows+vcpkg (vcpkg intercepts every find_package call).
+#
+# • saucer::desktop is NOT bundled by saucer v8 — it must be added separately.
+#   We use URL tarball and add it after saucer so saucer's targets are ready.
+#
+# Useful overrides
+# ─────────────────
+#   Local checkout:  cmake -DFETCHCONTENT_SOURCE_DIR_SAUCER=/path/to/checkout
+#   Network-free:    cmake -DFETCHCONTENT_FULLY_DISCONNECTED=ON  (reuse cache)
 
-include(FetchContent)
+# Redirect saucer's internal CPM Find-module output to the build tree.
+# Without this, saucer's packageProject() writes CPM_modules/Findsaucer.cmake
+# into the root source directory.
+set(CPM_MODULE_PATH "${CMAKE_BINARY_DIR}/cmake/cpm_modules")
 
-# Ensure FetchContent downloads land in build/_deps (never in the source tree).
-set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_deps")
-
-# Prevent vcpkg's find_package override from recursing into FetchContent on
-# CMake 3.31+ (causes >1000 recursive calls).
-set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE NEVER)
-
-# ── saucer (webview core) ─────────────────────────────────────────────────────
-FetchContent_Declare(
-    saucer
-    GIT_REPOSITORY https://github.com/saucer/saucer.git
-    GIT_TAG        v8.0.5
-    GIT_SHALLOW    TRUE
-)
-
-set(saucer_static                    ON  CACHE BOOL "" FORCE)
+# ── saucer options (set before FetchContent_MakeAvailable) ───────────────────
 set(saucer_examples                  OFF CACHE BOOL "" FORCE)
 set(saucer_tests                     OFF CACHE BOOL "" FORCE)
+set(saucer_static                    ON  CACHE BOOL "" FORCE)
+# prefer_remote ON  →  CPM_DOWNLOAD_ALL ON inside saucer
+#   = saucer's internal CPM always fetches, never calls find_package()
+#   = no vcpkg find_package interception on Windows CI
 set(saucer_prefer_remote             ON  CACHE BOOL "" FORCE)
-# Bypass compiler-version check for Clang < 20 and legacy variable names.
 set(saucer_no_compiler_version_check ON  CACHE BOOL "" FORCE)
 set(saucer_no_version_check          ON  CACHE BOOL "" FORCE)
 
+# ── saucer (webview core) ─────────────────────────────────────────────────────
+# Latest: v8.0.5  • https://github.com/saucer/saucer/releases
+FetchContent_Declare(
+    saucer
+    URL     https://github.com/saucer/saucer/archive/refs/tags/v8.0.5.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
 FetchContent_MakeAvailable(saucer)
 
 # ── saucer::desktop (file/folder picker) ─────────────────────────────────────
+# saucer v8 does NOT auto-add desktop — confirmed from saucer's CMakeLists.txt.
+# Must be added explicitly. Added AFTER saucer so the saucer targets saucer-
+# desktop links against (saucer::saucer) are already defined.
+# Latest: v4.2.0  • https://github.com/saucer/desktop/releases
 FetchContent_Declare(
     saucer_desktop
-    GIT_REPOSITORY https://github.com/saucer/desktop.git
-    GIT_TAG        v4.2.0
-    GIT_SHALLOW    TRUE
+    URL     https://github.com/saucer/desktop/archive/refs/tags/v4.2.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-
 FetchContent_MakeAvailable(saucer_desktop)
-

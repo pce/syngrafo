@@ -17,10 +17,62 @@ from typing import Iterable, List, Optional
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
+# ── optional log file ─────────────────────────────────────────────────────────
+# Set DEV_LOG_FILE=/path/to/file.log (or pass --log-file on the CLI) to mirror
+# all log output to a file.  Useful for inspecting long configure runs.
+_LOG_FILE: Optional[Path] = None
 
-def run(cmd: Iterable[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
+def _attach_log_file(path: Path) -> None:
+    global _LOG_FILE
+    _LOG_FILE = path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(str(path), mode="a", encoding="utf-8")
+    fh.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logging.getLogger().addHandler(fh)
+    logging.info("Logging to: %s", path)
+
+
+def run(
+    cmd: Iterable[str],
+    cwd: Optional[Path] = None,
+    check: bool = True,
+    capture_to_log: bool = True,
+) -> subprocess.CompletedProcess:
+    """Run a subprocess, streaming output to the terminal (and log file if set)."""
+    cmd = list(cmd)
     logging.info("Running: %s", " ".join(cmd))
-    return subprocess.run(list(cmd), cwd=(str(cwd) if cwd else None), check=check)
+
+    if _LOG_FILE is None or not capture_to_log:
+        # Simple path – inherit stdout/stderr so the user sees live output.
+        return subprocess.run(cmd, cwd=(str(cwd) if cwd else None), check=check)
+
+    # Tee subprocess output to the log file AND stdout simultaneously.
+    import threading
+    result_holder: dict = {}
+
+    def _stream(pipe, log_fh, stdout_fh) -> None:
+        for raw in iter(pipe.readline, b""):
+            line = raw.decode("utf-8", errors="replace")
+            stdout_fh.write(line)
+            stdout_fh.flush()
+            log_fh.write(line)
+            log_fh.flush()
+
+    with open(str(_LOG_FILE), "a", encoding="utf-8") as log_fh:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=(str(cwd) if cwd else None),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        t = threading.Thread(target=_stream, args=(proc.stdout, log_fh, sys.stdout), daemon=True)
+        t.start()
+        proc.wait()
+        t.join()
+
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+    return subprocess.CompletedProcess(cmd, proc.returncode)
 
 
 def clean_cmake_cache(build_dir: Path) -> None:
@@ -40,7 +92,27 @@ def clean_cmake_cache(build_dir: Path) -> None:
 
 
 def cmake_configure(source_dir: Path, build_dir: Path, build_type: str = "Release", extra: Optional[List[str]] = None) -> None:
-    extra = extra or []
+    extra = list(extra or [])
+
+    # Auto-apply vcpkg toolchain when VCPKG_ROOT is set and the caller has not
+    # already provided CMAKE_TOOLCHAIN_FILE.  This covers local developer
+    # machines that have vcpkg installed globally, and CI runners that export
+    # VCPKG_ROOT (GitHub Actions, Azure Pipelines, etc.).
+    # Note: CMAKE_TOOLCHAIN_FILE must be on the cmake command line; it cannot
+    # be set inside CMakeLists.txt (toolchain is loaded before processing).
+    if not any("CMAKE_TOOLCHAIN_FILE" in e for e in extra):
+        vcpkg_root = os.environ.get("VCPKG_ROOT", "").strip()
+        if vcpkg_root:
+            toolchain = Path(vcpkg_root) / "scripts" / "buildsystems" / "vcpkg.cmake"
+            if toolchain.exists():
+                logging.info("Auto-detected vcpkg toolchain from VCPKG_ROOT=%s", vcpkg_root)
+                extra = [f"-DCMAKE_TOOLCHAIN_FILE={toolchain}"] + extra
+            else:
+                logging.warning(
+                    "VCPKG_ROOT is set (%s) but toolchain not found at expected path: %s",
+                    vcpkg_root, toolchain
+                )
+
     cmd = ["cmake", "-S", str(source_dir), "-B", str(build_dir), f"-DCMAKE_BUILD_TYPE={build_type}"] + extra
     run(cmd)
 
@@ -138,6 +210,14 @@ def package_zip(name: str, files: Iterable[Path], out_dir: Path) -> Path:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dev.py", description="Build/release/deploy helper for this project")
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=(Path(os.environ["DEV_LOG_FILE"]) if "DEV_LOG_FILE" in os.environ else None),
+        metavar="PATH",
+        help="Mirror all output (including subprocess stdout) to this file. "
+             "Also honours the DEV_LOG_FILE environment variable.",
+    )
     sub = parser.add_subparsers(dest="command")
 
     # debug
@@ -569,6 +649,11 @@ def main() -> None:
     """Parse CLI arguments and dispatch to the appropriate command handler."""
     parser = _build_parser()
     args = parser.parse_args()
+
+    # Attach log file early so even the configure output goes to disk.
+    if args.log_file:
+        _attach_log_file(args.log_file)
+
     if not args.command:
         parser.print_help()
         sys.exit(1)

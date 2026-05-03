@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -12,62 +13,54 @@
 #include <thread>
 #include <vector>
 
-// Use libcurl C API directly — never spawn a child process.
 #include <curl/curl.h>
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
 namespace saucer::model_downloader
 {
-    //  Built-in model catalog
-    //
-    //  All entries are GGUF files hosted on Hugging Face (bartowski quantisations).
-    //  URLs point to the main branch; they will redirect to the latest version.
-    //  size_bytes values are approximate (used for progress estimation before the
-    //  actual Content-Length is available).
 
-    static const std::vector<ModelInfo> g_catalog = {
+// ── Catalog loaders ────────────────────────────────────────────────────────────
+
+std::vector<ModelInfo> load_catalog_from_json(const std::string& json_text)
+{
+    std::vector<ModelInfo> out;
+    try
+    {
+        auto arr = nlohmann::json::parse(json_text);
+        for (const auto& obj : arr)
         {
-            .id          = "phi-3.5-mini-q4",
-            .name        = "Phi-3.5-mini Instruct (Q4_K_M · ~2.4 GB)",
-            .description = "Microsoft Phi-3.5-mini 3.8B. Best quality-to-size ratio for document writing and editing tasks.",
-            .url         = "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
-            .filename    = "Phi-3.5-mini-instruct-Q4_K_M.gguf",
-            .size_bytes  = 2393LL * 1024 * 1024, // ~2.4 GB
-        },
-        {
-            .id          = "llama-3.2-1b-q8",
-            .name        = "Llama 3.2 1B Instruct (Q8_0 · ~1.3 GB)",
-            .description = "Meta Llama 3.2 1B. Ultra-fast, low memory footprint. Great for quick completions on any hardware.",
-            .url         = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q8_0.gguf",
-            .filename    = "Llama-3.2-1B-Instruct-Q8_0.gguf",
-            .size_bytes  = 1321LL * 1024 * 1024, // ~1.3 GB
-        },
-        {
-            .id          = "qwen2.5-1.5b-q4",
-            .name        = "Qwen 2.5 1.5B Instruct (Q4_K_M · ~1.0 GB)",
-            .description = "Alibaba Qwen2.5 1.5B. Excellent multilingual support and structured-output compliance.",
-            .url         = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
-            .filename    = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
-            .size_bytes  = 1002LL * 1024 * 1024, // ~1.0 GB
-        },
-        {
-            .id          = "smollm2-1.7b-q4",
-            .name        = "SmolLM2 1.7B Instruct (Q4_K_M · ~1.1 GB)",
-            .description = "HuggingFace SmolLM2 1.7B. Compact model optimised for on-device inference with a 8k context window.",
-            .url         = "https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
-            .filename    = "SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
-            .size_bytes  = 1122LL * 1024 * 1024, // ~1.1 GB
-        },
-        {
-            .id          = "gemma-2-2b-q4",
-            .name        = "Gemma 2 2B Instruct (Q4_K_M · ~1.6 GB)",
-            .description = "Google Gemma 2 2B. Strong reasoning and instruction following in a compact package.",
-            .url         = "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
-            .filename    = "gemma-2-2b-it-Q4_K_M.gguf",
-            .size_bytes  = 1639LL * 1024 * 1024, // ~1.6 GB
-        },
-    };
+            out.push_back({
+                .id          = obj.value("id",          ""),
+                .name        = obj.value("name",        ""),
+                .description = obj.value("description", ""),
+                .url         = obj.value("url",         ""),
+                .filename    = obj.value("filename",    ""),
+                .size_bytes  = obj.value("size_bytes",  int64_t{0}),
+            });
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[ModelDownloader] catalog parse error: " << e.what() << '\n';
+    }
+    return out;
+}
+
+std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path)
+{
+    std::ifstream f(path);
+    if (!f)
+    {
+        std::cerr << "[ModelDownloader] catalog file not found: " << path << '\n';
+        return {};
+    }
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    return load_catalog_from_json(ss.str());
+}
+
 
 
 
@@ -144,6 +137,7 @@ namespace saucer::model_downloader
     ModelDownloader::ModelDownloader(const ModelDownloaderConfig& config)
         : m_models_dir(config.models_dir)
         , m_user_agent(config.user_agent)
+        , m_catalog(config.catalog)
         , m_impl(std::make_unique<Impl>())
     {
         if (!m_models_dir.empty() && !fs::exists(m_models_dir))

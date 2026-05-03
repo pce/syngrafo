@@ -72,7 +72,7 @@ else()
         message(STATUS "[syngrafo] SQLite3 found via find_package (${SQLite3_VERSION})")
     else()
         message(STATUS "[syngrafo] SQLite3 not found — fetching amalgamation 3.53.0")
-        include(FetchContent)
+        # FetchContent is already included and configured by root CMakeLists.txt.
         FetchContent_Declare(
             sqlite3_amalgamation
             URL      https://www.sqlite.org/2026/sqlite-amalgamation-3530000.zip

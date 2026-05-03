@@ -148,9 +148,23 @@ struct EngineHandle {
     }
 
     // NER model (bert-base-NER, CoNLL-2003 BIO labels).
-    if (auto svc = make_addon(model_dir / "ner.onnx", vocab)) {
-      engine->set_ner_service(svc);
-      std::print("[nlp] NER model loaded\n");
+    // bert-base-NER uses bert-base-CASED (28,996 tokens) — a different vocab
+    // from all-MiniLM-L6-v2 (30,522 tokens).  Use ner_vocab.txt when present;
+    // fall back to the shared vocab only as a last resort (will produce
+    // out-of-bounds ONNX errors for token IDs > 28,995).
+    {
+      const fs::path ner_vocab = model_dir / "ner_vocab.txt";
+      const fs::path ner_vocab_path = fs::exists(ner_vocab) ? ner_vocab : vocab;
+      if (!fs::exists(ner_vocab))
+        std::print(stderr,
+                   "[nlp] WARNING: ner_vocab.txt not found — NER may produce "
+                   "out-of-bounds ONNX errors.\n"
+                   "         Run: python3 scripts/download_models.py download "
+                   "--models ner_vocab\n");
+      if (auto svc = make_addon(model_dir / "ner.onnx", ner_vocab_path)) {
+        engine->set_ner_service(svc);
+        std::print("[nlp] NER model loaded\n");
+      }
     }
 
     // Toxicity classifier (Toxic-BERT, multi-label sigmoid).
@@ -244,7 +258,7 @@ private:
 
       std::print("[nlp] using download script at: {}\n", script_path);
       int res = std::system(
-          std::format("python3 {} download --models embed,vocab,sentiment",
+          std::format("python3 {} download --models embed,vocab,sentiment,ner_vocab",
                       script_path)
               .c_str());
       if (res != 0) {
@@ -579,12 +593,16 @@ if (typeof window.__dms_progress === 'undefined')
     register_bindings(*webview, nlp);
     saucer::modules::desktop desk{app};
 
-    // Model downloader — manages NLP/LLM model files.
-    // Models are stored in <data_dir>/models/  (bundle-aware on macOS).
-    const std::string models_dir = (fs::path(data_dir()) / "models").string();
-    saucer::model_downloader::ModelDownloader model_dl{
-        { .models_dir = models_dir, .user_agent = "Syngrafo/" SYNGRAFO_VERSION }
-    };
+    // Model downloader — manages LLM/GGUF model files chosen by the user in-app.
+    // The catalog is loaded from data/llm_catalog.json (bundled into .app/Contents/Resources/data/).
+    // To add or remove models: edit data/llm_catalog.json — no recompile required.
+    const std::string models_dir    = (fs::path(data_dir()) / "models").string();
+    const std::string catalog_path  = (fs::path(data_dir()) / "llm_catalog.json").string();
+    saucer::model_downloader::ModelDownloader model_dl{{
+        .models_dir = models_dir,
+        .user_agent = "Syngrafo/" SYNGRAFO_VERSION,
+        .catalog    = saucer::model_downloader::load_catalog_from_json_file(catalog_path),
+    }};
     std::print("[models] model store: {}\n", models_dir);
 
     pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);

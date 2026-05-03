@@ -134,6 +134,88 @@ export interface OcrResult {
   quality?: "ok" | "low" | "garbage";
 }
 
+/** Target kind for a bookmark — a folder or anything else (file, image, …). */
+export type BookmarkKind = "file" | "folder";
+
+/**
+ * A Bookmark is a named quick-jump target that lives inside a Zone.
+ *
+ * `target` is a zone-relative materialized path, e.g.:
+ *   - `path/to/file.py`        → whole file
+ *   - `path/to/file.py?10:12`  → line range 10–12 (inclusive)
+ *   - `path/to/file.py?10:`    → from line 10 to EOF
+ *   - `path/to/folder/`        → directory (trailing slash)
+ *   - `path/to/image.png`      → image file (kind = "file")
+ *
+ * Canonical URI:  `/#<zoneName>/<target>`
+ */
+export interface Bookmark {
+  id:         number;
+  zone_name:  string;
+  label:      string;
+  /** Zone-relative path, optionally with `?<from>:<to>` suffix. */
+  target:     string;
+  kind:       BookmarkKind;
+  line_from:  number;   // 0 = not specified
+  line_to:    number;   // 0 = not specified (open range)
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface BookmarkResolveResult {
+  abs_path:  string;
+  line_from: number;
+  line_to:   number;
+  kind:      BookmarkKind;
+  exists:    boolean;
+  zone_name: string;
+  target:    string;
+}
+
+
+/**
+ * Build the canonical display URI for a bookmark:
+ *   `/#<zoneName>/<target>`
+ */
+export function bookmarkUri(zoneName: string, target: string): string {
+  return `/#${zoneName}/${target}`;
+}
+
+/**
+ * Parse a canonical bookmark URI (`/#<zone>/<target>`) back into its parts.
+ * Returns `null` if the string is not a valid bookmark URI.
+ */
+export function parseBookmarkUri(uri: string): { zone: string; target: string } | null {
+  if (!uri.startsWith("/#")) return null;
+  const rest = uri.slice(2);               // "<zone>/<target>"
+  const slash = rest.indexOf("/");
+  if (slash < 0) return null;
+  return { zone: rest.slice(0, slash), target: rest.slice(slash + 1) };
+}
+
+/**
+ * Parse the `?<from>:<to>` suffix out of a zone-relative target string.
+ * Returns the bare path and (optionally) the line numbers.
+ */
+export function parseBookmarkTarget(target: string): {
+  path:      string;
+  lineFrom?: number;
+  lineTo?:   number;
+} {
+  const q = target.lastIndexOf("?");
+  if (q < 0) return { path: target };
+  const spec  = target.slice(q + 1);
+  const colon = spec.indexOf(":");
+  if (colon < 0) return { path: target }; // no colon → treat whole string as path
+  const fromStr = spec.slice(0, colon);
+  const toStr   = spec.slice(colon + 1);
+  const lineFrom = fromStr ? parseInt(fromStr, 10) : undefined;
+  const lineTo   = toStr   ? parseInt(toStr,   10) : undefined;
+  if (lineFrom !== undefined && isNaN(lineFrom)) return { path: target };
+  return { path: target.slice(0, q), lineFrom, lineTo };
+}
+
 export interface PaletteEntry {
   r: number; g: number; b: number;
   hex: string;
@@ -598,7 +680,6 @@ export const dms = {
     return call<{ created: boolean; path: string }>(binding("dms_create_dir"), path);
   },
 
-  // ── File Operations ─────────────────────────────────────────────────────────
 
   /**
    * Copy one or more files/dirs into `destDir`.
@@ -699,6 +780,60 @@ export const dms = {
 
   /** True when running inside the saucer webview (C++ bindings present). */
   isConnected: (): boolean => typeof window.saucer?.call === "function",
+
+
+  /**
+   * Add a bookmark to a zone.
+   * `target` is a zone-relative path (e.g. `"reports/q1.py?5:20"`).
+   * Returns the newly created Bookmark.
+   */
+  bookmark: {
+    add: async (
+      zoneName: string,
+      label: string,
+      target: string,
+    ): Promise<NlpEnvelope<Bookmark>> => {
+      return call<Bookmark>(binding("dms_bookmark_add"), zoneName, label, target);
+    },
+
+    /**
+     * List all bookmarks for a zone, sorted by sort_order then id.
+     */
+    list: async (zoneName: string): Promise<NlpEnvelope<Bookmark[]>> => {
+      return call<Bookmark[]>(binding("dms_bookmark_list"), zoneName);
+    },
+
+    /**
+     * Delete a bookmark by id.
+     */
+    delete: async (id: number): Promise<NlpEnvelope<{ deleted: boolean; id: number }>> => {
+      return call<{ deleted: boolean; id: number }>(binding("dms_bookmark_delete"), id);
+    },
+
+    /**
+     * Update label, target, and sort_order of a bookmark.
+     * Returns the updated Bookmark.
+     */
+    update: async (
+      id: number,
+      label: string,
+      target: string,
+      sortOrder: number,
+    ): Promise<NlpEnvelope<Bookmark>> => {
+      return call<Bookmark>(binding("dms_bookmark_update"), id, label, target, sortOrder);
+    },
+
+    /**
+     * Resolve a zone-relative target to an absolute filesystem path.
+     * Parses `?<from>:<to>` line-range suffixes and determines `kind`.
+     */
+    resolve: async (
+      zoneName: string,
+      target: string,
+    ): Promise<NlpEnvelope<BookmarkResolveResult>> => {
+      return call<BookmarkResolveResult>(binding("dms_bookmark_resolve"), zoneName, target);
+    },
+  },
 };
 
 // Register the C++ progress callback
@@ -727,7 +862,6 @@ export function onDmsProgress(listener: ProgressListener): () => void {
 }
 
 //  MIME helpers
-
 const TEXT_EXTS  = new Set([
   ".txt", ".md", ".markdown", ".rst", ".csv", ".json", ".xml",
   ".html", ".htm", ".log", ".yaml", ".yml", ".toml", ".ini",
@@ -766,7 +900,6 @@ export function is3DModelFile(path: string): boolean { return MODEL3D_EXTS.has(e
 /** Alias used by the viewer – single canonical name across the codebase. */
 export const is3DFile = is3DModelFile;
 
-// ─── FileKind ─────────────────────────────────────────────────────────────────
 // Canonical file-kind taxonomy — mirrors kind_for_extension() in dms_bindings.hh.
 export type FileKind =
   | "image" | "vector" | "audio" | "video" | "document"
@@ -839,7 +972,6 @@ export function isVideoFile(p: string): boolean { return VIDEO_EXTS.has(extOf(p)
 export function isSvgFile(path: string):     boolean { return extOf(path) === ".svg";         }
 export function isArchiveFile(path: string): boolean { return ARCHIVE_EXTS.has(extOf(path)); }
 export function isCssFile(path: string):     boolean { return CSS_EXTS.has(extOf(path));     }
-export function is3DModelFile(path: string): boolean { return MODEL3D_EXTS.has(extOf(path)); }
 export function isHtmlFile(path: string):    boolean {
   return new Set([".html", ".htm", ".xhtml"]).has(extOf(path));
 }

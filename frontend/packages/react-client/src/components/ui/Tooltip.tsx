@@ -5,6 +5,7 @@ interface TooltipProps {
   children: React.ReactNode;
   position?: "top" | "bottom" | "left" | "right";
   delay?: number;
+  multiline?: boolean;
 }
 
 /**
@@ -15,6 +16,7 @@ const Tooltip: React.FC<TooltipProps> = ({
   children,
   position = "top",
   delay = 300,
+  multiline = false,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -47,7 +49,7 @@ const Tooltip: React.FC<TooltipProps> = ({
       {children}
       {isVisible && (
         <div
-          className={`absolute z-50 px-2 py-1 text-[10px] font-bold rounded shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in duration-150 border ${positionClasses[position]}`}
+          className={`absolute z-50 px-2 py-1 text-[10px] font-bold rounded shadow-xl pointer-events-none animate-in fade-in zoom-in duration-150 border ${positionClasses[position]} ${multiline ? "whitespace-normal max-w-60 leading-relaxed" : "whitespace-nowrap"}`}
           role="tooltip"
           aria-live="polite"
           style={{

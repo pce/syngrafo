@@ -14,8 +14,9 @@ import { useSettings } from "../store/settings-store";
 import { useLocale } from "../store/locale-store";
 import { LOCALES, type SupportedLocale } from "../i18n";
 import Icon from "./Icon";
+import Toggle from "./ui/Toggle";
+import Tooltip from "./ui/Tooltip";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
 
 const COLOR_SLOTS: Array<{ label: string; var: string }> = [
   { label: "Background",    var: "--theme-bg"         },
@@ -41,7 +42,6 @@ const DENSITY_OPTIONS = [
   { id: "roomy",   label: "Roomy",   icon: "▦" },
 ];
 
-// ── subcomponents ─────────────────────────────────────────────────────────────
 
 const PresetCard: React.FC<{
   preset: ThemePreset;
@@ -93,13 +93,40 @@ type Tab = "presets" | "colors" | "appearance" | "settings";
 
 
 const SVG_SIZE_OPTIONS: Array<{ bytes: number; label: string }> = [
-  { bytes: 512_000,     label: "500 KB" },
-  { bytes: 1_048_576,   label: "1 MB"   },
-  { bytes: 2_097_152,   label: "2 MB"   },
-  { bytes: 4_194_304,   label: "4 MB"   },
-  { bytes: 8_388_608,   label: "8 MB"   },
-  { bytes: 10_485_760,  label: "10 MB"  },
+  { bytes:    512_000,     label: "500 KB"  },
+  { bytes:  1_048_576,     label: "1 MB"    },
+  { bytes:  2_097_152,     label: "2 MB"    },
+  { bytes:  4_194_304,     label: "4 MB"    },
+  { bytes:  8_388_608,     label: "8 MB"    },
+  { bytes: 10_485_760,     label: "10 MB"   },
+  { bytes: 20_971_520,     label: "20 MB"   },
+  { bytes: 52_428_800,     label: "50 MB"   },
+  { bytes: 104_857_600,    label: "100 MB"  },
+  { bytes: 209_715_200,    label: "200 MB"  },
 ];
+
+// A single compact row: label + help tooltip on the left, control on the right.
+
+const SettingRow: React.FC<{
+  label: string;
+  help:  string;
+  children: React.ReactNode;
+}> = ({ label, help, children }) => (
+  <div className="flex items-center justify-between gap-3 py-1.5">
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="text-[11px] font-bold text-[var(--theme-text)] truncate">{label}</span>
+      <Tooltip content={help} position="right" multiline>
+        <span
+          className="flex-shrink-0 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black cursor-help select-none"
+          style={{ background: "var(--theme-border)", color: "var(--theme-text-muted)" }}
+        >
+          ?
+        </span>
+      </Tooltip>
+    </div>
+    <div className="flex-shrink-0">{children}</div>
+  </div>
+);
 
 const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
   const { theme, setTheme, saveTheme, isSaving: isSavingTheme } = useTheme();
@@ -150,7 +177,6 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
     </div>
   );
 
-  // ── Tab: Colors ───────────────────────────────────────────────────────────
 
   const ColorsTab = () => (
     <div className="p-3 flex flex-col gap-2">
@@ -180,7 +206,6 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
     </div>
   );
 
-  // ── Tab: Settings ─────────────────────────────────────────────────────────
 
   const SettingsTab = () => (
     <div className="p-3 flex flex-col gap-5">
@@ -216,47 +241,67 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
       </section>
 
-      {/* SVG inline preview size */}
+      {/* Application behaviour */}
       <section>
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          SVG Inline Preview Limit
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
+          Application
         </h3>
-        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
-          Maximum SVG file size rendered inline. Files above this threshold show a
-          placeholder. Palette-based conversion produces compact output even for large
-          source images — bump this up if your converted SVGs exceed 2 MB.
-        </p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {SVG_SIZE_OPTIONS.map(({ bytes, label }) => (
-            <button
-              key={bytes}
-              onClick={() => setSetting({ svgPreviewMaxBytes: bytes })}
-              className={`
-                flex items-center justify-center py-2 px-1 rounded-lg border-2 text-[10px] font-black
-                uppercase tracking-wider transition-all
-                ${
-                  settings.svgPreviewMaxBytes === bytes
-                    ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"
-                    : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50"
-                }
-              `}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col divide-y divide-[var(--theme-border)]">
+          <SettingRow
+            label="Close to Systray"
+            help="Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully."
+          >
+            <Toggle
+              checked={settings.closeToSystray}
+              onChange={(v) => setSetting({ closeToSystray: v })}
+              size="sm"
+            />
+          </SettingRow>
+          <SettingRow
+            label="Auto-Update"
+            help="Check for updates on startup and offer to install them automatically."
+          >
+            <Toggle
+              checked={settings.autoUpdate}
+              onChange={(v) => setSetting({ autoUpdate: v })}
+              size="sm"
+            />
+          </SettingRow>
         </div>
-        <p className="text-[9px] text-[var(--theme-text-muted)] mt-2 text-center">
-          Current limit: <span className="font-bold text-[var(--theme-text)]">
-            {SVG_SIZE_OPTIONS.find(o => o.bytes === settings.svgPreviewMaxBytes)?.label
-              ?? `${(settings.svgPreviewMaxBytes / 1_048_576).toFixed(1)} MB`}
-          </span>
-        </p>
+      </section>
+
+      {/* Display */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
+          Display
+        </h3>
+        <div className="flex flex-col divide-y divide-[var(--theme-border)]">
+          <SettingRow
+            label="SVG Inline Preview Limit"
+            help="Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB."
+          >
+            <select
+              value={settings.svgPreviewMaxBytes}
+              onChange={(e) => setSetting({ svgPreviewMaxBytes: Number(e.target.value) })}
+              className="text-[10px] font-bold px-2 py-1 focus:outline-none cursor-pointer"
+              style={{
+                background:   "var(--theme-bg)",
+                color:        "var(--theme-text)",
+                border:       "1px solid var(--theme-border)",
+                borderRadius: "var(--theme-radius-sm, 4px)",
+              }}
+            >
+              {SVG_SIZE_OPTIONS.map(({ bytes, label }) => (
+                <option key={bytes} value={bytes}>{label}</option>
+              ))}
+            </select>
+          </SettingRow>
+        </div>
       </section>
 
     </div>
   );
 
-  // ── Tab: Appearance ───────────────────────────────────────────────────────
 
   const AppearanceTab = () => (
     <div className="p-3 flex flex-col gap-5">
@@ -350,7 +395,6 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
     </div>
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     /* Backdrop */
