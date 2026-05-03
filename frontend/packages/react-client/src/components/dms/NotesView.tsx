@@ -1,21 +1,18 @@
-// components/dms/NotesView.tsx ─────────────────────────────────────────────────
-// Two-panel notes editor shown when the FileBrowser navigates into .notes/.
-//
-// Left pane  (~240 px): tree view — root .md files + collapsible Collection groups.
-// Right pane (flex-1):  textarea (edit) + live markdown preview, side-by-side.
-//
-// Collections = one-level subdirectories inside .notes/.  Each subdir is a
-// "Collection" (also called "Album") that groups related notes.
-//
-// Features:
-//   • Auto-save with 600 ms debounce (stale-closure-safe via refs)
-//   • Create note: inline form with optional Collection picker
-//   • Create collection / album: inline form via folder icon
-//   • Delete note / collection: inline confirm (WKWebView has no window.confirm)
-//   • Cascade-delete collection: deletes all inner notes, then the dir
-//   • Markdown renderer: headings, lists, tasks, **bold**, *italic*, `code`,
-//     fenced code/ASCII art blocks (```ascii), standalone images ![alt](path)
-// ──────────────────────────────────────────────────────────────────────────────
+/**
+ * @file NotesView.tsx
+ * @brief Two-panel notes editor rendered when the FileBrowser navigates into .notes/.
+ *
+ * Left pane (~240 px) — root .md files + collapsible Collection groups.
+ * Right pane (flex-1) — textarea editor with live markdown preview.
+ *
+ * Collections are one-level subdirectories inside .notes/ that group related notes.
+ *
+ * @remarks
+ * - Auto-save with 600 ms debounce, stale-closure-safe via refs
+ * - Create note / collection via inline forms; delete with inline confirm
+ * - Cascade-delete removes all notes inside a collection before the directory
+ * - Markdown renderer: headings, tasks, bold/italic, code, ASCII art, images
+ */
 
 import React, {
   useCallback,
@@ -30,14 +27,14 @@ import type { FsEntry } from "../../services/dms-service";
 import { useDms } from "../../store/dms-store";
 import Icon from "../Icon";
 
-// ── Props ──────────────────────────────────────────────────────────────────────
+/** @section Props */
 
 export interface NotesViewProps {
   /** Absolute path to the .notes folder, e.g. "/home/user/zone/.notes" */
   notesDir: string;
 }
 
-// ── Internal types ─────────────────────────────────────────────────────────────
+/** @section Internal types */
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -47,7 +44,7 @@ interface CollectionGroup {
   notes: FsEntry[];
 }
 
-// ── Markdown renderer ──────────────────────────────────────────────────────────
+/** @section Markdown renderer */
 
 /** Escape HTML special chars. */
 function escapeHtml(s: string): string {
@@ -215,7 +212,7 @@ function renderMarkdown(md: string): string {
   return out.join("\n");
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+/** @section Helpers */
 
 /**
  * Convert a human title into a safe ASCII filename slug.
@@ -252,12 +249,12 @@ function fmtDate(ms: number | undefined): string {
   });
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
+/** @section Component */
 
 const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const { state: storeState, dispatch: storeDispatch } = useDms();
 
-  // ── State ─────────────────────────────────────────────────────────────────────
+  /** @section State */
   const [rootNotes,    setRootNotes]    = useState<FsEntry[]>([]);
   const [collections,  setCollections]  = useState<CollectionGroup[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -268,23 +265,19 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const [saveStatus,   setSaveStatus]   = useState<SaveStatus>("idle");
   const [listLoading,  setListLoading]  = useState(false);
 
-  // Collapsed state for collection groups
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
 
-  // New-note inline form
   const [creatingNote,      setCreatingNote]      = useState(false);
   const [newNoteTitle,      setNewNoteTitle]       = useState("");
   const [newNoteCollection, setNewNoteCollection] = useState<string>("");
 
-  // New-collection inline form
   const [creatingCollection, setCreatingCollection] = useState(false);
   const [newCollectionName,  setNewCollectionName]  = useState("");
 
-  // Delete confirmations
   const [confirmDeleteNote, setConfirmDeleteNote] = useState<string | null>(null);
   const [confirmDeleteCol,  setConfirmDeleteCol]  = useState<string | null>(null);
 
-  // ── Refs ──────────────────────────────────────────────────────────────────────
+  /** @section Refs */
   const contentRef      = useRef<string>("");
   const selectedPathRef = useRef<string | null>(null);
   // saveTargetRef tracks which path the *current content* belongs to.
@@ -297,7 +290,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   contentRef.current      = content;
   selectedPathRef.current = selectedPath;
 
-  // ── Load notes (two-level scan) ───────────────────────────────────────────────
+  /** @section Load notes */
 
   const loadNotes = useCallback(async () => {
     setListLoading(true);
@@ -332,9 +325,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 
   useEffect(() => { loadNotes(); }, [loadNotes]);
 
-  // Auto-select from search navigation
-  // When the store's viewerPath is set to a path inside this .notes folder
-  // (i.e., the user clicked a note in search results), queue a pending auto-select.
+  /** @section Auto-select from search navigation */
   useEffect(() => {
     const vp = storeState.viewerPath;
     if (vp && vp !== selectedPath && vp.startsWith(notesDir + "/")) {
@@ -356,19 +347,27 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     }
   }, [pendingAutoSelect, rootNotes, collections]);
 
-  // Store sync
+  /** @section Store sync */
 
   useEffect(() => {
     storeDispatch({ type: "SELECT_FILE", path: selectedPath });
   }, [selectedPath, storeDispatch]);
 
   useEffect(() => {
+    // Capture any search-navigation intent (viewerPath set by SearchResults)
+    // before the SELECT_FILE(null) clears it.  storeState is captured from
+    // the outer scope at mount-render time, so this always reflects the
+    // value that was current when NotesView first painted.
+    const vp = storeState.viewerPath;
+    if (vp && vp.startsWith(notesDir + "/")) {
+      setPendingAutoSelect(vp);
+    }
     storeDispatch({ type: "SELECT_FILE", path: null });
     return () => { storeDispatch({ type: "SELECT_FILE", path: null }); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load content when selection changes
+  /** @section Load content on selection change */
 
   useEffect(() => {
     if (!selectedPath) {
@@ -402,7 +401,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     return () => { cancelled = true; };
   }, [selectedPath]);
 
-  // Debounced auto-save
+  /** @section Debounced auto-save */
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -421,7 +420,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [scheduleSave]
   );
 
-  // Create note
+  /** @section Create note */
 
   const createNote = useCallback(
     async (title: string, collection: string) => {
@@ -455,7 +454,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     if (title) await createNote(title, newNoteCollection);
   }, [newNoteTitle, newNoteCollection, createNote]);
 
-  // Create collection
+  /** @section Create collection */
 
   const createCollection = useCallback(async () => {
     const name = newCollectionName.trim();
@@ -466,7 +465,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     await loadNotes();
   }, [newCollectionName, notesDir, loadNotes]);
 
-  //  Delete note
+  /** @section Delete note */
 
   const deleteNote = useCallback(
     async (path: string) => {
@@ -482,7 +481,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [selectedPath, loadNotes]
   );
 
-  // Delete collection (cascade delete all notes, then dir)
+  /** @section Delete collection */
 
   const deleteCollection = useCallback(
     async (group: CollectionGroup) => {
@@ -499,7 +498,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [selectedPath, loadNotes]
   );
 
-  // Toggle collection collapsed
+  /** @section Toggle collection collapsed */
 
   const toggleCollapse = useCallback((name: string) => {
     setCollapsedCols((prev) => {
@@ -509,12 +508,12 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     });
   }, []);
 
-  // Derived
+  /** @section Derived */
 
   const preview = useMemo(() => renderMarkdown(content), [content]);
   const allCollectionNames = collections.map((c) => c.name);
 
-  // Render helper: one note row
+  /** @section Render helper: note row */
 
   const renderNoteRow = (note: FsEntry, indent: boolean) => {
     const isSelected = note.path === selectedPath;
@@ -583,12 +582,12 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     );
   };
 
-  // Render
+  /** @section Render */
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--theme-bg)]">
 
-      {/* Left pane ══════════════════════════════════════════════════════════ */}
+      {/* Left pane */}
       <div
         className="flex flex-col shrink-0 border-r border-[var(--theme-border)] bg-[var(--theme-surface)]"
         style={{ width: 240 }}
@@ -755,7 +754,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
         </div>
       </div>
 
-      {/* ══ Right pane — editor + preview ══════════════════════════════════════ */}
+      {/* Right pane — editor + preview */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
         {selectedPath == null ? (
           <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8">

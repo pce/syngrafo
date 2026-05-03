@@ -177,12 +177,12 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         {
             std::lock_guard lk{dms.db_mutex};
             try {
-                (void)dms.active_db().insert_into("dms_documents")
+                discard(dms.active_db().insert_into("dms_documents")
                     .value("path",path_str).value("filename",p.filename().string())
                     .value("extension",ext).value("size_bytes",fsize)
                     .value("mtime",mtime).value("mime_type",mime).value("kind",kind)
                     .value("indexed_at",int64_t{0}).value("text_hash",std::string{""})
-                    .value("snippet",std::string{""}).execute();
+                    .value("snippet",std::string{""}).execute());
                 newly=true;
             } catch (...) {}
         }
@@ -298,7 +298,7 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
                     else
                         fs::copy_file(src,tgt,fs::copy_options::overwrite_existing,ec);
                     if (!ec)
-                        fs::is_directory(tgt,ec)?(void)fs::remove_all(src,ec):(void)fs::remove(src,ec);
+                        fs::is_directory(tgt,ec)?discard(fs::remove_all(src,ec)):discard(fs::remove(src,ec));
                 }
                 if(ec){errors.push_back(std::format("move '{}': {}",ss,ec.message()));ec.clear();continue;}
                 ++moved;
@@ -347,13 +347,13 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         try {
             const auto now = pce::db::now_unix();
             std::lock_guard lk{dms.db_mutex};
-            (void)dms.db
+            discard(dms.db
                 .insert_into("app_preferences")
                 .value("key",        key)
                 .value("value",      value)
                 .value("updated_at", now)
                 .on_conflict_replace()
-                .execute();
+                .execute());
         } catch (const std::exception& e) {
             return DMSHandle::err_str(std::format("save_preference: {}", e.what()));
         }

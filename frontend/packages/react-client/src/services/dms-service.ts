@@ -1,3 +1,4 @@
+
 //
 // Document Management System — saucer expose() bindings.
 //
@@ -171,6 +172,26 @@ export interface BookmarkResolveResult {
   exists:    boolean;
   zone_name: string;
   target:    string;
+}
+
+
+
+
+/** Disk-usage figures for one filesystem path (volume). */
+export interface DiskUsageInfo {
+  path:       string;
+  capacity:   number;   // bytes
+  free:       number;   // bytes (including reserved blocks)
+  available:  number;   // bytes usable by the process
+  used:       number;   // capacity − free
+  usedRatio:  number;   // 0.0 – 1.0
+}
+
+/** Zone disk-usage report returned by dms_zone_disk_usage. */
+export interface ZoneDiskUsage {
+  zone:     string;
+  in_path:  DiskUsageInfo;
+  out_path?: DiskUsageInfo;   // only present when out_path is on a different volume
 }
 
 
@@ -832,6 +853,36 @@ export const dms = {
       target: string,
     ): Promise<NlpEnvelope<BookmarkResolveResult>> => {
       return call<BookmarkResolveResult>(binding("dms_bookmark_resolve"), zoneName, target);
+    },
+  },
+
+  /** Zone-level utilities */
+  zone: {
+    /**
+     * Query disk usage for the in_path (and out_path if on a different volume)
+     * of the given zone.  Uses `std::filesystem::space` — works for regular
+     * directories, mounted volumes (`/Volumes/…`), and cross-platform.
+     */
+    diskUsage: async (zoneName: string): Promise<NlpEnvelope<ZoneDiskUsage>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await call<any>(binding("dms_zone_disk_usage"), zoneName);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      const mapInfo = (raw: any): DiskUsageInfo => ({
+        path:      String(raw.path      ?? ""),
+        capacity:  Number(raw.capacity  ?? 0),
+        free:      Number(raw.free      ?? 0),
+        available: Number(raw.available ?? 0),
+        used:      Number(raw.used      ?? 0),
+        usedRatio: Number(raw.used_ratio ?? 0),
+      });
+      return {
+        ok:   true,
+        data: {
+          zone:     String(res.data.zone ?? zoneName),
+          in_path:  mapInfo(res.data.in_path),
+          out_path: res.data.out_path ? mapInfo(res.data.out_path) : undefined,
+        },
+      };
     },
   },
 };

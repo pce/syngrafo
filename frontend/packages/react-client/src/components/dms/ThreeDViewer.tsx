@@ -1,12 +1,12 @@
 /**
  * ThreeDViewer.tsx — Three.js-powered 3D model and point-cloud preview.
  *
- * Supported formats
- * ─────────────────
- * Mesh:           PLY, OBJ (+MTL), GLTF, GLB, STL
- * Point-cloud:    XYZ (ASCII), PCD (ASCII/binary via PCDLoader)
- * Gaussian Splat: .splat (antimatter15 compact binary, 32 bytes/splat)
- * Placeholder:    .spz  (compressed Gaussian Splat — decoder not bundled)
+ * Supported formats:
+ *
+ * Mesh            - PLY, OBJ (+MTL), GLTF, GLB, STL
+ * Point-cloud     - XYZ (ASCII), PCD (ASCII/binary via PCDLoader)
+ * Gaussian Splat  - .splat (antimatter15 compact binary, 32 bytes/splat)
+ * Placeholder     - .spz  (compressed Gaussian Splat — decoder not bundled)
  *
  * Controls toolbar: wireframe · grid · auto-rotate · reset · point-size
  *
@@ -28,8 +28,7 @@ import { STLLoader }  from "three/examples/jsm/loaders/STLLoader.js";
 import { PCDLoader }  from "three/examples/jsm/loaders/PCDLoader.js";
 import Icon from "../Icon";
 
-// ── Format helpers (NOT re-exporting is3DFile — use dms-service.ts) ──────────
-
+// Format helpers (NOT re-exporting is3DFile — use dms-service.ts)
 export type ModelFormat =
   | "ply" | "obj" | "gltf" | "glb" | "stl"
   | "splat" | "spz" | "xyz" | "pcd";
@@ -43,8 +42,7 @@ export function get3DFormat(path: string): ModelFormat | null {
   return map[ext] ?? null;
 }
 
-// ── Internal helpers ─────────────────────────────────────────────────────────
-
+// Internal helpers
 interface Props { filePath: string; className?: string; }
 type RenderKind = "mesh" | "points" | "unknown";
 
@@ -115,8 +113,7 @@ function parseXyzToPoints(text: string): THREE.Points {
   }));
 }
 
-// ── Viewer controls state ─────────────────────────────────────────────────────
-
+// Viewer controls state
 interface ViewerControls {
   wireframe: boolean; grid: boolean; autoRotate: boolean;
   pointSize: number;  renderKind: RenderKind;
@@ -126,7 +123,7 @@ const INIT: ViewerControls = {
   pointSize: 0.02,  renderKind: "unknown",
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// Component
 
 const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -205,7 +202,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
     });
   }, [vc.pointSize]);
 
-  // ── Scene setup + model load ──────────────────────────────────────────────
+  // Scene setup + model load
   useEffect(() => {
     mountedRef.current = true;
     const container = containerRef.current;
@@ -415,7 +412,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
   return (
     <div className={`relative flex flex-col w-full h-full ${className}`}>
 
-      {/* ── Toolbar ────────────────────────────────────────────────────────── */}
+      {/* ─── [Toolbar] ────────────────────────────────────────────────────────── */}
       {!loading && !error && (
         <div className="flex items-center gap-1 px-2 py-1.5 shrink-0 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]">
           {vc.renderKind === "mesh" && (
@@ -466,10 +463,8 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
         </div>
       )}
 
-      {/* ── Canvas ─────────────────────────────────────────────────────────── */}
+      {/* ── [Canvas] ─────────────────────────────────────────────────────────── */}
       <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden" style={{ minHeight: 320 }} />
-
-      {/* ── Loading overlay ─────────────────────────────────────────────────── */}
       {loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--theme-bg)]/85 rounded-lg">
           <span className="w-8 h-8 border-2 border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)] rounded-full animate-spin" />
@@ -478,8 +473,6 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
           </span>
         </div>
       )}
-
-      {/* ── Error overlay ───────────────────────────────────────────────────── */}
       {error && !loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 bg-[var(--theme-bg)]/92 rounded-lg">
           <Icon name="warning" size="lg" className="opacity-40 text-[var(--theme-danger)]" />

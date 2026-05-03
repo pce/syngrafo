@@ -1,3 +1,10 @@
+/**
+ * @file ocr_addon_apple.mm
+ * @brief Apple-platform implementations: OCR backend and OS-specific services.
+ *
+ * - `pce::nlp::backend` — Apple Vision OCR, compiled when `NLP_APPLE_VISION` is defined.
+ * - `pce::nlp::platform` — macOS OS services (`reveal_in_finder`), always compiled on Apple.
+ */
 #import <Foundation/Foundation.h>
 #import <Vision/Vision.h>
 #import <AppKit/AppKit.h>
@@ -7,15 +14,10 @@
 #include <vector>
 #include "platform_services.hh"
 
-namespace pce::nlp::platform {
-
-// OCR backend is selected at compile time via NLP_APPLE_VISION / NLP_WITH_TESSERACT.
-// No runtime dispatch — extract_text() and extract_text_from_pdf() are provided
-// either here (NLP_APPLE_VISION) or by ocr_addon_tesseract.cpp (NLP_WITH_TESSERACT).
-
 #ifdef NLP_APPLE_VISION
 
-// ── extract_text (single image) — Apple Vision ───────────────────────────────
+namespace pce::nlp::backend {
+
 std::string extract_text(const std::string& input) {
     @autoreleasepool {
         NSString* path = [NSString stringWithUTF8String:input.c_str()];
@@ -59,7 +61,7 @@ std::string extract_text(const std::string& input) {
     }
 }
 
-// ── extract_text_from_pdf (PDFKit + Vision AI) ───────────────────────────────
+// extract_text_from_pdf (PDFKit + Vision AI)
 // 1. Try native PDFKit text extraction (fast, works for digital PDFs).
 // 2. If text is sparse (scanned PDF), render each page at 150 DPI and OCR with Vision AI.
 std::string extract_text_from_pdf(const std::string& input_path) {
@@ -174,9 +176,13 @@ std::string extract_text_from_pdf(const std::string& input_path) {
 
 #endif // NLP_APPLE_VISION
 
-// ── reveal_in_finder ─────────────────────────────────────────────────────────
-// Uses NSWorkspace to select (highlight) the file in a Finder window.
-// This is a pure OS API call — no child process is spawned.
+} // namespace pce::nlp::backend
+
+// ─── OS-specific platform services ───────────────────────────────────────────
+
+namespace pce::nlp::platform {
+
+/** Reveal the file in a Finder window using NSWorkspace. */
 bool reveal_in_finder(const std::string& path) {
     @autoreleasepool {
         NSString* nsPath = [NSString stringWithUTF8String:path.c_str()];

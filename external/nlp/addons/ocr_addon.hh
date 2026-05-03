@@ -1,28 +1,28 @@
-//
-// Created by Patrick Engel on 03.04.26.
-//
-
-#ifndef OCR_ADDON_H
-#define OCR_ADDON_H
+/**
+ * @file ocr_addon.hh
+ * @brief OCRAddon — thin NLP addon wrapper over the compile-time OCR backend.
+ *
+ * Delegates to `pce::nlp::backend::extract_text` which is resolved at link time
+ * to either Apple Vision (`ocr_addon_apple.mm`) or Tesseract (`ocr_addon_tesseract.cpp`).
+ */
 
 #pragma once
 
 #include "../nlp_addon_system.hh"
 #include "platform_services.hh"
-#include <string>
-#include <unordered_map>
 #include <functional>
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace pce::nlp {
 
 /**
  * @class OCRAddon
- * @brief Optical Character Recognition engine for extracting text from images.
+ * @brief Optical Character Recognition addon; backend selected at compile time.
  *
- * On Apple platforms: delegates to Apple Vision framework (ocr_addon_apple.mm).
- * On Linux/Windows:   delegates to Tesseract (ocr_addon_tesseract.cpp) when
- *                     available; returns an informative error string otherwise.
+ * - Apple default: Apple Vision (`NLP_APPLE_VISION`)
+ * - Cross-platform / Apple fallback: libtesseract (`NLP_WITH_TESSERACT`)
  */
 class OCRAddon : public NLPAddon<OCRAddon> {
 public:
@@ -32,25 +32,14 @@ public:
     const std::string& name_impl()    const { return name_; }
     const std::string& version_impl() const { return version_; }
 
-    bool init_impl() {
-        ready_ = true;
-        return true;
-    }
-
+    bool init_impl()        { ready_ = true; return true; }
     bool is_ready_impl() const { return ready_; }
+    bool initialize()        { return init_impl(); }
 
-    /**
-     * @brief Extract text from an image file.
-     *
-     * Calls the platform-specific implementation (Apple Vision / Tesseract).
-     * Returns the extracted UTF-8 text, or a "[OCR error: …]" string on failure.
-     */
     std::string extract_text(const std::string& input) {
         if (!ready_) return "";
-        return platform::extract_text(input);
+        return backend::extract_text(input);
     }
-
-    bool initialize() { return init_impl(); }
 
     AddonResponse process_impl(const std::string& input,
                                const std::unordered_map<std::string, std::string>& options,
@@ -63,7 +52,6 @@ public:
             const bool ok    = !text.empty() && !text.starts_with("[OCR error");
             return {text, ok, ok ? "" : text, {}};
         }
-
         return {"", false, "Unknown OCR method", {}};
     }
 
@@ -71,8 +59,7 @@ public:
                              std::function<void(const std::string& chunk, bool is_final)> callback,
                              const std::unordered_map<std::string, std::string>& options,
                              std::shared_ptr<AddonContext> context = nullptr) {
-        AddonResponse resp = process_impl(input, options, context);
-        callback(resp.output, true);
+        callback(process_impl(input, options, context).output, true);
     }
 
 private:
@@ -82,6 +69,4 @@ private:
 };
 
 } // namespace pce::nlp
-
-#endif // OCR_ADDON_H
 

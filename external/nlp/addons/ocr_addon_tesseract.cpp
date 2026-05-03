@@ -1,22 +1,22 @@
 /**
- * ocr_addon_tesseract.cpp — OCR via libtesseract.
+ * @file ocr_addon_tesseract.cpp
+ * @brief OCR implementation via libtesseract.
  *
- * Compiled when NLP_WITH_TESSERACT is defined (non-Apple by default;
- * Apple with NLP_APPLE_VISION=OFF).
- * Provides extract_text() and extract_text_from_pdf() for the platform layer.
+ * Compiled when @c NLP_WITH_TESSERACT is defined (non-Apple default;
+ * Apple with @c NLP_APPLE_VISION=OFF).
  *
- * Supported languages by default (if tessdata files are present):
- *   eng — English
- *   deu — German  (apt: tesseract-ocr-deu  | brew: tesseract-lang)
- *   ell — Greek   (apt: tesseract-ocr-ell)
+ * Language support is fully dynamic: every @c .traineddata file found in the
+ * resolved tessdata directory is activated automatically.  No languages are
+ * hardcoded.  Install additional packs via your package manager and they will
+ * be picked up on the next application start.
  *
  * tessdata lookup order:
- *   1. TESSDATA_PREFIX environment variable
- *   2. <exe_dir>/../share/tessdata          (bundled layout)
- *   3. <source_dir>/../../../data/tessdata  (dev layout)
- *   4. /usr/share/tesseract-ocr/5/tessdata  (Ubuntu 22+)
- *   5. /usr/share/tessdata                  (older Linux)
- *   6. nullptr (let Tesseract use its compiled-in default)
+ *   1. @c TESSDATA_PREFIX environment variable
+ *   2. @c <source_dir>/../../../data/tessdata  (dev layout, relative to __FILE__)
+ *   3. @c /usr/share/tesseract-ocr/5/tessdata  (Ubuntu 22+)
+ *   4. @c /usr/share/tesseract-ocr/4/tessdata
+ *   5. @c /usr/share/tessdata / @c /usr/local/share/tessdata
+ *   6. @c nullptr — Tesseract uses its compiled-in default
  */
 
 #include "platform_services.hh"
@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-namespace pce::nlp::platform {
+namespace pce::nlp::backend {
 
 namespace {
 
@@ -147,45 +147,43 @@ tesseract::TessBaseAPI* get_tess() {
     return nullptr;
 }
 
-}  // namespace
+    /// Run Tesseract on a single image/PDF path; returns raw UTF-8 text.
+    std::string run_tesseract(const std::string& input_path) {
+        tesseract::TessBaseAPI* tess = get_tess();
+        if (!tess) {
+            return "[OCR error: Tesseract initialisation failed — "
+                   "make sure tessdata files are installed "
+                   "(run: python3 scripts/download_models.py download --models tessdata)]";
+        }
 
-// ── extract_text ──────────────────────────────────────────────────────────────
-std::string extract_text_tesseract(const std::string& input_path) {
-    tesseract::TessBaseAPI* tess = get_tess();
-    if (!tess) {
-        return "[OCR error: Tesseract initialisation failed — "
-               "make sure tessdata files are installed "
-               "(run: python3 scripts/download_models.py download --models tessdata)]";
+        Pix* pix = pixRead(input_path.c_str());
+        if (!pix)
+            return "[OCR error: could not read image " + input_path + "]";
+
+        tess->SetImage(pix);
+        char* raw = tess->GetUTF8Text();
+        std::string result = raw ? raw : "";
+        delete[] raw;
+
+        tess->Clear();
+        pixDestroy(&pix);
+
+        while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+            result.pop_back();
+
+        return result;
     }
 
-    Pix* pix = pixRead(input_path.c_str());
-    if (!pix) {
-        return "[OCR error: could not read image " + input_path + "]";
-    }
-
-    tess->SetImage(pix);
-    char* raw = tess->GetUTF8Text();
-    std::string result = raw ? raw : "";
-    delete[] raw;
-
-    tess->Clear();
-    pixDestroy(&pix);
-
-    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
-        result.pop_back();
-
-    return result;
-}
+}  // anonymous namespace
 
 std::string extract_text(const std::string& input_path) {
-    return extract_text_tesseract(input_path);
+    return run_tesseract(input_path);
 }
 
 std::string extract_text_from_pdf(const std::string& input_path) {
-    // Leptonica pixRead() handles single-page / first-page PDFs when Ghostscript is present.
-    return extract_text_tesseract(input_path);
+    // pixRead() handles single-page PDFs when Ghostscript is present.
+    return run_tesseract(input_path);
 }
 
-
-} // namespace pce::nlp::platform
+} // namespace pce::nlp::backend
 

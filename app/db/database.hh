@@ -12,6 +12,8 @@
 
 #include <sqlite3.h>
 
+#include "../internal/discard.hh"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -810,11 +812,11 @@ inline void apply_migrations(Database& db, std::span<const Migration> migrations
                            m.version, e.what());
             }
         }
-        (void)db.insert_into("schema_migrations")
+        discard(db.insert_into("schema_migrations")
             .value("version",     static_cast<int64_t>(m.version))
             .value("description", std::string{m.description ? m.description : ""})
             .value("applied_at",  now_unix())
-            .execute();
+            .execute());
     }
 }
 

@@ -25,7 +25,6 @@
 
 namespace pce::nlp {
 
-// ============ NLPModel Implementation ============
 
 bool NLPModel::load_from(const std::string& base_path) {
     current_path_ = base_path;
@@ -55,6 +54,13 @@ bool NLPModel::load_from(const std::string& base_path) {
 
     // Load Toxicity Patterns
     success &= load_file_to_vec(current_path_ + "toxic_words.txt", data_.toxic_patterns);
+
+    // ── Domain filter lists — soft-load (missing files are non-fatal) ────────
+    // Lives in data/filters/ to separate corpus-normalisation from linguistics.
+    const std::string filters = current_path_ + "filters/";
+    load_file_to_vec(filters + "web_tokens.txt",      data_.web_tokens);
+    load_file_to_vec(filters + "file_extensions.txt", data_.file_extensions);
+    load_file_to_vec(filters + "repo_tokens.txt",     data_.repo_tokens);
 
     // Sync legacy views for backward compatibility
     en_stopwords_ = data_.stopwords["en"];
@@ -156,7 +162,7 @@ std::string NLPEngine::extract_text_from_image(const std::string& path) {
 
 std::string NLPEngine::extract_text_from_pdf(const std::string& path) {
     if (!has_ocr()) return "";
-    return pce::nlp::platform::extract_text_from_pdf(path);
+    return pce::nlp::backend::extract_text_from_pdf(path);
 }
 
 LanguageProfile NLPEngine::detect_language(const std::string& text) {
@@ -330,15 +336,74 @@ std::vector<std::string> NLPEngine::split_sentences(const std::string& text) {
     return sentences;
 }
 
-std::vector<std::string> NLPEngine::remove_stopwords(const std::vector<std::string>& tokens, const std::string& lang) {
-    if (!model_) return tokens;
-    const auto& stopwords = model_->get_stopwords(lang);
-    std::unordered_set<std::string> stop_set(stopwords.begin(), stopwords.end());
-    std::vector<std::string> filtered;
-    for (const auto& t : tokens) {
-        if (stop_set.find(t) == stop_set.end()) filtered.push_back(t);
+/// Structural filter predicates
+/// These operate on token shape / content alone — no lists, no data files.
+/// Drop tokens that carry residual URL structure after tokenisation.
+/// Stage 0 URL pre-strip (nlp_pipeline.hh) handles full URLs; this is the
+/// safety net for partial forge paths copied as plain text.
+[[nodiscard]] static bool looks_like_url_fragment(const std::string& t) noexcept {
+    // Any token that still contains a dot is a URL, version, or path fragment.
+    if (t.find('.') != std::string::npos) return true;
+    // Git SHA / commit hash: >= 7 hex chars (forge-link expansions produce these).
+    if (t.size() >= 7 &&
+        std::all_of(t.begin(), t.end(),
+            [](unsigned char c){ return std::isxdigit(c); })) return true;
+    return false;
+}
+
+std::vector<std::string> NLPEngine::filter_tokens(
+    const std::vector<std::string>& tokens,
+    const FilterConfig& cfg)
+{
+    //  Build stop set from model data only — no hardcoded fallback
+    std::unordered_set<std::string> stop_set;
+    if (model_) {
+        if (cfg.stopwords) {
+            const auto& sw = model_->get_stopwords(cfg.lang);
+            stop_set.insert(sw.begin(), sw.end());
+        }
+        if (cfg.web) {
+            const auto& web = model_->get_web_tokens();
+            stop_set.insert(web.begin(), web.end());
+        }
+        if (cfg.extensions) {
+            const auto& ext = model_->get_file_extensions();
+            stop_set.insert(ext.begin(), ext.end());
+        }
+        if (cfg.repo) {
+            const auto& repo = model_->get_repo_tokens();
+            stop_set.insert(repo.begin(), repo.end());
+        }
     }
+
+    std::vector<std::string> filtered;
+    filtered.reserve(tokens.size());
+
+    for (const auto& t : tokens) {
+        // Structural filters (pattern logic, zero lists)
+        if (cfg.min_len > 0 && t.size() < static_cast<size_t>(cfg.min_len))
+            continue;
+
+        if (cfg.numeric &&
+            std::all_of(t.begin(), t.end(),
+                [](unsigned char c){ return std::isdigit(c); }))
+            continue;
+
+        if (cfg.url && looks_like_url_fragment(t))
+            continue;
+
+        // Model-file filter
+        if (!stop_set.count(t))
+            filtered.push_back(t);
+    }
+
     return filtered;
+}
+
+std::vector<std::string> NLPEngine::remove_stopwords(const std::vector<std::string>& tokens, const std::string& lang) {
+    // Delegate to the configurable overload with classic defaults.
+    // Repo-token filtering is off by default (prose documents).
+    return filter_tokens(tokens, FilterConfig{.lang = lang});
 }
 
 std::string NLPEngine::normalize(const std::string& text) {
@@ -438,7 +503,7 @@ SummaryResult NLPEngine::summarize(const std::string& text, float ratio,
     std::vector<std::pair<size_t, float>> scores;
     scores.reserve(sentences.size());
 
-    // ── Semantic path: ONNX available ────────────────────────────────────────
+    // Semantic path: ONNX available
     std::shared_ptr<OnnxService> onnx_ptr;
     {
         std::shared_lock lock(engine_mutex_);
@@ -516,7 +581,7 @@ std::map<std::string, float> NLPEngine::calculate_tfidf(const std::string& text,
                                                          const std::string& lang) {
     auto sentences = split_sentences(text);
     auto tokens = tokenize(text);
-    auto filtered = remove_stopwords(tokens, lang);
+    auto filtered = filter_tokens(tokens, FilterConfig{.lang = lang});
     if (filtered.empty()) return {};
 
     std::unordered_map<std::string, int> term_counts;
@@ -880,7 +945,6 @@ ToxicityResult NLPEngine::detect_toxicity(const std::string& text, const std::st
     return res;
 }
 
-// --- Internal Helpers ---
 
 std::string NLPEngine::to_lower(const std::string& str) {
     return unicode::UnicodeUtils::fold_case(str);
@@ -1019,8 +1083,7 @@ json NLPEngine::toxicity_to_json(const ToxicityResult& t) {
     };
 }
 
-// ── ONNX-powered semantic methods ────────────────────────────────────────────
-
+// ONNX-powered semantic methods
 inference::EmbeddingResult NLPEngine::embed(std::string_view text) {
     std::shared_ptr<OnnxService> onnx_ptr;
     {

@@ -3,8 +3,8 @@ import { useDms } from "../../store/dms-store";
 import {
   dms, isImageFile, isTextFile, isSupportedFile, isDocFile,
   isSvgFile, isAudioFile, isArchiveFile, isCssFile, fileKind,
-} from "../../services/dms-service";
-import type { FsEntry } from "../../services/dms-service";
+} from "@/services/dms-service.ts";
+import type { FsEntry } from "@/services/dms-service.ts";
 import Icon from "../Icon";
 import { ImportModal } from "./ImportModal";
 
@@ -12,8 +12,7 @@ type SortBy  = "name" | "size" | "modified" | "kind";
 type SortDir = "asc"  | "desc";
 type ViewMode = "list" | "details" | "grid";
 
-// ── PathBreadcrumb ─────────────────────────────────────────────────────────────
-//
+// PathBreadcrumb
 // Renders the current path as interactive breadcrumb segments.
 // • Click a segment  → navigate to that path
 // • Click a chevron  → open a popup listing sub-directories at that path level
@@ -298,7 +297,6 @@ function fmtSize(bytes?: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// ── LazyImage ────────────────────────────────────────────────────────────────
 // Renders a placeholder until the element scrolls into the viewport, then
 // swaps in the real <img> src.  Uses IntersectionObserver so images that are
 // off-screen never trigger a network request.
@@ -352,7 +350,6 @@ const LazyImage: React.FC<LazyImageProps> = ({ src, alt, className }) => {
   );
 };
 
-// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface FileBrowserProps {
   /** called whenever multi-selection changes (file paths only) */
@@ -363,7 +360,6 @@ interface FileBrowserProps {
   onPathChange?: (path: string) => void;
 }
 
-// ── FileBrowser ───────────────────────────────────────────────────────────────
 
 const FileBrowser: React.FC<FileBrowserProps> = ({
   onSelectionChange,

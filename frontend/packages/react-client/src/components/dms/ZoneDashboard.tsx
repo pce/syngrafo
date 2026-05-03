@@ -12,15 +12,14 @@
 
 import React, { useState, useEffect } from "react";
 import { useDms } from "../../store/dms-store";
-import { dms, type Bookmark } from "../../services/dms-service";
+import { dms, type Bookmark, type DiskUsageInfo } from "@/services/dms-service.ts";
 import Icon from "../Icon";
 import type { IconName } from "../Icon";
 
 // Workaround: cast newly added icon names until TS language server re-indexes Icon.tsx
 const IC = (n: string) => n as IconName;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
+// TODO why helpers, do we relly need help in the Zone?
 const DAYS   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const MONTHS = ["January","February","March","April","May","June",
                 "July","August","September","October","November","December"];
@@ -41,8 +40,7 @@ function greeting(d: Date) {
   return "Good evening";
 }
 
-// ── Widget wrapper ────────────────────────────────────────────────────────────
-
+//  Widget wrappe
 const Widget: React.FC<{
   title?: string;
   icon?: React.ReactNode;
@@ -69,8 +67,7 @@ const Widget: React.FC<{
   </div>
 );
 
-// ── DateTimeWidget ────────────────────────────────────────────────────────────
-
+//  DateTimeWidget
 const DateTimeWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -100,8 +97,7 @@ const DateTimeWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
   );
 };
 
-// ── ZoneInfoWidget ────────────────────────────────────────────────────────────
-
+// ZoneInfoWidget
 const ZoneInfoWidget: React.FC<{
   zone: { name: string; description: string; taxonomy_domain: string; in_path: string; out_path: string };
   onEdit: () => void;
@@ -144,8 +140,7 @@ const ZoneInfoWidget: React.FC<{
   </Widget>
 );
 
-// ── BookmarksWidget ───────────────────────────────────────────────────────────
-
+// BookmarksWidget
 const BookmarksWidget: React.FC<{
   bookmarks: Bookmark[];
   zoneName: string;
@@ -212,8 +207,7 @@ const BookmarksWidget: React.FC<{
   );
 };
 
-// ── StatsWidget ───────────────────────────────────────────────────────────────
-
+// StatsWidget
 const StatsWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
   const [stats, setStats] = useState<{
     total: number; indexed: number; lastIndexed?: number;
@@ -365,8 +359,125 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
   );
 };
 
-// ── ZoneModeBadge  ────────────────────────────────────────────────────────────
 
+/** Format bytes → human-readable string (no library, no rounding surprises). */
+function humanSize(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const i = Math.min(Math.floor(Math.log2(bytes) / 10), units.length - 1);
+  const v = bytes / (1 << (i * 10));
+  return `${i === 0 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
+}
+
+/** SVG donut ring — pure CSS, no chart library. */
+const Donut: React.FC<{
+  ratio: number;       // 0.0 – 1.0
+  size?: number;       // viewBox size (default 80)
+  stroke?: number;     // ring thickness (default 10)
+  color?: string;
+  bg?: string;
+}> = ({ ratio, size = 80, stroke = 10, color = "var(--theme-primary)", bg = "var(--theme-border)" }) => {
+  const r   = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const used = Math.max(0, Math.min(1, ratio)) * circ;
+  const cx  = size / 2;
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+      {/* background track */}
+      <circle cx={cx} cy={cx} r={r} fill="none"
+        stroke={bg} strokeWidth={stroke} />
+      {/* used arc */}
+      <circle cx={cx} cy={cx} r={r} fill="none"
+        stroke={color} strokeWidth={stroke}
+        strokeDasharray={`${used} ${circ}`}
+        strokeLinecap="round"
+        style={{ transition: "stroke-dasharray 0.5s ease" }} />
+    </svg>
+  );
+};
+
+/** Disk-usage row for one path (in_path or out_path). */
+const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label, info }) => {
+  const pct = Math.round(info.usedRatio * 100);
+  // Color gradient: green → amber → red by usage
+  const color =
+    pct < 60 ? "var(--theme-success, #22c55e)"
+    : pct < 80 ? "var(--theme-warning, #f59e0b)"
+    : "var(--theme-danger, #ef4444)";
+
+  return (
+    <div className="flex items-center gap-3">
+      <Donut ratio={info.usedRatio} size={56} stroke={7} color={color} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
+            {label}
+          </span>
+          <span className="text-[10px] font-black tabular-nums"
+            style={{ color }}>{pct}%</span>
+        </div>
+        {/* bar */}
+        <div className="h-1 rounded-full overflow-hidden bg-[var(--theme-border)]">
+          <div
+            className="h-full rounded-full transition-[width] duration-500"
+            style={{ width: `${pct}%`, background: color }}
+          />
+        </div>
+        <div className="flex justify-between mt-1">
+          <span className="text-[9px] text-[var(--theme-text-muted)] font-mono">
+            {humanSize(info.used)} used
+          </span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] font-mono">
+            {humanSize(info.available)} free
+          </span>
+        </div>
+        <p className="text-[8px] text-[var(--theme-text-muted)] font-mono truncate mt-0.5 opacity-60">
+          {info.path}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const DiskUsageWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
+  const [data, setData]     = useState<import("../../services/dms-service").ZoneDiskUsage | null>(null);
+  const [error, setError]   = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!zoneName) return;
+    setLoading(true);
+    setError(null);
+    dms.zone.diskUsage(zoneName).then((r) => {
+      if (r.ok && r.data) setData(r.data);
+      else setError(r.error ?? "Unknown error");
+      setLoading(false);
+    });
+  }, [zoneName]);
+
+  return (
+    <Widget title="Disk Usage" icon={<Icon name={IC("database")} size="xs" />}>
+      {loading ? (
+        <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">Loading…</p>
+      ) : error ? (
+        <p className="text-[10px] text-[var(--theme-danger,#ef4444)]">{error}</p>
+      ) : data ? (
+        <div className="flex flex-col gap-4">
+          <DiskUsageRow label="Input path" info={data.in_path} />
+          {data.out_path && (
+            <DiskUsageRow label="Workspace" info={data.out_path} />
+          )}
+          <p className="text-[8px] text-[var(--theme-text-muted)] opacity-50 leading-tight">
+            Volume capacity: {humanSize(data.in_path.capacity)}
+          </p>
+        </div>
+      ) : null}
+    </Widget>
+  );
+};
+
+//  ZoneModeBadge
 const ZONE_MODE_LABELS: Record<string, { label: string; icon: string }> = {
   "general":              { label: "General",               icon: "layers"  },
   "document-management":  { label: "Document Management",   icon: "document" },
@@ -389,8 +500,7 @@ const ZoneModeBadge: React.FC<{ mode: string }> = ({ mode }) => {
   );
 };
 
-// ── QuickActionsWidget ────────────────────────────────────────────────────────
-
+// QuickActionsWidget
 const QuickActionsWidget: React.FC<{
   onManageBookmarks: () => void;
   onEditZone: () => void;
@@ -519,6 +629,11 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
           {/* Stats */}
           <div className="sm:col-span-1 lg:col-span-1">
             <StatsWidget zoneName={zone.name} />
+          </div>
+
+          {/* Disk Usage */}
+          <div className="sm:col-span-1 lg:col-span-2">
+            <DiskUsageWidget zoneName={zone.name} />
           </div>
 
           {/* Color Palette — spans 2 */}

@@ -139,7 +139,7 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
 
         try {
             std::lock_guard lk{dms.db_mutex};
-            (void)dms.active_db().insert_into("zone_palettes")
+            discard(dms.active_db().insert_into("zone_palettes")
                 .value("id",          p.id)
                 .value("name",        p.name)
                 .value("kind",        std::string{palette_kind_name(p.kind)})
@@ -148,7 +148,7 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
                 .value("created_at",  p.created_at)
                 .value("updated_at",  p.updated_at)
                 .on_conflict_replace()
-                .execute();
+                .execute());
         } catch (const std::exception& e) {
             return DMSHandle::err_str(std::format("DB error: {}", e.what()));
         }
@@ -170,8 +170,8 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
         int64_t changes = 0;
         try {
             std::lock_guard lk{dms.db_mutex};
-            (void)dms.active_db().delete_from("zone_palettes")
-                .where("id = ?", id).execute();
+            discard(dms.active_db().delete_from("zone_palettes")
+                .where("id = ?", id).execute());
             changes = dms.active_db().changes();
         } catch (const std::exception& e) {
             return DMSHandle::err_str(std::format("DB error: {}", e.what()));
@@ -179,9 +179,9 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"ok", true}, {"deleted", changes > 0}});
     });
 
-    // ── dms_get_palette_as_css ────────────────────────────────────────────────
+    // dms_get_palette_as_css
     // Returns a CSS custom-property block for the palette, useful for
-    // injecting brand colors directly into the webview document style.
+    // injecting style colors directly into the webview document style.
     //
     // Example output for a 4-color palette named "acme":
     //   --pal-acme-0: #006aff; --pal-acme-1: #ff6b00; …

@@ -118,6 +118,13 @@ inline void register_nlp_bindings(saucer::smartview& wv, DMSHandle& dms,
         if (!r) return DMSHandle::err_str(r.error());
         return DMSHandle::ok_str(*r);
     });
+
+    // ── dms_zone_disk_usage ───────────────────────────────────────────────────
+    wv.expose("dms_zone_disk_usage", [&dms](string zone_name) -> string {
+        const auto r = dms.zone_disk_usage(zone_name);
+        if (!r) return DMSHandle::err_str(r.error());
+        return DMSHandle::ok_str(*r);
+    });
 }
 
 } // namespace pce::dms

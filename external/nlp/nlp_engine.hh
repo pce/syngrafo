@@ -138,7 +138,34 @@ struct DocumentStructure {
   float estimated_complexity;
 };
 
-// ============ Data Model ============
+
+/**
+ * @struct FilterConfig
+ * @brief  Declarative configuration for the token filter pipeline.
+ *
+ * Every flag defaults to the safe "on" state so existing callers that use
+ * remove_stopwords() / filter_tokens() without a config get the same
+ * behaviour as before.  Callers can opt out of individual stages:
+ *
+ * @code{.cpp}
+ *   // Prose document — skip forge path-segment filter.
+ *   FilterConfig prose{.lang = "de", .repo = false};
+ *
+ *   // Term-frequency analysis — keep stopwords, still drop URLs.
+ *   FilterConfig tfidf{.stopwords = false, .url = true, .numeric = true};
+ * @endcode
+ */
+struct FilterConfig {
+    bool stopwords  = true;  ///< Linguistic stopwords from data/stopwords_<lang>.txt
+    bool web        = true;  ///< Protocol names + unambiguous TLDs (web_tokens.txt)
+    bool extensions = true;  ///< File extension tokens (file_extensions.txt)
+    bool repo       = false; ///< Forge/VCS path segments (repo_tokens.txt) — off by default
+    bool numeric    = true;  ///< Drop purely-digit tokens (structural)
+    bool url        = true;  ///< Drop tokens with residual dots / SHA hex (structural)
+    int  min_len    = 2;     ///< Minimum token length; 0 disables the check
+    std::string lang = "en"; ///< Language code used for stopword selection
+};
+
 
 /**
  * @class NLPModel
@@ -212,6 +239,30 @@ public:
    */
   const std::vector<std::string>& get_toxic_patterns() const { return toxic_patterns_; }
 
+  // ── Domain filter accessors (data/filters/*.txt) ─────────────────────────
+
+  /**
+   * @brief URL protocol names and unambiguous multi-char TLDs.
+   *
+   * Loaded from data/filters/web_tokens.txt.
+   * 2-letter country codes are intentionally excluded — they collide with
+   * linguistic words and are handled structurally via URL pre-strip (Stage 0).
+   */
+  const std::vector<std::string>& get_web_tokens()      const { return data_.web_tokens;      }
+
+  /**
+   * @brief File extension tokens (html, json, png, gz …).
+   * Loaded from data/filters/file_extensions.txt.
+   */
+  const std::vector<std::string>& get_file_extensions() const { return data_.file_extensions; }
+
+  /**
+   * @brief Forge/VCS URL path segment tokens (blob, tree, releases …).
+   * Loaded from data/filters/repo_tokens.txt.
+   * Applied only when FilterConfig::repo == true (off by default).
+   */
+  const std::vector<std::string>& get_repo_tokens()     const { return data_.repo_tokens;     }
+
   /**
    * @brief Checks if the model has been successfully loaded.
    */
@@ -227,11 +278,17 @@ public:
    * @brief Internal storage for all linguistic resources.
    */
   struct DataModel {
-    std::map<std::string, std::vector<std::string>> stopwords;    ///< Map of language codes to lists of stop words.
-    std::map<std::string, std::vector<std::string>> dictionaries;  ///< Map of language codes to full dictionary word lists.
-    std::map<std::string, float> positive_lexicon;                ///< Map of words to positive sentiment scores.
-    std::map<std::string, float> negative_lexicon;                ///< Map of words to negative sentiment scores.
-    std::vector<std::string> toxic_patterns;                      ///< List of patterns/words used for toxicity detection.
+    // Linguistic resources (per language)
+    std::map<std::string, std::vector<std::string>> stopwords;    ///< Language code → stopword list (data/stopwords_<lang>.txt)
+    std::map<std::string, std::vector<std::string>> dictionaries; ///< Language code → dictionary words (data/dictionary_<lang>.txt)
+    std::map<std::string, float> positive_lexicon;                ///< Word → positive sentiment score
+    std::map<std::string, float> negative_lexicon;                ///< Word → negative sentiment score
+    std::vector<std::string> toxic_patterns;                      ///< Toxicity detection patterns
+
+    // ── Domain filter lists (data/filters/*.txt)
+    std::vector<std::string> web_tokens;       ///< URL protocols + unambiguous TLDs  (web_tokens.txt)
+    std::vector<std::string> file_extensions;  ///< File extension tokens             (file_extensions.txt)
+    std::vector<std::string> repo_tokens;      ///< Forge/VCS URL path segments       (repo_tokens.txt)
   };
 
   const DataModel& get_data() const { return data_; }
@@ -404,8 +461,29 @@ public:
    * @brief Removes common stop words from a token stream.
    * @param tokens Vector of tokens.
    * @param lang Language code.
+   *
+   * @note Delegates to filter_tokens() with default FilterConfig{.lang = lang}.
+   *       Prefer filter_tokens() directly for new call-sites.
    */
   std::vector<std::string> remove_stopwords(const std::vector<std::string>& tokens, const std::string& lang = "en");
+
+  /**
+   * @brief Filter a token list using a declarative FilterConfig.
+   *
+   * Three-layer pipeline:
+   *   1. Structural filters (pattern logic — min length, pure numeric, URL dot)
+   *   2. Model-file filters (stopwords + domain lists loaded from data/)
+   *
+   * All behaviour is driven by model files and config flags.
+   * No hardcoded token lists exist in C++.
+   *
+   * @param tokens  Pre-tokenised, case-folded token list.
+   * @param cfg     Filter configuration (see FilterConfig).
+   * @return Filtered token list.
+   */
+  std::vector<std::string> filter_tokens(
+      const std::vector<std::string>& tokens,
+      const FilterConfig& cfg = {});
 
   /**
    * @brief Normalizes text (lowercasing, punctuation cleanup).
