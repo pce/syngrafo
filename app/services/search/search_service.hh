@@ -189,8 +189,8 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
             });
     }
 
-    // ── Keyword fallback ──────────────────────────────────────────────────────
-    // scoring: filename hit (0.85) > snippet hit (0.75) > keyword hit (0.65)
+    //  Keyword fallback ──────────────────────────────────────────────────────
+    // scoring: filename (0.85) > snippet (0.75) > keyword (0.65) > full-text (0.60)
     const std::string q_like = "%" + query + "%";
     struct KwCand { int64_t doc_id; float score; };
     std::unordered_map<int64_t, KwCand> kw_map;
@@ -218,6 +218,20 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
             auto it = kw_map.find(id);
             if (it == kw_map.end()) kw_map[id] = {id, 0.65f};
             else it->second.score = std::max(it->second.score, 0.65f);
+        }
+        // Full-text fallback: search the stored document/OCR text in note_text.
+        // This catches documents (especially OCR-indexed images) whose search term
+        // appears beyond the 280-char snippet and was not extracted as a keyword.
+        // Score 0.60 — below snippet (0.75) and keyword (0.65) matches.
+        for (const auto& row : active_db_().from("nlp_notes")
+                 .where("row_type = ?", std::string{"dms_doc"})
+                 .where("note_text LIKE ?", q_like)
+                 .limit(int64_t(top_k) * 2).execute()) {
+            const auto id = row.try_get<int64_t>("row_id").value_or(0);
+            if (!id) continue;
+            auto it = kw_map.find(id);
+            if (it == kw_map.end()) kw_map[id] = {id, 0.60f};
+            else it->second.score = std::max(it->second.score, 0.60f);
         }
     }
     std::vector<KwCand> kw_cands;

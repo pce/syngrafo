@@ -4,7 +4,6 @@ import { dms, isImageFile, isDocFile, isAudioFile, isTextFile, isSvgFile } from 
 import type { FsEntry } from "../../services/dms-service";
 import Icon from "../Icon";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function relativeDay(ts: number): string {
   const now   = Date.now();
@@ -69,7 +68,6 @@ function groupByDay(entries: FsEntry[]): Map<string, FsEntry[]> {
 
 type FilterKind = "all" | "files" | "images" | "docs" | "audio";
 
-// ── Component ─────────────────────────────────────────────────────────────────
 
 const TimelinePage: React.FC = () => {
   const { state, dispatch } = useDms();
@@ -79,7 +77,6 @@ const TimelinePage: React.FC = () => {
   const [filter,   setFilter]   = useState<FilterKind>("all");
   const [scanPath, setScanPath] = useState<string>("");
 
-  // ── Load entries ─────────────────────────────────────────────────────────
   const load = useCallback(async (path: string) => {
     if (!path) return;
     setLoading(true);
@@ -103,7 +100,6 @@ const TimelinePage: React.FC = () => {
     }
   }, [state.zone, state.currentPath, scanPath, load]);
 
-  // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = entries.filter((e) => {
     if (filter === "all")    return true;
     if (filter === "images") return isImageFile(e.path);
@@ -115,7 +111,6 @@ const TimelinePage: React.FC = () => {
   const grouped = groupByDay(filtered);
   const dayKeys = Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a)); // newest first
 
-  // ── UI ────────────────────────────────────────────────────────────────────
   const activePath = state.zone?.out_path ?? state.currentPath;
 
   return (

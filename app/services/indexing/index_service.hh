@@ -232,7 +232,11 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                 discard(active_db_().insert_into("nlp_notes")
                     .value("row_type",       std::string{"dms_doc"})
                     .value("row_id",         ap.doc_id)
-                    .value("note_text",      snippet)
+                    // Store the full document text (not just the 280-char snippet) so
+                    // that keyword searches can match terms anywhere in the content —
+                    // especially important for OCR-indexed images where the search term
+                    // may appear well past the first 280 characters.
+                    .value("note_text",      std::string{ap.file.text})
                     .value("keywords",       ap.kw_json)
                     .value("entities",       ap.ents_json)
                     .value("sentiment",      ap.sentiment)
