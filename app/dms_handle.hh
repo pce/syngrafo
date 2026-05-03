@@ -661,6 +661,36 @@ struct DMSHandle {
     [[nodiscard]] Expected<json> bookmark_resolve(std::string_view zone_name,
                                                    std::string_view target);
 
+    // ── Preference helpers (synchronous) ─────────────────────────────────────
+    /// Synchronously load a preference value from the global DB.
+    /// Returns std::nullopt when the key does not exist or on DB error.
+    [[nodiscard]] std::optional<std::string> load_preference_sync(std::string_view key) const {
+        try {
+            std::lock_guard lk{db_mutex};
+            auto row = const_cast<pce::db::Database&>(db)
+                           .from("app_preferences")
+                           .where("key = ?", std::string{key})
+                           .first();
+            if (!row) return std::nullopt;
+            return row->get<std::string>("value");
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    /// Synchronously save a preference value to the global DB.
+    void save_preference_sync(std::string_view key, std::string_view value) {
+        try {
+            const auto now = pce::db::now_unix();
+            std::lock_guard lk{db_mutex};
+            (void)db.insert_into("app_preferences")
+                     .value("key",        std::string{key})
+                     .value("value",      std::string{value})
+                     .value("updated_at", now)
+                     .on_conflict_replace()
+                     .execute();
+        } catch (...) {}
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
     [[nodiscard]] Expected<std::vector<float>> embed_text_(std::string_view text) const;
     [[nodiscard]] Expected<json> index_one_file_(const fs::path& p,

@@ -35,6 +35,19 @@ elseif(UNIX)
     include(GNUInstallDirs)
     install(TARGETS syngrafo RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+    # Bundle the data/ directory (NLP models, catalog, tessdata) next to the binary
+    # at runtime: the app looks for <exe_dir>/data/ first (see data_dir() in main.cc).
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data")
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/data/"
+                DESTINATION "${CMAKE_INSTALL_BINDIR}/data"
+                FILES_MATCHING PATTERN "*"
+                PATTERN "*.db"  EXCLUDE   # don't ship development databases
+                PATTERN "*.db-shm" EXCLUDE
+                PATTERN "*.db-wal" EXCLUDE
+                PATTERN "inp/" EXCLUDE    # don't ship dev input files
+        )
+    endif()
+
     set(CPACK_GENERATOR "DEB;TGZ")
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER     "pce")
     set(CPACK_DEBIAN_PACKAGE_SECTION        "utils")
@@ -46,6 +59,18 @@ elseif(UNIX)
 # ── Windows ───────────────────────────────────────────────────────────────────
 elseif(WIN32)
     install(TARGETS syngrafo RUNTIME DESTINATION .)
+
+    # data/ next to the .exe — same sibling logic as Linux
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data")
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/data/"
+                DESTINATION "data"
+                FILES_MATCHING PATTERN "*"
+                PATTERN "*.db"     EXCLUDE
+                PATTERN "*.db-shm" EXCLUDE
+                PATTERN "*.db-wal" EXCLUDE
+                PATTERN "inp/"     EXCLUDE
+        )
+    endif()
 
     set(CPACK_GENERATOR "NSIS;ZIP")
     set(CPACK_NSIS_DISPLAY_NAME                  "Syngrafo ${PROJECT_VERSION}")

@@ -172,7 +172,7 @@ std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path)
         std::ostringstream oss;
         oss << "[";
         bool first = true;
-        for (const auto& m : g_catalog)
+        for (const auto& m : m_catalog)
         {
             if (!first) oss << ",";
             first = false;
@@ -196,7 +196,7 @@ std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path)
     {
         // Validate model exists in catalog
         const ModelInfo* info = nullptr;
-        for (const auto& m : g_catalog)
+        for (const auto& m : m_catalog)
         {
             if (m.id == model_id)
             {
@@ -421,7 +421,7 @@ std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path)
 
     bool ModelDownloader::is_downloaded(const std::string& model_id) const
     {
-        for (const auto& m : g_catalog)
+        for (const auto& m : m_catalog)
         {
             if (m.id == model_id)
             {
@@ -437,7 +437,7 @@ std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path)
 
     bool ModelDownloader::delete_model(const std::string& model_id)
     {
-        for (const auto& m : g_catalog)
+        for (const auto& m : m_catalog)
         {
             if (m.id == model_id)
             {
@@ -462,7 +462,7 @@ std::vector<ModelInfo> load_catalog_from_json_file(const std::string& path)
 
     std::string ModelDownloader::get_model_path(const std::string& model_id) const
     {
-        for (const auto& m : g_catalog)
+        for (const auto& m : m_catalog)
         {
             if (m.id == model_id)
             {

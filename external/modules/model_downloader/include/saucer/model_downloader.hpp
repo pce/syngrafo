@@ -99,6 +99,9 @@ namespace saucer::model_downloader
         /// Each entry includes an "downloaded" boolean reflecting current state.
         [[nodiscard]] std::string list_models() const;
 
+        /// Returns the directory where model files are stored.
+        [[nodiscard]] const std::string& models_dir() const { return m_models_dir; }
+
         /// Start downloading a model.
         /// Returns a download_id string on success, or "error: <msg>" on failure.
         /// If the model is already downloading, returns the existing download_id.

@@ -962,7 +962,7 @@ inline void register_dms_bindings(saucer::smartview& wv, DMSHandle& dms,
     register_nlp_bindings    (wv, dms, desk);      //  index / search / zones / bulk
     register_archive_bindings(wv, dms, desk);      //  create_archive / compress_file
     register_palette_bindings(wv, dms, desk);      //  zone/brand/project ColorPalettes
-    register_model_bindings  (wv, model_dl);       //  model list/download/cancel/delete
+    register_model_bindings  (wv, model_dl, dms);  //  model list/download/cancel/delete/dir
     register_bookmark_bindings(wv, dms);           //  zone bookmarks (quick jump targets)
 
     std::print("[dms] 7 domain binding modules registered "

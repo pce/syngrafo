@@ -1,11 +1,7 @@
 #pragma once
 /**
  * @file bindings/model_bindings.hh
- * @author Patrick Engel
  * @brief NLP model management bindings — list, download, cancel, delete.
- *
- * Exposes the saucer::model_downloader module to the JS frontend so
- * users can manage their local NLP models from within the app.
  *
  * Exposed bindings:
  *   model_list          ()                         → JSON array of ModelInfo
@@ -14,9 +10,8 @@
  *   model_cancel        (downloadId: string)       → boolean
  *   model_delete        (modelId: string)          → boolean
  *   model_path          (modelId: string)          → absolute path | ""
- *
- * The download uses libcurl C API directly — no child processes are spawned.
- * Progress polling is left to the frontend (recommended: 500 ms interval).
+ *   model_get_models_dir ()                        → current LLM models dir
+ *   model_set_models_dir (path: string)            → persists to DB, returns new path
  */
 
 #include <saucer/model_downloader.hpp>
@@ -27,27 +22,23 @@ namespace pce::dms {
 
 // ─────────────────────────────────────────────────────────────────────────────
 inline void register_model_bindings(saucer::smartview& wv,
-                                     saucer::model_downloader::ModelDownloader& dl)
+                                     saucer::model_downloader::ModelDownloader& dl,
+                                     DMSHandle& dms)
 {
     using std::string;
     using namespace saucer::model_downloader;
 
     // ── model_list ───────────────────────────────────────────────────────────
-    // Returns the built-in catalog as a JSON array with a "downloaded" flag
-    // for each entry reflecting the current on-disk state.
     wv.expose("model_list", [&dl]() -> string {
         return dl.list_models();
     });
 
     // ── model_start ──────────────────────────────────────────────────────────
-    // Start downloading a model from the catalog.  Returns the download_id on
-    // success, or a string starting with "error:" on failure.
     wv.expose("model_start", [&dl](string model_id) -> string {
         return dl.start_download(model_id);
     });
 
     // ── model_progress ───────────────────────────────────────────────────────
-    // Query download progress by download_id.  Poll every ~500 ms from JS.
     wv.expose("model_progress", [&dl](string download_id) -> string {
         return dl.get_progress(download_id);
     });
@@ -63,9 +54,26 @@ inline void register_model_bindings(saucer::smartview& wv,
     });
 
     // ── model_path ───────────────────────────────────────────────────────────
-    // Returns the absolute path to a downloaded model file, or "" if absent.
     wv.expose("model_path", [&dl](string model_id) -> string {
         return dl.get_model_path(model_id);
+    });
+
+    // ── model_get_models_dir ─────────────────────────────────────────────────
+    // Returns the active LLM models directory (may differ from the default when
+    // the user has configured a custom path via model_set_models_dir).
+    wv.expose("model_get_models_dir", [&dl]() -> string {
+        return dl.models_dir();
+    });
+
+    // ── model_set_models_dir ─────────────────────────────────────────────────
+    // Persist a new LLM models directory preference to the DB.
+    // Takes effect on the next app launch (the downloader instance is immutable
+    // at runtime — changing the directory mid-session could corrupt partial
+    // downloads).  Returns the persisted path.
+    wv.expose("model_set_models_dir", [&dms](string path) -> string {
+        if (path.empty()) return R"({"ok":false,"error":"path must not be empty"})";
+        dms.save_preference_sync("llm_models_dir", path);
+        return R"({"ok":true,"restart_required":true,"path":")" + path + R"("})";
     });
 }
 

@@ -52,6 +52,30 @@ static std::string get_executable_path() {
   return ".";
 }
 
+/// Returns a platform-appropriate writable directory for user-downloaded
+/// LLM model files (GGUF), similar to how Ollama uses ~/.ollama/models.
+///
+///   macOS   → ~/Library/Application Support/Syngrafo/models
+///   Linux   → $XDG_DATA_HOME/syngrafo/models  (fallback: ~/.local/share/…)
+///   Windows → %APPDATA%\Syngrafo\models
+static std::string default_llm_models_dir() {
+#ifdef __APPLE__
+    if (const char* home = std::getenv("HOME"); home && *home)
+        return (fs::path(home) / "Library" / "Application Support" / "Syngrafo" / "models").string();
+#elif defined(_WIN32)
+    if (const char* appdata = std::getenv("APPDATA"); appdata && *appdata)
+        return (fs::path(appdata) / "Syngrafo" / "models").string();
+#else
+    // XDG-compliant Linux / BSD
+    if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg && *xdg)
+        return (fs::path(xdg) / "syngrafo" / "models").string();
+    if (const char* home = std::getenv("HOME"); home && *home)
+        return (fs::path(home) / ".local" / "share" / "syngrafo" / "models").string();
+#endif
+    // Last resort: a sibling directory of the executable.
+    return (fs::path(get_executable_path()) / "models").string();
+}
+
 static std::string data_dir() {
   auto exe_dir = fs::path(get_executable_path());
 
@@ -596,14 +620,35 @@ if (typeof window.__dms_progress === 'undefined')
     // Model downloader — manages LLM/GGUF model files chosen by the user in-app.
     // The catalog is loaded from data/llm_catalog.json (bundled into .app/Contents/Resources/data/).
     // To add or remove models: edit data/llm_catalog.json — no recompile required.
-    const std::string models_dir    = (fs::path(data_dir()) / "models").string();
+    //
+    // LLM model files (GGUF, 1–3 GB each) live in a platform-specific user
+    // directory — separate from the NLP/ONNX models bundled in data/models/:
+    //   macOS   → ~/Library/Application Support/Syngrafo/models/
+    //   Linux   → ~/.local/share/syngrafo/models/
+    //   Windows → %APPDATA%\Syngrafo\models\
+    // The user can override this path in Settings (persisted to the DB under
+    // pref key "llm_models_dir").  We read that preference synchronously here
+    // before constructing the downloader so the worker threads always see the
+    // correct directory.
+    std::string llm_models_dir_pref;
+    {
+        // Best-effort synchronous read — DB is already open at this point.
+        const std::string pref_key = "llm_models_dir";
+        auto pref_val = dms.load_preference_sync(pref_key);
+        if (pref_val && !pref_val->empty())
+            llm_models_dir_pref = *pref_val;
+    }
+    const std::string llm_models_dir = llm_models_dir_pref.empty()
+        ? default_llm_models_dir()
+        : llm_models_dir_pref;
     const std::string catalog_path  = (fs::path(data_dir()) / "llm_catalog.json").string();
     saucer::model_downloader::ModelDownloader model_dl{{
-        .models_dir = models_dir,
+        .models_dir = llm_models_dir,
         .user_agent = "Syngrafo/" SYNGRAFO_VERSION,
         .catalog    = saucer::model_downloader::load_catalog_from_json_file(catalog_path),
     }};
-    std::print("[models] model store: {}\n", models_dir);
+    std::print("[models] LLM model store : {}\n", llm_models_dir);
+    std::print("[models] catalog         : {}\n", catalog_path);
 
     pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);
 

@@ -49,6 +49,18 @@ target_link_libraries(saucer_model_downloader PUBLIC
     CURL::libcurl        # libcurl C API — no process spawning
 )
 
+# nlohmann/json is fetched transitively by saucer but not always propagated
+# through include paths to modules that only link saucer.  Add it explicitly
+# when the target exists (it will after FetchContent_MakeAvailable(saucer)).
+if(TARGET nlohmann_json::nlohmann_json)
+    target_link_libraries(saucer_model_downloader PUBLIC nlohmann_json::nlohmann_json)
+else()
+    # Fallback: add the include dir directly from the saucer _deps tree.
+    target_include_directories(saucer_model_downloader PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/_deps/json-src/include>
+    )
+endif()
+
 # Require C++23 (std::filesystem, atomic, etc.)
 target_compile_features(saucer_model_downloader PUBLIC cxx_std_23)
 

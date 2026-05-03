@@ -7,7 +7,7 @@
  *  • Appearance — radius + density pickers
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme, THEME_PRESETS } from "../store/theme-store";
 import type { ThemePreset } from "../store/theme-store";
 import { useSettings } from "../store/settings-store";
@@ -16,6 +16,8 @@ import { LOCALES, type SupportedLocale } from "../i18n";
 import Icon from "./Icon";
 import Toggle from "./ui/Toggle";
 import Tooltip from "./ui/Tooltip";
+import { models, type LlmModelInfo, type LlmDownloadProgress } from "../services/dms-service";
+import { dms } from "../services/dms-service";
 
 
 const COLOR_SLOTS: Array<{ label: string; var: string }> = [
@@ -89,7 +91,7 @@ interface ThemePanelProps {
   onClose: () => void;
 }
 
-type Tab = "presets" | "colors" | "appearance" | "settings";
+type Tab = "presets" | "colors" | "appearance" | "settings" | "models";
 
 
 const SVG_SIZE_OPTIONS: Array<{ bytes: number; label: string }> = [
@@ -127,6 +129,299 @@ const SettingRow: React.FC<{
     <div className="flex-shrink-0">{children}</div>
   </div>
 );
+
+// ── NLP feature → ONNX model mapping ────────────────────────────────────────
+const NLP_FEATURES: Array<{ label: string; key: keyof typeof window.__nlp; model: string; size: string }> = [
+  { label: "Embeddings / Semantic Search", key: "hasOnnx",      model: "embed.onnx",     size: "~23 MB"  },
+  { label: "Sentiment Analysis",           key: "hasSentiment", model: "sentiment.onnx", size: "~67 MB"  },
+  { label: "Named Entity Recognition",     key: "hasNer",       model: "ner.onnx",       size: "~415 MB" },
+  { label: "Toxicity Detection",           key: "hasToxicity",  model: "toxicity.onnx",  size: "~415 MB" },
+  { label: "OCR",                          key: "hasOcr",       model: "Platform Vision", size: "built-in" },
+];
+
+
+function fmt_bytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+// ── ModelsTab ────────────────────────────────────────────────────────────────
+
+const ModelsTab: React.FC = () => {
+  const [catalog, setCatalog] = useState<LlmModelInfo[]>([]);
+  const [modelsDir, setModelsDirState] = useState<string>("");
+  const [dirInput, setDirInput] = useState<string>("");
+  const [dirSaved, setDirSaved] = useState(false);
+  // downloadId per model_id while downloading
+  const [activeDownloads, setActiveDownloads] = useState<Record<string, string>>({});
+  // progress snapshots per model_id
+  const [progress, setProgress] = useState<Record<string, LlmDownloadProgress>>({});
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load catalog + current dir on mount
+  useEffect(() => {
+    const isConnected = typeof window.saucer?.call === "function";
+    if (!isConnected) return;
+
+    models.list().then(setCatalog).catch(() => {});
+    models.getModelsDir().then((dir) => {
+      setModelsDirState(dir);
+      setDirInput(dir);
+    }).catch(() => {});
+  }, []);
+
+  // Poll progress for all active downloads
+  const pollProgress = useCallback(async () => {
+    const ids = Object.entries(activeDownloads);
+    if (ids.length === 0) return;
+
+    for (const [modelId, downloadId] of ids) {
+      try {
+        const p = await models.progress(downloadId);
+        setProgress((prev) => ({ ...prev, [modelId]: p }));
+        if (p.status === "completed" || p.status === "failed" || p.status === "cancelled") {
+          setActiveDownloads((prev) => {
+            const copy = { ...prev };
+            delete copy[modelId];
+            return copy;
+          });
+          // Refresh download status from C++
+          models.list().then(setCatalog).catch(() => {});
+        }
+      } catch { /* ignore */ }
+    }
+  }, [activeDownloads]);
+
+  useEffect(() => {
+    if (Object.keys(activeDownloads).length > 0) {
+      pollRef.current = setInterval(pollProgress, 600);
+    } else if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeDownloads, pollProgress]);
+
+  const handleDownload = async (modelId: string) => {
+    try {
+      const result = await models.start(modelId);
+      if (result.startsWith("error:")) return;
+      setActiveDownloads((prev) => ({ ...prev, [modelId]: result }));
+    } catch { /* ignore */ }
+  };
+
+  const handleCancel = async (modelId: string) => {
+    const dlId = activeDownloads[modelId];
+    if (!dlId) return;
+    await models.cancel(dlId).catch(() => {});
+    setActiveDownloads((prev) => { const c = { ...prev }; delete c[modelId]; return c; });
+  };
+
+  const handleDelete = async (modelId: string) => {
+    await models.remove(modelId).catch(() => {});
+    models.list().then(setCatalog).catch(() => {});
+  };
+
+  const handlePickDir = async () => {
+    const res = await dms.selectDirectory();
+    if (res.ok && res.data) {
+      setDirInput(res.data);
+    }
+  };
+
+  const handleSaveDir = async () => {
+    if (!dirInput.trim()) return;
+    await models.setModelsDir(dirInput.trim()).catch(() => {});
+    setModelsDirState(dirInput.trim());
+    setDirSaved(true);
+    setTimeout(() => setDirSaved(false), 2500);
+  };
+
+  const nlp = (window as unknown as { __nlp?: Record<string, boolean> }).__nlp ?? {};
+
+  return (
+    <div className="p-3 flex flex-col gap-5">
+
+      {/* ── NLP / ONNX Models ──────────────────────────────────────────── */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
+          NLP Engine — ONNX Models
+        </h3>
+        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
+          Managed by <code className="font-mono">scripts/download_models.py</code> — placed in&nbsp;
+          <code className="font-mono">data/models/</code>.
+        </p>
+        <div className="flex flex-col gap-1">
+          {NLP_FEATURES.map(({ label, key, model, size }) => {
+            const active = !!nlp[key];
+            return (
+              <div key={key} className="flex items-center gap-2 py-1 border-b border-[var(--theme-border)] last:border-0">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? "bg-emerald-400" : "bg-[var(--theme-border)]"}`}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-[var(--theme-text)] truncate">{label}</p>
+                  <p className="text-[9px] text-[var(--theme-text-muted)] font-mono truncate">{model}</p>
+                </div>
+                <span className={`text-[9px] font-bold shrink-0 ${active ? "text-emerald-400" : "text-[var(--theme-text-muted)]"}`}>
+                  {active ? "loaded" : size}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── LLM Model Storage Path ─────────────────────────────────────── */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
+          LLM Model Storage
+        </h3>
+        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
+          Where GGUF model files are stored. Changes take effect on next launch.
+        </p>
+        <div className="flex gap-1.5 items-stretch">
+          <input
+            type="text"
+            value={dirInput}
+            onChange={(e) => setDirInput(e.target.value)}
+            placeholder={modelsDir || "e.g. ~/Library/Application Support/Syngrafo/models"}
+            className="flex-1 text-[10px] font-mono px-2 py-1.5 min-w-0 focus:outline-none"
+            style={{
+              background:   "var(--theme-bg)",
+              color:        "var(--theme-text)",
+              border:       "1px solid var(--theme-border)",
+              borderRadius: "var(--theme-radius-sm, 4px)",
+            }}
+          />
+          <button
+            onClick={handlePickDir}
+            title="Browse…"
+            className="shrink-0 px-2 py-1 text-[10px] font-bold border border-[var(--theme-border)] hover:bg-[var(--theme-bg)] transition-colors"
+            style={{ borderRadius: "var(--theme-radius-sm, 4px)", color: "var(--theme-text-muted)" }}
+          >
+            <Icon name="folder-open" size="xs" />
+          </button>
+          <button
+            onClick={handleSaveDir}
+            disabled={!dirInput.trim() || dirInput === modelsDir}
+            className="shrink-0 px-2.5 py-1 text-[10px] font-bold bg-[var(--theme-primary)]/80 text-[var(--theme-bg)] disabled:opacity-40 hover:opacity-90 transition-all"
+            style={{ borderRadius: "var(--theme-radius-sm, 4px)" }}
+          >
+            {dirSaved ? "✓" : "Save"}
+          </button>
+        </div>
+        {dirSaved && (
+          <p className="text-[9px] text-amber-400 mt-1">
+            ⚠ Restart required for the new path to take effect.
+          </p>
+        )}
+      </section>
+
+      {/* ── LLM Catalog ────────────────────────────────────────────────── */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
+          LLM Catalog
+        </h3>
+        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
+          GGUF models downloaded on demand via libcurl — no Python required.
+          Edit <code className="font-mono">data/llm_catalog.json</code> to add models.
+        </p>
+        {catalog.length === 0 ? (
+          <p className="text-[10px] text-[var(--theme-text-muted)] italic">
+            {typeof window.saucer?.call === "function"
+              ? "No models in catalog — check data/llm_catalog.json."
+              : "Not connected to native host."}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {catalog.map((m) => {
+              const dl = activeDownloads[m.id];
+              const prog = progress[m.id];
+              const isDownloading = !!dl;
+              const pct = prog && prog.total_bytes > 0
+                ? Math.round((prog.bytes_downloaded / prog.total_bytes) * 100)
+                : null;
+
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-lg border border-[var(--theme-border)] p-2.5 flex flex-col gap-1.5"
+                  style={{ background: "var(--theme-bg)" }}
+                >
+                  {/* Model name + status dot */}
+                  <div className="flex items-start gap-2">
+                    <span
+                      className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                        m.downloaded ? "bg-emerald-400" : isDownloading ? "bg-amber-400 animate-pulse" : "bg-[var(--theme-border)]"
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-[var(--theme-text)] truncate">{m.name}</p>
+                      <p className="text-[9px] text-[var(--theme-text-muted)] leading-snug mt-0.5">{m.description}</p>
+                      <p className="text-[9px] font-mono text-[var(--theme-text-muted)] mt-0.5">
+                        {fmt_bytes(m.size_bytes)} · {m.filename}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  {isDownloading && prog && (
+                    <div>
+                      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--theme-border)" }}>
+                        <div
+                          className="h-full bg-[var(--theme-primary)] transition-all"
+                          style={{ width: `${pct ?? 0}%` }}
+                        />
+                      </div>
+                      <p className="text-[9px] text-[var(--theme-text-muted)] mt-0.5 font-mono">
+                        {fmt_bytes(prog.bytes_downloaded)} / {fmt_bytes(prog.total_bytes)}{pct != null ? ` · ${pct}%` : ""}
+                        {prog.status === "failed" && <span className="text-red-400 ml-1">{prog.error_message}</span>}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-1.5 mt-0.5">
+                    {m.downloaded ? (
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        className="text-[9px] font-bold px-2 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    ) : isDownloading ? (
+                      <button
+                        onClick={() => handleCancel(m.id)}
+                        className="text-[9px] font-bold px-2 py-0.5 rounded border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDownload(m.id)}
+                        className="text-[9px] font-bold px-2 py-0.5 rounded border border-[var(--theme-primary)]/60 text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 transition-colors"
+                      >
+                        ↓ Download
+                      </button>
+                    )}
+                    {m.downloaded && (
+                      <span className="text-[9px] text-emerald-400 font-bold self-center ml-1">✓ Ready</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
+
 
 const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
   const { theme, setTheme, saveTheme, isSaving: isSavingTheme } = useTheme();
@@ -413,7 +708,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--theme-border)] shrink-0">
           <div>
             <h2 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-widest">Theme & Settings</h2>
-              <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">Colours · Radius · Density · Config</p>
+              <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">Colours · Radius · Density · Config · Models</p>
           </div>
           <button
             onClick={onClose}
@@ -425,7 +720,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
 
         {/* Tabs */}
         <div className="flex border-b border-[var(--theme-border)] shrink-0">
-          {(["presets", "colors", "appearance", "settings"] as Tab[]).map((t) => (
+          {(["presets", "colors", "appearance", "settings", "models"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -447,6 +742,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
           {tab === "colors"     && <ColorsTab />}
           {tab === "appearance" && <AppearanceTab />}
           {tab === "settings"   && <SettingsTab />}
+          {tab === "models"     && <ModelsTab />}
         </div>
 
         {/* Footer */}
