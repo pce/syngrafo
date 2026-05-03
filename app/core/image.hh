@@ -311,6 +311,76 @@ map_pixels(const uint8_t* rgba, int w, int h, const Palette& p) {
     return out;
 }
 
+
+/// CIE L*a*b* triple (D65 illuminant).  Perceptually uniform — use with
+/// `nearest_lab` instead of `nearest` for photos and gradients.
+struct Lab3 { float L{}, a{}, b{}; };
+
+/// sRGB (uint8, 0–255) → CIE L*a*b* (D65).
+[[nodiscard]] inline Lab3 rgb_to_lab(uint8_t r, uint8_t g, uint8_t b) noexcept {
+    // Linearise sRGB (gamma decode)
+    auto lin = [](float c) -> float {
+        c /= 255.f;
+        return c <= 0.04045f ? c / 12.92f
+                             : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    const float rl = lin(float(r)), gl = lin(float(g)), bl = lin(float(b));
+
+    // Linear sRGB → XYZ (D65, IEC 61966-2-1)
+    const float X = rl*0.4124564f + gl*0.3575761f + bl*0.1804375f;
+    const float Y = rl*0.2126729f + gl*0.7151522f + bl*0.0721750f;
+    const float Z = rl*0.0193339f + gl*0.1191920f + bl*0.9503041f;
+
+    // XYZ → LAB (D65 white point: 0.95047, 1.00000, 1.08883)
+    auto f = [](float t) -> float {
+        return t > 0.008856f ? std::cbrt(t) : (7.787f * t + 16.f / 116.f);
+    };
+    const float fx = f(X / 0.95047f);
+    const float fy = f(Y);
+    const float fz = f(Z / 1.08883f);
+
+    return { 116.f * fy - 16.f, 500.f * (fx - fy), 200.f * (fy - fz) };
+}
+
+/// Precompute LAB values for an entire palette (call once, reuse).
+[[nodiscard]] inline std::vector<Lab3> palette_to_lab(const Palette& p) {
+    std::vector<Lab3> cache(p.size());
+    for (int i = 0; i < (int)p.size(); ++i)
+        cache[i] = rgb_to_lab(p[i].r, p[i].g, p[i].b);
+    return cache;
+}
+
+/// Nearest palette colour using perceptual squared-Euclidean distance in LAB.
+/// Pass a pre-built `lab_cache` from `palette_to_lab()` to avoid recomputing.
+[[nodiscard]] inline int
+nearest_lab(uint8_t r, uint8_t g, uint8_t b,
+            const Palette& /*p*/, const std::vector<Lab3>& lab_cache) noexcept {
+    const Lab3 q = rgb_to_lab(r, g, b);
+    int   best  = 0;
+    float bestD = 1e30f;
+    for (int i = 0; i < (int)lab_cache.size(); ++i) {
+        const Lab3& c = lab_cache[i];
+        const float dL = q.L - c.L, da = q.a - c.a, db = q.b - c.b;
+        const float d  = dL*dL + da*da + db*db;
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+}
+
+/// Map pixels to palette indices using perceptual LAB distance.
+/// Prefer over `map_pixels` for natural photos and gradients.
+[[nodiscard]] inline std::vector<int>
+map_pixels_lab(const uint8_t* rgba, int w, int h, const Palette& p) {
+    const int n = w * h;
+    std::vector<int> out(n, -1);
+    const auto lab_cache = palette_to_lab(p);
+    for (int i = 0; i < n; ++i) {
+        if (rgba[i*4 + 3] == 0) continue;
+        out[i] = nearest_lab(rgba[i*4], rgba[i*4+1], rgba[i*4+2], p, lab_cache);
+    }
+    return out;
+}
+
 /// 3×3 majority-vote smoothing — dissolves isolated noise pixels.
 inline void smooth(std::vector<int>& idx, int w, int h) {
     std::vector<int> out(idx);

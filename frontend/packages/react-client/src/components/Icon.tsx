@@ -1069,6 +1069,30 @@ const ICONS: Record<
       <line x1="17" y1="18" x2="17.01" y2="18" />
     </svg>
   ),
+  /**
+   * 16×16 pixel-art dinosaur.
+   * Reserved for the pixel-art retro render pipeline — not wired into any
+   * view yet.  `crispEdges` rendering keeps the pixel-perfect look at any size.
+   */
+  dino: (props) => (
+    <svg {...props} viewBox="0 0 16 16" shapeRendering="crispEdges">
+      {/* body */}
+      <rect x="5" y="6" width="6" height="3" fill="currentColor" />
+      {/* head */}
+      <rect x="10" y="5" width="3" height="2" fill="currentColor" />
+      {/* eye */}
+      <rect x="12" y="5" width="1" height="1" fill="black" />
+      {/* tail */}
+      <rect x="2" y="7" width="3" height="1" fill="currentColor" />
+      <rect x="1" y="6" width="2" height="1" fill="currentColor" />
+      {/* legs */}
+      <rect x="6" y="9" width="1" height="2" fill="currentColor" />
+      <rect x="9" y="9" width="1" height="2" fill="currentColor" />
+      {/* back spikes */}
+      <rect x="6" y="5" width="1" height="1" fill="currentColor" />
+      <rect x="8" y="5" width="1" height="1" fill="currentColor" />
+    </svg>
+  ),
 };
 
 interface IconProps extends Omit<React.SVGProps<SVGSVGElement>, "name"> {

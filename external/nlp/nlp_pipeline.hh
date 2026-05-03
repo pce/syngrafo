@@ -68,11 +68,6 @@ using TokenList   = std::vector<std::string>;
 /// Expected result type used by pipeline stages.
 using TokenResult = std::expected<TokenList, std::string>;
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Stage 0 helper: URL pre-strip
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * @brief Strip bare http(s)/ftp URLs from text before tokenisation.
  *
@@ -117,11 +112,6 @@ using TokenResult = std::expected<TokenList, std::string>;
     }
     return out;
 }
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Full pipeline entry point
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * @brief Run the complete text-processing pipeline on a document.

@@ -28,6 +28,7 @@
 #include "../core/image.hh"
 #include "../core/mesh.hh"
 #include "../core/pipeline.hh"
+#include "../media/topology.hh"
 
 #include <algorithm>
 #include <array>
@@ -39,13 +40,11 @@
 #endif
 
 namespace pce::dms {
+namespace topology = ::pce::media::topology;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// svg_detail — stateless SVG render helpers (rect-merge, polygon, triangle)
-// ─────────────────────────────────────────────────────────────────────────────
 namespace svg_detail {
 
-/// Greedy width-then-height rect merge → compact SVG <rect> elements.
+/// Greedy width-then-height rect merge → compact SVG `<rect>` elements.
 inline void write_svg_rects(std::ofstream& f, const std::vector<int>& pidx,
                              const pal::Palette& pal_, int w, int h) {
     std::vector<uint8_t> vis(static_cast<size_t>(w) * h, 0);
@@ -77,12 +76,14 @@ inline void write_svg_rects(std::ofstream& f, const std::vector<int>& pidx,
     }
 }
 
-/// Directed boundary-edge polygon tracing — one <path> per palette colour.
+/// Directed boundary-edge polygon tracing — one `<path>` per palette colour.
+/// Uses Ramer–Douglas–Peucker to simplify contours (replaces collinearity-only pass).
 inline void write_svg_poly(std::ofstream& f, std::vector<int>& pidx,
-                            const pal::Palette& pal_, int w, int h) {
-    const int np = (int)pal_.size();
-    using Pt = std::pair<int,int>;
+                            const pal::Palette& pal_, int w, int h,
+                            float rdp_epsilon = 1.5f) {
+    using Pt = topology::Vec2i;
     using EM = std::unordered_map<int64_t, Pt>;
+    const int np = (int)pal_.size();
     auto enc = [](int x, int y) -> int64_t {
         return (int64_t(uint32_t(x)) << 32) | int64_t(uint32_t(y));
     };
@@ -103,39 +104,26 @@ inline void write_svg_poly(std::ofstream& f, std::vector<int>& pidx,
         }
     pidx.clear(); pidx.shrink_to_fit();
 
-    auto simplify = [](const std::vector<Pt>& pts) -> std::vector<Pt> {
-        const int n = (int)pts.size();
-        if (n<3) return pts;
-        std::vector<Pt> out; out.reserve(static_cast<size_t>(n));
-        for (int i=0; i<n; ++i) {
-            const Pt& p = (i==0)?pts[n-1]:pts[i-1];
-            const Pt& c = pts[i];
-            const Pt& nx = (i==n-1)?pts[0]:pts[i+1];
-            if (!((p.first==c.first&&c.first==nx.first)||(p.second==c.second&&c.second==nx.second)))
-                out.push_back(c);
-        }
-        return out;
-    };
-
     for (int ci=0; ci<np; ++ci) {
         auto& emap = em[static_cast<size_t>(ci)];
         if (emap.empty()) continue;
         std::string d;
         while (!emap.empty()) {
             auto it = emap.begin();
-            const Pt start = {(int)(it->first>>32),(int)(uint32_t(it->first))};
+            const Pt start{(int)(it->first>>32),(int)(uint32_t(it->first))};
             std::vector<Pt> ring{start};
             Pt cur = it->second; emap.erase(it);
             for (int step=0; step<200'000 && cur!=start && !emap.empty(); ++step) {
                 ring.push_back(cur);
-                auto ni = emap.find(enc(cur.first,cur.second));
+                auto ni = emap.find(enc(cur.x,cur.y));
                 if (ni==emap.end()) break;
                 cur = ni->second; emap.erase(ni);
             }
-            const auto s = simplify(ring);
+            // RDP simplification — replaces old collinearity-only pass
+            const auto s = topology::rdp_simplify(ring, rdp_epsilon);
             if (s.size()<3) continue;
-            d += std::format("M{},{}", s[0].first, s[0].second);
-            for (size_t j=1; j<s.size(); ++j) d += std::format(" L{},{}", s[j].first, s[j].second);
+            d += std::format("M{},{}", s[0].x, s[0].y);
+            for (size_t j=1; j<s.size(); ++j) d += std::format(" L{},{}", s[j].x, s[j].y);
             d += " Z";
         }
         if (!d.empty()) {
@@ -177,19 +165,74 @@ inline void write_svg_tri(std::ofstream& f, const std::vector<int>& pidx,
     }
 }
 
-struct SvgArgs { std::string path; std::string palette{"db16"}; bool smooth{true}; int gridSize{8}; };
+/**
+ * Full region-graph SVG emitter.
+ *
+ * Pipeline:
+ *   pidx → build_label_field (union-find CC)
+ *        → per-component boundary-edge walk
+ *        → RDP simplification
+ *        → SVG `<path>` grouped by palette colour
+ *
+ * Unlike `write_svg_poly` (which traces once per palette colour globally),
+ * this function traces per **connected component**, so disjoint patches of the
+ * same colour produce independent paths.
+ */
+inline void write_svg_regions(std::ofstream& f, const std::vector<int>& pidx,
+                               const pal::Palette& pal_, int w, int h,
+                               float rdp_epsilon = 1.5f) {
+    const int np = (int)pal_.size();
+    const auto rmap = topology::build_label_field(pidx, w, h);
+
+    std::vector<std::string> paths(static_cast<size_t>(np));
+
+    for (int rid = 0; rid < rmap.component_count; ++rid) {
+        const int ci = rmap.label_of[rid];
+        if (ci < 0 || ci >= np) continue;
+        // inline svg_path_for_region: extract rings → rdp → SVG d= string
+        std::string path_d;
+        for (auto& ring : topology::extract_rings(rmap, rid)) {
+            const auto s = topology::rdp_simplify(ring, rdp_epsilon);
+            if (s.size() < 3) continue;
+            path_d += std::format("M{},{}", s[0].x, s[0].y);
+            for (size_t j = 1; j < s.size(); ++j)
+                path_d += std::format(" L{},{}", s[j].x, s[j].y);
+            path_d += " Z";
+        }
+        if (!path_d.empty()) paths[static_cast<size_t>(ci)] += path_d;
+    }
+
+    for (int ci = 0; ci < np; ++ci) {
+        if (paths[static_cast<size_t>(ci)].empty()) continue;
+        const auto& c = pal_[static_cast<size_t>(ci)];
+        f << "<path d=\"" << paths[static_cast<size_t>(ci)]
+          << "\" fill=\"rgb(" << (int)c.r << ',' << (int)c.g << ',' << (int)c.b << ")\"/>\n";
+    }
+}
+
+struct SvgArgs {
+    std::string path;
+    std::string palette   {"db16"};
+    bool        smooth    {true};
+    int         gridSize  {8};
+    float       rdpEpsilon{1.5f};  ///< RDP tolerance in pixels (1.0=crisp, 3.0=loose)
+    bool        useLab    {false}; ///< use LAB-space palette mapping (better for photos)
+};
 
 [[nodiscard]] inline SvgArgs parse_svg_args(const std::string& raw) {
     SvgArgs a;
     try {
         auto j=json::parse(raw);
-        a.path    =j.value("path",    std::string{});
-        a.palette =j.value("palette", std::string{"db16"});
-        a.smooth  =j.value("smooth",  true);
-        a.gridSize=j.value("gridSize",8);
+        a.path       =j.value("path",       std::string{});
+        a.palette    =j.value("palette",    std::string{"db16"});
+        a.smooth     =j.value("smooth",     true);
+        a.gridSize   =j.value("gridSize",   8);
+        a.rdpEpsilon =float(j.value("rdpEpsilon", 1.5));
+        a.useLab     =j.value("useLab",     false);
     } catch (...) {}
     if (a.path.empty()) a.path=raw;
-    a.gridSize=std::clamp(a.gridSize,2,64);
+    a.gridSize   = std::clamp(a.gridSize, 2, 64);
+    a.rdpEpsilon = std::clamp(a.rdpEpsilon, 0.1f, 20.f);
     return a;
 }
 
@@ -204,12 +247,10 @@ struct SvgArgs { std::string path; std::string palette{"db16"}; bool smooth{true
 } // namespace svg_detail
 
 
-// ─────────────────────────────────────────────────────────────────────────────
 inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
                                      saucer::modules::desktop& /*desk*/) {
     using std::string;
 
-    // ── dms_image_to_svg ─────────────────────────────────────────────────────
     wv.expose("dms_image_to_svg", [](string arg) -> string {
         const auto a = svg_detail::parse_svg_args(arg);
         const fs::path src{a.path}; std::error_code ec;
@@ -219,7 +260,8 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
-        auto pidx    = pal::map_pixels(img->data(),w,h,palette);
+        auto pidx    = a.useLab ? pal::map_pixels_lab(img->data(),w,h,palette)
+                                : pal::map_pixels(img->data(),w,h,palette);
         if (a.smooth) pal::smooth(pidx,w,h);
         const auto out = svg_detail::unique_out(src,"_rct",".svg");
         std::ofstream file(out,std::ios::out|std::ios::trunc);
@@ -233,7 +275,6 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},{"colors",(int)palette.size()}});
     });
 
-    // ── dms_image_to_svg_poly ────────────────────────────────────────────────
     wv.expose("dms_image_to_svg_poly", [](string arg) -> string {
         const auto a = svg_detail::parse_svg_args(arg);
         const fs::path src{a.path}; std::error_code ec;
@@ -243,7 +284,8 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
-        auto pidx    = pal::map_pixels(img->data(),w,h,palette);
+        auto pidx    = a.useLab ? pal::map_pixels_lab(img->data(),w,h,palette)
+                                : pal::map_pixels(img->data(),w,h,palette);
         if (a.smooth) pal::smooth(pidx,w,h);
         const auto out = svg_detail::unique_out(src,"_ply",".svg");
         std::ofstream file(out,std::ios::out|std::ios::trunc);
@@ -251,13 +293,12 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
              << "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\""
              << " viewBox=\"0 0 " << w << " " << h << "\" shape-rendering=\"crispEdges\">\n";
-        svg_detail::write_svg_poly(file,pidx,palette,w,h);
+        svg_detail::write_svg_poly(file,pidx,palette,w,h,a.rdpEpsilon);
         file << "</svg>\n";
         if (file.fail()) return DMSHandle::err_str("I/O error writing SVG");
         return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},{"colors",(int)palette.size()}});
     });
 
-    // ── dms_image_to_svg_tri ─────────────────────────────────────────────────
     wv.expose("dms_image_to_svg_tri", [](string arg) -> string {
         const auto a = svg_detail::parse_svg_args(arg);
         const fs::path src{a.path}; std::error_code ec;
@@ -267,7 +308,8 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
-        auto pidx    = pal::map_pixels(img->data(),w,h,palette);
+        auto pidx    = a.useLab ? pal::map_pixels_lab(img->data(),w,h,palette)
+                                : pal::map_pixels(img->data(),w,h,palette);
         if (a.smooth) pal::smooth(pidx,w,h);
         const auto out = svg_detail::unique_out(src,"_tri",".svg");
         std::ofstream file(out,std::ios::out|std::ios::trunc);
@@ -282,7 +324,34 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
                                        {"colors",(int)palette.size()},{"gridSize",a.gridSize}});
     });
 
-    // ── dms_image_analyze ────────────────────────────────────────────────────
+    // Full region-graph pipeline:
+    //   pixels → LAB quantisation (optional) → smooth → union-find CC regions
+    //          → per-region boundary-edge walk → RDP simplification → SVG <path>
+    wv.expose("dms_image_to_svg_region", [](string arg) -> string {
+        const auto a = svg_detail::parse_svg_args(arg);
+        const fs::path src{a.path}; std::error_code ec;
+        if (!fs::exists(src,ec)) return DMSHandle::err_str(std::format("'{}' does not exist",a.path));
+        if (fs::is_directory(src,ec)) return DMSHandle::err_str("path is a directory");
+        auto img = Image::load(a.path);
+        if (!img) return DMSHandle::err_str(img.error());
+        const int w=img->width, h=img->height;
+        auto palette = pal::resolve(a.palette,img->data(),w,h);
+        auto pidx    = a.useLab ? pal::map_pixels_lab(img->data(),w,h,palette)
+                                : pal::map_pixels(img->data(),w,h,palette);
+        if (a.smooth) pal::smooth(pidx,w,h);
+        const auto out = svg_detail::unique_out(src,"_rgn",".svg");
+        std::ofstream file(out,std::ios::out|std::ios::trunc);
+        if (!file) return DMSHandle::err_str(std::format("Cannot write '{}'",out.string()));
+        file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             << "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\""
+             << " viewBox=\"0 0 " << w << " " << h << "\" shape-rendering=\"crispEdges\">\n";
+        svg_detail::write_svg_regions(file,pidx,palette,w,h,a.rdpEpsilon);
+        file << "</svg>\n";
+        if (file.fail()) return DMSHandle::err_str("I/O error writing SVG");
+        return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},
+                                       {"colors",(int)palette.size()},{"rdpEpsilon",a.rdpEpsilon}});
+    });
+
     wv.expose("dms_image_analyze", [](string arg) -> string {
         std::string path; std::string palName="auto16";
         try { auto j=json::parse(arg); path=j.value("path",std::string{}); palName=j.value("palette",std::string{"auto16"}); }
@@ -317,7 +386,6 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
             {"histogram",json{{"r",rR},{"g",rG},{"b",rB}}}});
     });
 
-    // ── dms_image_to_mesh ────────────────────────────────────────────────────
     // Asset → Transform → View: Image::load | build_mesh | save_as_ply
     wv.expose("dms_image_to_mesh", [](string arg) -> string {
         std::string path; std::string modeStr="solid";
@@ -350,12 +418,10 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
             {"mode",modeStr},{"gridSize",(int)gridSize},{"depthScale",depthScale}});
     });
 
-    // ── dms_ocr_document ─────────────────────────────────────────────────────
     wv.expose("dms_ocr_document", [&dms](string path, string zone) -> string {
         return dms.ocr_document(path, zone);
     });
 
-    // ── dms_get_exif ─────────────────────────────────────────────────────────
 #ifdef NLP_WITH_ONNX
     wv.expose("dms_get_exif", [](string path) -> string {
         if (!fs::exists(fs::path{path})) return DMSHandle::err_str("File not found: "+path);
@@ -369,7 +435,6 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
     });
 #endif
 
-    // ── dms_rectify_document ─────────────────────────────────────────────────
     wv.expose("dms_rectify_document",
               [&dms](string path, std::optional<string> out_path) -> string {
         const auto r = dms.rectify_document(path, out_path);
@@ -377,20 +442,16 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(*r);
     });
 
-    // ── dms_export_pdf ───────────────────────────────────────────────────────
-    // TODO: integrate saucer/pdf (https://github.com/saucer/pdf) for self-contained
-    //       PDF export.  On macOS, PDFKit / CGPDFContext are the correct APIs.
-    //       No process spawning (sips, cupsfilter, etc.) is permitted.
+    // TODO: integrate saucer/pdf — https://github.com/saucer/pdf
+    //       macOS: PDFKit / CGPDFContext. No process spawning permitted.
     wv.expose("dms_export_pdf", [](string /*src_path*/, string /*out_path*/) -> string {
         return DMSHandle::err_str(
             "PDF export is not yet available — pending saucer/pdf integration. "
             "See: https://github.com/saucer/pdf");
     });
 
-    // ── dms_extract_pdf_text ─────────────────────────────────────────────────
-    // TODO: integrate saucer/pdf (https://github.com/saucer/pdf) for self-contained
-    //       PDF text extraction.  macOS can use PDFKit's PDFDocument API.
-    //       No process spawning (pdftotext, pdftoppm, etc.) is permitted.
+    // TODO: integrate saucer/pdf — https://github.com/saucer/pdf
+    //       macOS: PDFKit PDFDocument API. No process spawning permitted.
     wv.expose("dms_extract_pdf_text", [](string /*path*/) -> string {
         return DMSHandle::err_str(
             "PDF text extraction is not yet available — pending saucer/pdf integration. "

@@ -1,0 +1,101 @@
+# French linguistic stopwords
+# Format : one word per line, lowercase, UTF-8
+# Lines starting with # are ignored by NLPModel::load_file_to_vec()
+#
+# ── Determiners & articles ────────────────────────────────────────────────────
+le
+la
+les
+un
+une
+des
+du
+au
+aux
+# ── Pronouns ─────────────────────────────────────────────────────────────────
+je
+tu
+il
+elle
+nous
+vous
+ils
+elles
+me
+te
+lui
+se
+# ── Auxiliary verbs ──────────────────────────────────────────────────────────
+est
+sont
+était
+étaient
+sera
+seront
+être
+avoir
+a
+ont
+avait
+avaient
+peut
+doit
+fait
+# ── Prepositions ─────────────────────────────────────────────────────────────
+dans
+sur
+sous
+par
+pour
+avec
+sans
+entre
+vers
+chez
+après
+avant
+depuis
+pendant
+# ── Conjunctions ─────────────────────────────────────────────────────────────
+et
+ou
+mais
+donc
+car
+ni
+si
+que
+quand
+comme
+parce
+bien
+# ── Adverbs / markers ────────────────────────────────────────────────────────
+aussi
+encore
+déjà
+ici
+là
+maintenant
+toujours
+jamais
+très
+plus
+moins
+seulement
+même
+ainsi
+# ── Possessives ──────────────────────────────────────────────────────────────
+mon
+ton
+son
+ma
+ta
+sa
+nos
+vos
+mes
+tes
+ses
+leur
+leurs
+

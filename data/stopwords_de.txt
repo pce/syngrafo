@@ -1,0 +1,104 @@
+# German linguistic stopwords
+# Format : one word per line, lowercase, UTF-8
+# Lines starting with # are ignored by NLPModel::load_file_to_vec()
+#
+# ── Determiners & articles ────────────────────────────────────────────────────
+der
+die
+das
+ein
+eine
+einem
+einen
+eines
+einer
+# ── Pronouns ─────────────────────────────────────────────────────────────────
+ich
+du
+er
+sie
+es
+wir
+ihr
+mich
+dich
+ihn
+uns
+euch
+sich
+# ── Auxiliary verbs ──────────────────────────────────────────────────────────
+ist
+sind
+war
+waren
+wird
+werden
+wurde
+wurden
+sein
+haben
+hat
+hatte
+hatten
+kann
+muss
+soll
+darf
+mag
+# ── Prepositions ─────────────────────────────────────────────────────────────
+in
+an
+auf
+bei
+durch
+für
+gegen
+mit
+nach
+ohne
+um
+von
+vor
+zu
+zwischen
+über
+unter
+neben
+aus
+# ── Conjunctions ─────────────────────────────────────────────────────────────
+und
+oder
+aber
+doch
+wenn
+weil
+dass
+ob
+als
+obwohl
+damit
+# ── Adverbs / markers ────────────────────────────────────────────────────────
+auch
+noch
+schon
+hier
+dort
+jetzt
+immer
+nie
+nicht
+sehr
+so
+wie
+da
+dann
+mehr
+nur
+# ── Possessives ──────────────────────────────────────────────────────────────
+mein
+dein
+sein
+ihr
+unser
+euer
+

@@ -1,0 +1,158 @@
+# English linguistic stopwords
+# Format : one word per line, lowercase, UTF-8
+# Lines starting with # are ignored by NLPModel::load_file_to_vec()
+#
+# This file covers English function words ONLY.
+# URL protocols, TLDs, file extensions, and forge path segments belong in
+# data/filters/ — keeping linguistic and domain concerns separate.
+#
+# ── Determiners & articles ────────────────────────────────────────────────────
+a
+an
+the
+# ── Conjunctions ─────────────────────────────────────────────────────────────
+and
+or
+but
+nor
+so
+yet
+both
+either
+neither
+# ── Prepositions ─────────────────────────────────────────────────────────────
+in
+on
+at
+to
+for
+of
+with
+by
+from
+into
+through
+during
+before
+after
+above
+below
+between
+out
+off
+over
+under
+about
+# ── Auxiliary verbs ──────────────────────────────────────────────────────────
+is
+are
+was
+were
+be
+been
+being
+have
+has
+had
+do
+does
+did
+will
+would
+may
+might
+must
+can
+could
+shall
+# ── Pronouns ─────────────────────────────────────────────────────────────────
+it
+its
+he
+she
+we
+they
+me
+him
+her
+us
+them
+# ── Possessive adjectives ─────────────────────────────────────────────────────
+my
+your
+his
+our
+their
+# ── Quantity / degree words ───────────────────────────────────────────────────
+if
+not
+no
+each
+few
+more
+most
+other
+some
+such
+than
+all
+any
+also
+as
+# ── Demonstratives ───────────────────────────────────────────────────────────
+that
+this
+these
+those
+then
+# ── Question words ───────────────────────────────────────────────────────────
+when
+where
+which
+who
+whose
+whom
+what
+how
+why
+# ── Adverbs / markers ────────────────────────────────────────────────────────
+once
+here
+there
+again
+further
+up
+down
+just
+very
+back
+even
+now
+like
+well
+too
+still
+only
+same
+# ── Common high-frequency verbs ──────────────────────────────────────────────
+get
+make
+use
+# ── English number words ─────────────────────────────────────────────────────
+# (pure-digit tokens already dropped structurally; these cover spelled-out forms)
+one
+two
+three
+four
+five
+six
+seven
+eight
+nine
+ten
+# ── Additional high-frequency English stopwords ──────────────────────────────
+i
+new
+old
+own
+
