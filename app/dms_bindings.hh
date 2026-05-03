@@ -283,23 +283,63 @@ inline Expected<json> DMSHandle::search(std::string_view query_sv, int top_k) {
             {"results", std::move(results)},
         });
     }
-    std::vector<pce::db::Row> doc_rows;
+    // ── keyword fallback: filename · snippet · indexed keywords ──────────────
+    // scoring: filename hit > snippet hit > keyword hit
+    const std::string q_like = "%" + query + "%";
+    struct KwCand { int64_t doc_id; float score; };
+    std::unordered_map<int64_t,KwCand> kw_map;
     {
         std::lock_guard lk{db_mutex};
-        doc_rows=active_db().from("dms_documents")
-                     .where("snippet LIKE ?","%"+query+"%").limit((int64_t)top_k).execute();
+        // filename hits
+        for (const auto& row : active_db().from("dms_documents")
+                 .where("filename LIKE ?", q_like).limit(int64_t(top_k)*2).execute()) {
+            const auto id = row.try_get<int64_t>("id").value_or(0);
+            if (!id) continue;
+            kw_map[id] = {id, 0.85f};
+        }
+        // snippet hits
+        for (const auto& row : active_db().from("dms_documents")
+                 .where("snippet LIKE ?", q_like).limit(int64_t(top_k)*2).execute()) {
+            const auto id = row.try_get<int64_t>("id").value_or(0);
+            if (!id) continue;
+            auto it = kw_map.find(id);
+            if (it==kw_map.end()) kw_map[id] = {id, 0.75f};
+            else it->second.score = std::max(it->second.score, 0.75f);
+        }
+        // nlp keyword hits – keywords stored as JSON text
+        for (const auto& row : active_db().from("nlp_notes")
+                 .where("row_type = ?", std::string{"dms_doc"})
+                 .where("keywords LIKE ?", q_like)
+                 .limit(int64_t(top_k)*2).execute()) {
+            const auto id = row.try_get<int64_t>("row_id").value_or(0);
+            if (!id) continue;
+            auto it = kw_map.find(id);
+            if (it==kw_map.end()) kw_map[id] = {id, 0.65f};
+            else it->second.score = std::max(it->second.score, 0.65f);
+        }
     }
+    std::vector<KwCand> kw_cands;
+    kw_cands.reserve(kw_map.size());
+    for (auto& [id,c] : kw_map) kw_cands.push_back(c);
+    std::ranges::sort(kw_cands,[](const KwCand& a,const KwCand& b){return a.score>b.score;});
+    if ((int)kw_cands.size()>top_k) kw_cands.resize(top_k);
+
     json results=json::array();
-    for(const auto& row:doc_rows){
-        const auto doc_id=row.try_get<int64_t>("id").value_or(0);
-        std::optional<pce::db::Row> nr;
+    for (const auto& c : kw_cands) {
+        std::optional<pce::db::Row> dr,nr;
         {
             std::lock_guard lk{db_mutex};
+            dr=active_db().from("dms_documents").where("id = ?",c.doc_id).first();
             nr=active_db().from("nlp_notes")
                    .where("row_type = ?",std::string{"dms_doc"})
-                   .where("row_id   = ?",doc_id).order_by("created_at",false).first();
+                   .where("row_id   = ?",c.doc_id).order_by("created_at",false).first();
         }
-        results.push_back(build_result_json_(doc_id,1.f,row,nr));
+        if (!dr) continue;
+        auto rj = build_result_json_(c.doc_id, c.score, *dr, nr);
+        // replace default snippet with a context window centred on the match
+        const auto ctx = make_context_snippet(dr->get<std::string>("snippet"), query);
+        if (!ctx.empty()) rj["snippet"] = ctx;
+        results.push_back(std::move(rj));
     }
     return json({
         {"strategy", "keyword"},
@@ -456,7 +496,7 @@ inline Expected<pce::db::Database> DMSHandle::open_zone_db(
         zone_row=db.from("dms_zones").where("name = ?",std::string{zone_name}).first();
     }
     if (!zone_row) return std::unexpected(std::format("Zone '{}' not found",zone_name));
-    fs::path db_path=fs::path{zone_row->get<std::string>("out_path")}/".papiere.db";
+    fs::path db_path=fs::path{zone_row->get<std::string>("out_path")}/".syngrafo.db";
     {std::error_code ec;fs::create_directories(db_path.parent_path(),ec);}
     const bool is_enc=zone_row->get<int64_t>("is_encrypted")!=0;
     try {

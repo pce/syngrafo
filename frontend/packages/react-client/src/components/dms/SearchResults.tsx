@@ -1,6 +1,36 @@
 import React from "react";
 import { useDms } from "../../store/dms-store";
+import type { SearchResult } from "../../services/dms-service";
 import Icon from "../Icon";
+
+/** Highlight every occurrence of `query` inside `text`. */
+function SnippetText({ text, query }: { text: string; query: string }) {
+  if (!text) return null;
+  if (!query) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-[var(--theme-primary)]/25 text-[var(--theme-primary)] font-semibold not-italic rounded-sm px-0.5">
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+/** Detect special folder prefixes in search result paths. */
+function pathKind(path: string, zone: { out_path: string } | null): "notes" | "kanban" | "file" {
+  if (zone) {
+    if (path.startsWith(zone.out_path + "/.notes")) return "notes";
+    if (path.startsWith(zone.out_path + "/.kanban")) return "kanban";
+  }
+  // fallback: check for common patterns
+  if (path.includes("/.notes/")) return "notes";
+  if (path.includes("/.kanban/")) return "kanban";
+  return "file";
+}
 
 const SearchResults: React.FC = () => {
   const { state, dispatch } = useDms();
@@ -15,8 +45,28 @@ const SearchResults: React.FC = () => {
     dispatch({ type: "SET_SEARCHING",      searching: false });
   };
 
-  const handleSelect = (path: string) => {
-    dispatch({ type: "SELECT_FILE", path });
+  const handleSelect = (result: SearchResult) => {
+    const kind = pathKind(result.path, state.zone ?? null);
+
+    if (kind === "notes" && state.zone) {
+      // Navigate left panel to NotesView; SELECT_FILE carries the target note
+      // so NotesView can auto-select it after loading.
+      dispatch({ type: "SET_PATH",    path: state.zone.out_path + "/.notes" });
+      dispatch({ type: "SELECT_FILE", path: result.path });
+      handleClose();
+      return;
+    }
+    if (kind === "kanban" && state.zone) {
+      dispatch({ type: "SET_PATH",    path: state.zone.out_path + "/.kanban" });
+      dispatch({ type: "SELECT_FILE", path: result.path });
+      handleClose();
+      return;
+    }
+
+    // Regular file: navigate file browser to parent dir and select the file
+    const parentDir = result.path.substring(0, result.path.lastIndexOf("/"));
+    if (parentDir) dispatch({ type: "SET_PATH", path: parentDir });
+    dispatch({ type: "SELECT_FILE", path: result.path });
     handleClose();
   };
 
@@ -24,6 +74,7 @@ const SearchResults: React.FC = () => {
 
   return (
     <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl z-50 flex flex-col max-h-[70vh] overflow-hidden">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/50">
         <div className="flex items-center gap-2">
           <Icon name="search" size="xs" className="text-[var(--theme-text-muted)]" />
@@ -52,6 +103,7 @@ const SearchResults: React.FC = () => {
         </button>
       </div>
 
+      {/* Results list */}
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
         {state.searching ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
@@ -66,55 +118,77 @@ const SearchResults: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-1">
-            {state.searchResults.map((result, i) => (
-              <button
-                key={i}
-                onClick={() => handleSelect(result.path)}
-                className={`
-                  w-full flex flex-col gap-1 p-3 rounded-xl text-left transition-all group
-                  ${state.selectedPath === result.path 
-                    ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] shadow-md" 
-                    : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)] border border-transparent hover:border-[var(--theme-border)]"}
-                `}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    <Icon
-                      name={result.path.toLowerCase().endsWith(".pdf") ? "document" : result.mimeType.startsWith("image/") ? "image" : "file"}
-                      size="xs"
-                      className={state.selectedPath === result.path ? "text-current" : "text-[var(--theme-primary)]"}
-                    />
-                    <span className="text-sm font-bold truncate max-w-md">{result.filename}</span>
-                  </div>
-                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    state.selectedPath === result.path ? "bg-white/20" : "bg-[var(--theme-bg)] text-[var(--theme-text-muted)]"
-                  }`}>
-                    {Math.round(result.score * 100)}%
-                  </span>
-                </div>
+            {state.searchResults.map((result, i) => {
+              const kind     = pathKind(result.path, state.zone ?? null);
+              const isActive = state.selectedPath === result.path;
+              const kindIcon = kind === "notes" ? "edit" : kind === "kanban" ? "view_kanban" : (
+                result.path.toLowerCase().endsWith(".pdf") ? "document"
+                  : result.mimeType.startsWith("image/") ? "image" : "file"
+              );
+              const scoreLabel =
+                result.score >= 0.99 ? "exact"
+                : result.score >= 0.80 ? `${Math.round(result.score * 100)}%`
+                : `${Math.round(result.score * 100)}%`;
 
-                {result.snippet && (
-                  <p className={`text-xs line-clamp-2 italic opacity-80 ${
-                    state.selectedPath === result.path ? "text-current" : "text-[var(--theme-text-muted)]"
-                  }`}>
-                    &ldquo;...{result.snippet}...&rdquo;
-                  </p>
-                )}
-
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {result.keywords.slice(0, 3).map((kw, ki) => (
-                    <span
-                      key={ki}
-                      className={`text-[9px] uppercase tracking-tighter font-bold px-1 rounded ${
-                        state.selectedPath === result.path ? "bg-white/10" : "bg-[var(--theme-bg)]/50 text-[var(--theme-text-muted)]"
-                      }`}
-                    >
-                      #{kw.term}
+              return (
+                <button
+                  key={i}
+                  onClick={() => handleSelect(result)}
+                  className={`
+                    w-full flex flex-col gap-1 p-3 rounded-xl text-left transition-all group
+                    ${isActive
+                      ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] shadow-md"
+                      : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)] border border-transparent hover:border-[var(--theme-border)]"}
+                  `}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <Icon
+                        name={kindIcon}
+                        size="xs"
+                        className={isActive ? "text-current" : "text-[var(--theme-primary)]"}
+                      />
+                      <span className="text-sm font-bold truncate max-w-xs">{result.filename}</span>
+                      {kind !== "file" && (
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-1 rounded ${
+                          isActive ? "bg-white/15" : "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"
+                        }`}>
+                          {kind}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      isActive ? "bg-white/20" : "bg-[var(--theme-bg)] text-[var(--theme-text-muted)]"
+                    }`}>
+                      {scoreLabel}
                     </span>
-                  ))}
-                </div>
-              </button>
-            ))}
+                  </div>
+
+                  {result.snippet && (
+                    <p className={`text-xs line-clamp-2 italic opacity-80 ${
+                      isActive ? "text-current" : "text-[var(--theme-text-muted)]"
+                    }`}>
+                      &ldquo;
+                      <SnippetText text={result.snippet} query={state.searchQuery} />
+                      &rdquo;
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {result.keywords.slice(0, 3).map((kw, ki) => (
+                      <span
+                        key={ki}
+                        className={`text-[9px] uppercase tracking-tighter font-bold px-1 rounded ${
+                          isActive ? "bg-white/10" : "bg-[var(--theme-bg)]/50 text-[var(--theme-text-muted)]"
+                        }`}
+                      >
+                        #{kw.term}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

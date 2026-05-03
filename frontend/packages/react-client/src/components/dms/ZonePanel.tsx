@@ -41,7 +41,7 @@ function isNetworkPath(p: string): boolean {
 function suggestWorkspace(sourcePath: string, name: string): string {
   if (!sourcePath) return "";
   const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "zone";
-  return `${sourcePath.replace(/\/$/, "")}/.papiere/${slug}`;
+  return `${sourcePath.replace(/\/$/, "")}/.syngrafo/${slug}`;
 }
 
 const ZonePanel: React.FC<Props> = ({ onClose }) => {
@@ -404,7 +404,7 @@ const ZonePanel: React.FC<Props> = ({ onClose }) => {
           <div className="flex gap-2 mt-1">
             <input
               className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
-              placeholder="/Users/you/Documents/Projects/.papiere/my-zone"
+              placeholder="/Users/you/Documents/Projects/.syngrafo/my-zone"
               value={outPath}
               onChange={e => { setOutPath(e.target.value); setAutoWorkspace(false); }}
             />

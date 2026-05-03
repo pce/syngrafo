@@ -255,12 +255,15 @@ function fmtDate(ms: number | undefined): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
-  const { dispatch: storeDispatch } = useDms();
+  const { state: storeState, dispatch: storeDispatch } = useDms();
 
   // ── State ─────────────────────────────────────────────────────────────────────
   const [rootNotes,    setRootNotes]    = useState<FsEntry[]>([]);
   const [collections,  setCollections]  = useState<CollectionGroup[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  // Pending auto-select from search navigation (set by viewerPath watcher,
+  // resolved once the note list has loaded).
+  const [pendingAutoSelect, setPendingAutoSelect] = useState<string | null>(null);
   const [content,      setContent]      = useState<string>("");
   const [saveStatus,   setSaveStatus]   = useState<SaveStatus>("idle");
   const [listLoading,  setListLoading]  = useState(false);
@@ -329,7 +332,31 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 
   useEffect(() => { loadNotes(); }, [loadNotes]);
 
-  // ── Store sync ────────────────────────────────────────────────────────────────
+  // Auto-select from search navigation
+  // When the store's viewerPath is set to a path inside this .notes folder
+  // (i.e., the user clicked a note in search results), queue a pending auto-select.
+  useEffect(() => {
+    const vp = storeState.viewerPath;
+    if (vp && vp !== selectedPath && vp.startsWith(notesDir + "/")) {
+      setPendingAutoSelect(vp);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeState.viewerPath]);
+
+  // Once the note list is populated, resolve any pending auto-select.
+  useEffect(() => {
+    if (!pendingAutoSelect) return;
+    const allNotes = [
+      ...rootNotes,
+      ...collections.flatMap((g) => g.notes),
+    ];
+    if (allNotes.find((n) => n.path === pendingAutoSelect)) {
+      setSelectedPath(pendingAutoSelect);
+      setPendingAutoSelect(null);
+    }
+  }, [pendingAutoSelect, rootNotes, collections]);
+
+  // Store sync
 
   useEffect(() => {
     storeDispatch({ type: "SELECT_FILE", path: selectedPath });
@@ -341,7 +368,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Load content when selection changes ───────────────────────────────────────
+  // Load content when selection changes
 
   useEffect(() => {
     if (!selectedPath) {
@@ -375,7 +402,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     return () => { cancelled = true; };
   }, [selectedPath]);
 
-  // ── Debounced auto-save ───────────────────────────────────────────────────────
+  // Debounced auto-save
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -394,7 +421,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [scheduleSave]
   );
 
-  // ── Create note ───────────────────────────────────────────────────────────────
+  // Create note
 
   const createNote = useCallback(
     async (title: string, collection: string) => {
@@ -428,7 +455,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     if (title) await createNote(title, newNoteCollection);
   }, [newNoteTitle, newNoteCollection, createNote]);
 
-  // ── Create collection ─────────────────────────────────────────────────────────
+  // Create collection
 
   const createCollection = useCallback(async () => {
     const name = newCollectionName.trim();
@@ -439,7 +466,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     await loadNotes();
   }, [newCollectionName, notesDir, loadNotes]);
 
-  // ── Delete note ───────────────────────────────────────────────────────────────
+  //  Delete note
 
   const deleteNote = useCallback(
     async (path: string) => {
@@ -455,7 +482,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [selectedPath, loadNotes]
   );
 
-  // ── Delete collection (cascade delete all notes, then dir) ────────────────────
+  // Delete collection (cascade delete all notes, then dir)
 
   const deleteCollection = useCallback(
     async (group: CollectionGroup) => {
@@ -472,7 +499,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [selectedPath, loadNotes]
   );
 
-  // ── Toggle collection collapsed ───────────────────────────────────────────────
+  // Toggle collection collapsed
 
   const toggleCollapse = useCallback((name: string) => {
     setCollapsedCols((prev) => {
@@ -482,12 +509,12 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     });
   }, []);
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
+  // Derived
 
   const preview = useMemo(() => renderMarkdown(content), [content]);
   const allCollectionNames = collections.map((c) => c.name);
 
-  // ── Render helper: one note row ───────────────────────────────────────────────
+  // Render helper: one note row
 
   const renderNoteRow = (note: FsEntry, indent: boolean) => {
     const isSelected = note.path === selectedPath;
@@ -556,7 +583,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     );
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--theme-bg)]">

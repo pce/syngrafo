@@ -1,0 +1,257 @@
+= Zero-Copy Database
+:toc: left
+:toclevels: 3
+:source-highlighter: rouge
+
+Header-only, C++23, SQLite-backed query builder with a *zero-copy* binding
+and row-reading path.  No generated code, no macros, no schema registration.
+
+== Migrations
+
+Schema migrations are applied with a single `apply()` call.  Choose a source
+depending on context:
+
+[source,cpp]
+----
+#include "app/db/migration/runner.hh"
+
+// Static (fastest — SQL embedded directly in the binary, zero I/O):
+#include "app/db/migration/source_static.hh"
+
+constexpr pce::db::migration::StaticSource MIGRATIONS {{
+    { 1, "001_init",      "CREATE TABLE documents (id INTEGER PRIMARY KEY);" },
+    { 2, "002_add_index", "CREATE INDEX idx_doc_hash ON documents(hash);" },
+}};
+
+migration::apply(db, MIGRATIONS);
+
+// File-based (dev mode — edit SQL without recompiling):
+#include "app/db/migration/source_fs.hh"
+
+migration::FileSource fs{"data/sql/migrations"};
+migration::apply(db, fs);
+----
+
+`apply()` is templated over the database type and works with both
+`ZeroDatabase` and the legacy `Database`.
+
+=== SQL file conventions
+
+----
+data/sql/migrations/
+    001_init.sql
+    002_add_index.sql
+    003_tags.sql
+----
+
+Files must start with a zero-padded integer version number.  `FileSource`
+uses `std::stoll` so anything up to the first non-digit is the version,
+and files are sorted by path before processing.
+
+=== `schema_migrations` tracking table
+
+`apply()` creates this table on first use and records every applied version:
+
+[source,sql]
+----
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL,
+    applied_at INTEGER NOT NULL
+);
+----
+
+=== Migration source files
+
+Each file carries a full `@file` doxygen block — see the source for detail.
+
+[cols="1,3"]
+|===
+| File | Purpose
+
+| `migration/migration.hh`
+| Core `Migration` POD — `version`, `name`, `sql` (all non-owning).  No SQLite dependency.
+
+| `migration/source.hh`
+| `MigrationSource` concept.  Satisfied by any type whose `migrations()` returns `span<const Migration>`.
+
+| `migration/source_static.hh`
+| `StaticSource<N>` — compile-time `std::array`; SQL lives in read-only program memory.
+
+| `migration/source_fs.hh`
+| `FileSource` — scans a directory at runtime; lazy-loads on first call; storage pre-reserved to prevent `string_view` invalidation.
+
+| `migration/runner.hh`
+| `apply(Db&, Source)` — creates tracking table, iterates source, skips already-applied versions.
+|===
+
+== Design: zero-copy vs. owning
+
+[cols="1,2,2"]
+|===
+| | Zero-copy path (`query.hh`) | Owning path (`database.hh`)
+
+| Binding type
+| `DbValueView` (`string_view` / `span`) — no allocation
+| `Value` (`std::string` / `std::vector<uint8_t>`) — copies on bind
+
+| SQLite flag
+| `SQLITE_STATIC` — sqlite3 reads from caller buffer
+| `SQLITE_TRANSIENT` — sqlite3 copies immediately
+
+| Row type
+| `RowView` — borrows from statement memory
+| `Row` — owns a full snapshot
+
+| Lifetime requirement
+| Caller's string/blob arguments **must outlive** `execute()` / `each()`
+| None — data is copied up-front
+
+| Allocation profile
+| Zero heap allocations for string/blob bindings or row reads
+| One allocation per bound string + one per TEXT/BLOB column per row
+|===
+
+=== When to prefer `query.hh`
+
+* High-frequency read loops (e.g. embedding search, export).
+* Bindings come from already-owned `std::string` locals or `string_view` literals that clearly outlive the query.
+* You process row data inside a callback without storing it.
+
+=== When to stick with `database.hh`
+
+* Convenience matters more than allocation count.
+* Bindings are temporaries (e.g. `std::to_string(id)`).
+* You need to store `Row` objects in a container after the query.
+
+== Quick-start (`query.hh`)
+
+[source,cpp]
+----
+#include "app/db/query.hh"
+
+auto db = pce::db::ZeroDatabase::open("app.db");
+
+// ── SELECT (zero-copy iteration) ─────────────────────────────────────────────
+std::string_view industry = "fintech";
+
+db.from("accounts")
+  .where("industry = ?", industry)   // ⚡ no copy of 'industry'
+  .where("active = ?", 1)
+  .order_by("name")
+  .limit(20)
+  .each([](pce::db::RowView rv) {
+      auto id   = rv.get<int64_t>("id");
+      auto name = rv.get<std::string_view>("name");  // ⚡ points into stmt buffer
+      std::println("{} — {}", id, name);
+  });
+
+// ── SELECT → owning snapshot ─────────────────────────────────────────────────
+auto rows = db.from("accounts")
+              .where("active = ?", 1)
+              .collect();   // vector<vector<DbValue>>
+
+// ── SELECT → typed projection ─────────────────────────────────────────────────
+struct Account { int64_t id; std::string name; };
+
+auto accounts = db.from("accounts")
+                  .where("active = ?", 1)
+                  .map<Account>([](pce::db::RowView rv) {
+                      return Account{
+                          rv.get<int64_t>("id"),
+                          rv.get<std::string>("name"),  // one copy here
+                      };
+                  });
+
+// ── first() ───────────────────────────────────────────────────────────────────
+auto first = db.from("accounts")
+               .where("id = ?", id)
+               .first<Account>([](pce::db::RowView rv) {
+                   return Account{ rv.get<int64_t>("id"),
+                                   rv.get<std::string>("name") };
+               });
+
+// ── INSERT ────────────────────────────────────────────────────────────────────
+std::string_view type = "account";
+auto rowid = db.insert_into("nlp_embeddings")
+               .value("row_type",  type)
+               .value("row_id",    account_id)
+               .value("text_hash", hash_sv)    // ⚡ string_view — no copy
+               .value("vector",    blob_span)  // ⚡ span — no copy
+               .value("updated_at", now_unix())
+               .on_conflict_replace()
+               .execute();
+
+// ── UPDATE ────────────────────────────────────────────────────────────────────
+db.update("accounts")
+  .set("sentiment_score", 0.73)
+  .set("updated_at",      now_unix())
+  .where("id = ?",        account_id)
+  .execute();
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
+db.delete_from("nlp_embeddings")
+  .where("row_type = ?", type)
+  .where("row_id = ?",   contact_id)
+  .execute();
+
+// ── TRANSACTION ───────────────────────────────────────────────────────────────
+{
+    auto tx = db.transaction();
+    db.insert_into("accounts").value("name", std::string_view{"Acme"}).execute();
+    tx.commit();
+}
+----
+
+== RowView API
+
+[source,cpp]
+----
+void each(pce::db::RowView rv) {
+    // by name
+    auto id    = rv.get<int64_t>("id");
+    auto name  = rv.get<std::string_view>("name");  // zero-copy
+    auto data  = rv.get<pce::db::BlobView>("data"); // zero-copy span
+    auto score = rv.get<double>("score", 0.0);       // with fallback
+
+    // optional (returns std::nullopt for NULL)
+    auto maybe = rv.try_get<std::string_view>("note");
+
+    // null check
+    bool missing = rv.is_null("note");
+
+    // copy everything out when you need to store the row
+    auto owned = rv.own();   // vector<DbValue>
+}
+----
+
+WARNING: `string_view` and `BlobView` values obtained from `RowView` are
+only valid *inside* the `each()` callback.  Do not store them beyond the
+lambda body.  Call `rv.own()` or `rv.get<std::string>(...)` to copy the data.
+
+== Value types
+
+[source,cpp]
+----
+// Non-owning (zero-copy, valid while statement is alive)
+pce::db::DbValueView  // variant<monostate, int64_t, double, string_view, span<const uint8_t>>
+pce::db::TextView     // = std::string_view
+pce::db::BlobView     // = std::span<const uint8_t>
+
+// Owning
+pce::db::DbValue      // variant<monostate, int64_t, double, string, vector<uint8_t>>
+pce::db::Text         // = std::string
+pce::db::Blob         // = std::vector<uint8_t>
+----
+
+== Thread safety
+
+`ZeroDatabase` (and `Database`) are **not** thread-safe.  Create one instance
+per thread, or guard with a mutex.
+
+== Requirements
+
+* C++23 (`std::span`, concepts, `std::print`)
+* SQLite 3 (`sqlite3.h`)
+* Optional: SQLCipher for at-rest encryption (use `database.hh`'s
+  `open_encrypted`)
