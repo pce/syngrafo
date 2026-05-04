@@ -124,11 +124,13 @@ struct DMSHandle {
         pce::db::bootstrap_nlp_schema(db);
         bootstrap_palette_schema(db);
         bootstrap_bookmark_schema(db);
-        pce::db::apply_migrations(db, kDmsMigrations);
+        bootstrap_fts_schema(db);
+        bootstrap_chunks_schema(db);
+        pce::db::migration::apply(db, kDmsMigrations);
         discard(scan_dir("data", false));
         std::print("[dms] global database ready: '{}' (schema v{})\n",
                    fs::absolute(db_path_()).string(),
-                   pce::db::current_schema_version(db));
+                   pce::db::migration::current_schema_version(db));
     }
     DMSHandle(const DMSHandle&) = delete;
     DMSHandle& operator=(const DMSHandle&) = delete;
@@ -239,4 +241,3 @@ struct DMSHandle {
 };
 
 } // namespace pce::dms
-

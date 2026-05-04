@@ -1,5 +1,15 @@
 = Syngrafo0
 
+
+
+:toc: auto
+:toc-title: Contents
+:toclevels: 3
+:icons: font
+:source-highlighter: highlight.js
+
+
+
 [.lead]
 A local-first system for transforming files into structured, searchable, and interactive data.
 
@@ -10,15 +20,6 @@ image:https://img.shields.io/badge/status-active-brightgreen[]
 image:https://img.shields.io/badge/license-MIT-blue[]
 image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey[]
 image:https://github.com/pce/syngrafo/actions/workflows/release.yml/badge.svg?branch=main[CI,link=https://github.com/pce/syngrafo/actions/workflows/release.yml]
-
-
-
-
-:toc: auto
-:toc-title: Contents
-:toclevels: 3
-:icons: font
-:source-highlighter: highlight.js
 
 
 // Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
@@ -136,67 +137,30 @@ PLY · OBJ · GLTF · STL
 // |===
 //
 
+== Search Index
+
+//    hybrid + chunked + language-aware retrieval
+// FTS5 BM25 first, LIKE fallback
+
+.Index Search in the zone
+image::data/inp/syngrafo_zonesearch_index.jpg[width=100%]
+
+[.text-right]
+Syngrafo0 uses a semantic search v0.1 index to find related contents
+
+
 == Image Options
 
 
 [cols="1,1", frame="none", grid="none"]
 |===
 | image:data/inp/syngrafo_image_ocr.jpg[width=100%]
-| image:data/inp/syngrafo_img_2_svg.jpg[width=100%]
+| image:data/inp/syngrafo0_svgImg.jpg[width=100%]
 
 | *OCR Extraction*
 | *SVG Reconstruction (Palette: AB)*
 |===
 
-// [cols="1,1", frame="none", grid="none"]
-// |===
-// | image:data/inp/syngrafo_image_ocr.jpg[width=100%]
-// | image:data/inp/syngrafo_img_2_svg.jpg[width=100%]
-// |===
-//
-// === OCR
-//
-// image::data/inp/syngrafo_image_ocr.jpg[[width=100%]
-//
-
-
-=== SVG
-// TODO Move this section to a dedicated SVG chapter, expand on the strategies and palette options.
-//
-// .SVG conversion using the “AB” color palette
-// image::data/inp/syngrafo_img_2_svg.jpg[width=100%]
-
-Image-to-SVG conversion with selectable strategies:
-
-* RCT: pixel-perfect reconstruction
-* PLY: polygonal approximation
-* TRI: triangulated mesh
-
-
-
-.Image to SVG triangulated
-image::data/inp/syngrafo0_svgImg.jpg[width=100%]
-
-
-Supports configurable color palettes.
-
-The ColorPalette reduces the image to a constrained color set
-optimized for vector reconstruction and stylization.
-
-
-
-[cols="1,1,1",options="header",frame="none",grid="none"]
-|===
-| polygonal approximation | Triangulated (16colors) | TRI (8colors)
-
-| image:data/inp/syngrafo_img2svg_ply_8.jpg[width=100%]
-
-
-| image:data/inp/syngrafo_img2svg_tri_16.jpg[width=100%]
-
-
-| image:data/inp/syngrafo_img2svg_tri_8.jpg[width=100%]
-|===
 
 
 == 3D Preview
@@ -239,11 +203,14 @@ python3 scripts/download_models.py check
 
 == Database
 
-`pce::db::Database` (`app/db/database.hh`) — header-only LINQ-style builder. No ORM, no macros. Statements compiled once per SQL shape and cached. WAL journal mode on every connection.
+`pce::db::Database` (`app/db/database.hh`) — header-only LINQ-style builder.
+
+// No ORM, no macros. Statements compiled once per SQL shape and cached.
+// WAL journal mode on every connection.
 
 [source,cpp]
 ----
-auto db = pce::db::Database::open("syngrafo.db");           // plain
+auto db = pce::db::Database::open("syngrafo.db");                       // plain
 auto db = pce::db::Database::open_encrypted("syngrafo.db", passphrase); // AES-256
 
 auto rows = db.from("dms_zones")
@@ -252,6 +219,8 @@ auto rows = db.from("dms_zones")
               .limit(10).execute();
 ----
 
+
+While the Migration offers StaticFileSources they are intentionally compile-time in Code
 
 
 == Build
@@ -277,6 +246,9 @@ cmake -S . -B build && cmake --build build --config Debug
 # tests
 python3 scripts/dev.py test --target syngrafo
 ----
+
+
+
 
 == License
 

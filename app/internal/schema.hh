@@ -1,19 +1,20 @@
 #pragma once
 /**
  * @file internal/schema.hh
- * @brief SQLite schema bootstrap functions and migration table for the DMS.
- *
- * @note Application-internal. Do not include from external headers.
+ * @brief Bootstrap helpers and versioned migrations for the DMS SQLite schema.
+ * @note Application-internal.
  */
 
 #include "../db/database.hh"
+#include "../db/migration/runner.hh"
+#include "../db/migration/source_static.hh"
 
-#include <array>
+#include <print>
 #include <string>
 
 namespace pce::dms {
 
-// ─── Value types ──────────────────────────────────────────────────────────────
+
 
 struct ZoneRow {
     std::string name;
@@ -24,7 +25,7 @@ struct ZoneRow {
     std::string taxonomy_domain;
 };
 
-// ─── Bootstrap helpers ────────────────────────────────────────────────────────
+
 
 inline void bootstrap_zone_schema(pce::db::Database& db) {
     db.exec(R"sql(
@@ -142,70 +143,127 @@ inline void bootstrap_palette_schema(pce::db::Database& db) {
             "ON zone_palettes (kind);");
 }
 
-// ─── Versioned migrations ─────────────────────────────────────────────────────
+/// Initialise FTS5 full-text search table. Safe to call on every startup.
+/// Silently skips if FTS5 is not compiled into SQLite (falls back to LIKE search).
+inline void bootstrap_fts_schema(pce::db::Database& db) {
+    try {
+        db.exec(R"sql(
+            CREATE VIRTUAL TABLE IF NOT EXISTS dms_fts USING fts5(
+                filename,
+                keywords,
+                body,
+                tokenize = 'unicode61'
+            );
+        )sql");
+    } catch (const std::exception& e) {
+        std::print(stderr, "[dms] FTS5 unavailable — keyword search will use LIKE fallback. ({})\n", e.what());
+    }
+}
 
-/** Migrations 1–4 cover the old try-catch ALTER TABLE pattern. 5+ are additive. */
-inline const std::array<pce::db::Migration, 12> kDmsMigrations{{
-    {1, "baseline dms + nlp + zone schema",         nullptr},
-    {2, "dms_documents: add content_blob",
-        "ALTER TABLE dms_documents ADD COLUMN content_blob BLOB;"},
-    {3, "dms_documents: add kind",
-        "ALTER TABLE dms_documents ADD COLUMN kind TEXT NOT NULL DEFAULT 'other';"},
-    {4, "dms_zones: add salt_hex",
-        "ALTER TABLE dms_zones ADD COLUMN salt_hex TEXT NOT NULL DEFAULT '';"},
-    {5, "zone_palettes table",
-        R"sql(
-        CREATE TABLE IF NOT EXISTS zone_palettes (
-            id           TEXT    PRIMARY KEY,
-            name         TEXT    NOT NULL DEFAULT '',
-            kind         TEXT    NOT NULL DEFAULT 'project',
-            colors_json  TEXT    NOT NULL DEFAULT '[]',
-            description  TEXT    NOT NULL DEFAULT '',
-            created_at   INTEGER NOT NULL DEFAULT 0,
-            updated_at   INTEGER NOT NULL DEFAULT 0
-        );
-        )sql"},
-    {6, "zone_palettes: kind index",
-        "CREATE INDEX IF NOT EXISTS idx_zone_palettes_kind ON zone_palettes (kind);"},
-    {7, "dms_zones: add description",
-        "ALTER TABLE dms_zones ADD COLUMN description TEXT NOT NULL DEFAULT '';"},
-    {8, "dms_zones: add taxonomy_domain",
-        "ALTER TABLE dms_zones ADD COLUMN taxonomy_domain TEXT NOT NULL DEFAULT 'General';"},
-    {9, "dms_documents: ensure indices",
-        R"sql(
-        CREATE INDEX IF NOT EXISTS idx_dms_doc_kind    ON dms_documents(kind);
-        CREATE INDEX IF NOT EXISTS idx_dms_doc_path    ON dms_documents(path);
-        CREATE INDEX IF NOT EXISTS idx_dms_doc_indexed ON dms_documents(indexed_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_dms_doc_mime    ON dms_documents(mime_type);
-        CREATE INDEX IF NOT EXISTS idx_dms_doc_mtime   ON dms_documents(mtime DESC);
-        )sql"},
-    {10, "app_preferences table",
-        R"sql(
-        CREATE TABLE IF NOT EXISTS app_preferences (
-            key        TEXT    PRIMARY KEY,
-            value      TEXT    NOT NULL DEFAULT '',
-            updated_at INTEGER NOT NULL DEFAULT 0
-        );
-        )sql"},
-    {11, "zone_bookmarks table",
-        R"sql(
-        CREATE TABLE IF NOT EXISTS zone_bookmarks (
+/// Placeholder schema for future chunk-level indexing.
+/// Populated by a future chunking pass; schema declared now so migrations are stable.
+inline void bootstrap_chunks_schema(pce::db::Database& db) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS dms_chunks (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            zone_name   TEXT    NOT NULL,
-            label       TEXT    NOT NULL DEFAULT '',
-            target      TEXT    NOT NULL,
-            kind        TEXT    NOT NULL DEFAULT 'file',
-            line_from   INTEGER NOT NULL DEFAULT 0,
-            line_to     INTEGER NOT NULL DEFAULT 0,
-            created_at  INTEGER NOT NULL DEFAULT 0,
+            doc_id      INTEGER NOT NULL,
+            position    INTEGER NOT NULL DEFAULT 0,
+            token_count INTEGER NOT NULL DEFAULT 0,
+            chunk_text  TEXT    NOT NULL DEFAULT '',
+            embedding   BLOB,
             updated_at  INTEGER NOT NULL DEFAULT 0,
-            sort_order  INTEGER NOT NULL DEFAULT 0
+            FOREIGN KEY (doc_id) REFERENCES dms_documents(id) ON DELETE CASCADE
         );
-        )sql"},
+    )sql");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_dms_chunks_doc "
+            "ON dms_chunks (doc_id, position);");
+}
+
+
+
+inline constexpr pce::db::migration::StaticSource<14> kDmsMigrations{{{
+    {1,  "baseline",                        ""},
+    {2,  "dms_documents: content_blob",
+         "ALTER TABLE dms_documents ADD COLUMN content_blob BLOB;"},
+    {3,  "dms_documents: kind",
+         "ALTER TABLE dms_documents ADD COLUMN kind TEXT NOT NULL DEFAULT 'other';"},
+    {4,  "dms_zones: salt_hex",
+         "ALTER TABLE dms_zones ADD COLUMN salt_hex TEXT NOT NULL DEFAULT '';"},
+    {5,  "zone_palettes",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS zone_palettes (
+             id           TEXT    PRIMARY KEY,
+             name         TEXT    NOT NULL DEFAULT '',
+             kind         TEXT    NOT NULL DEFAULT 'project',
+             colors_json  TEXT    NOT NULL DEFAULT '[]',
+             description  TEXT    NOT NULL DEFAULT '',
+             created_at   INTEGER NOT NULL DEFAULT 0,
+             updated_at   INTEGER NOT NULL DEFAULT 0
+         );
+         )sql"},
+    {6,  "zone_palettes: kind index",
+         "CREATE INDEX IF NOT EXISTS idx_zone_palettes_kind ON zone_palettes (kind);"},
+    {7,  "dms_zones: description",
+         "ALTER TABLE dms_zones ADD COLUMN description TEXT NOT NULL DEFAULT '';"},
+    {8,  "dms_zones: taxonomy_domain",
+         "ALTER TABLE dms_zones ADD COLUMN taxonomy_domain TEXT NOT NULL DEFAULT 'General';"},
+    {9,  "dms_documents: indices",
+         R"sql(
+         CREATE INDEX IF NOT EXISTS idx_dms_doc_kind    ON dms_documents(kind);
+         CREATE INDEX IF NOT EXISTS idx_dms_doc_path    ON dms_documents(path);
+         CREATE INDEX IF NOT EXISTS idx_dms_doc_indexed ON dms_documents(indexed_at DESC);
+         CREATE INDEX IF NOT EXISTS idx_dms_doc_mime    ON dms_documents(mime_type);
+         CREATE INDEX IF NOT EXISTS idx_dms_doc_mtime   ON dms_documents(mtime DESC);
+         )sql"},
+    {10, "app_preferences",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS app_preferences (
+             key        TEXT    PRIMARY KEY,
+             value      TEXT    NOT NULL DEFAULT '',
+             updated_at INTEGER NOT NULL DEFAULT 0
+         );
+         )sql"},
+    {11, "zone_bookmarks",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS zone_bookmarks (
+             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+             zone_name   TEXT    NOT NULL,
+             label       TEXT    NOT NULL DEFAULT '',
+             target      TEXT    NOT NULL,
+             kind        TEXT    NOT NULL DEFAULT 'file',
+             line_from   INTEGER NOT NULL DEFAULT 0,
+             line_to     INTEGER NOT NULL DEFAULT 0,
+             created_at  INTEGER NOT NULL DEFAULT 0,
+             updated_at  INTEGER NOT NULL DEFAULT 0,
+             sort_order  INTEGER NOT NULL DEFAULT 0
+         );
+         )sql"},
     {12, "zone_bookmarks: zone index",
-        "CREATE INDEX IF NOT EXISTS idx_zone_bookmarks_zone "
-        "ON zone_bookmarks (zone_name, sort_order);"},
-}};
+         "CREATE INDEX IF NOT EXISTS idx_zone_bookmarks_zone "
+         "ON zone_bookmarks (zone_name, sort_order);"},
+    {13, "dms_fts",
+         R"sql(
+         CREATE VIRTUAL TABLE IF NOT EXISTS dms_fts USING fts5(
+             filename,
+             keywords,
+             body,
+             tokenize = 'unicode61'
+         );
+         )sql"},
+    {14, "dms_chunks",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS dms_chunks (
+             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+             doc_id      INTEGER NOT NULL,
+             position    INTEGER NOT NULL DEFAULT 0,
+             token_count INTEGER NOT NULL DEFAULT 0,
+             chunk_text  TEXT    NOT NULL DEFAULT '',
+             embedding   BLOB,
+             updated_at  INTEGER NOT NULL DEFAULT 0,
+             FOREIGN KEY (doc_id) REFERENCES dms_documents(id) ON DELETE CASCADE
+         );
+         CREATE INDEX IF NOT EXISTS idx_dms_chunks_doc ON dms_chunks (doc_id, position);
+         )sql"},
+}}};
 
 } // namespace pce::dms
-

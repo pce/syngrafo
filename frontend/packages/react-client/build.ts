@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import plugin from "bun-plugin-tailwind";
 import { existsSync } from "fs";
-import { rm } from "fs/promises";
+import { cp, rm } from "fs/promises";
 import path from "path";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -131,7 +131,23 @@ const formatFileSize = (bytes: number): string => {
   return `${size.toFixed(2)} ${units[unitIndex]}`;
 };
 
-console.log("\n🚀 Starting build process...\n");
+/**
+ * Bun plugin: mark font file URL references in CSS as external so the bundler
+ * does not try to resolve /fonts/<file> at build time.  The C++ host serves
+ * these files from the saucer::embed bundle at runtime; they are copied into
+ * dist/fonts/ by the post-build step below.
+ */
+const externalFontsPlugin = {
+  name: "external-fonts",
+  setup(build: any) {
+    build.onResolve(
+      { filter: /\.(ttf|woff2?|eot|otf)$/ },
+      (args: any) => ({ path: args.path, external: true }),
+    );
+  },
+};
+
+console.log("\n\u{1F680} Starting build process...\n");
 
 const cliConfig = parseArgs();
 const outdir = cliConfig.outdir as string || path.join(process.cwd(), "dist");
@@ -155,7 +171,7 @@ const isProd = cliConfig.minify === true || process.argv.includes("--minify");
 const result = await Bun.build({
   entrypoints,
   outdir,
-  plugins: [plugin],
+  plugins: [plugin, externalFontsPlugin],
   minify: isProd,
   target: "browser",
   sourcemap: isProd ? "none" : "linked",
@@ -187,3 +203,24 @@ console.table(outputTable);
 const buildTime = (end - start).toFixed(2);
 
 console.log(`\n✅ Build completed in ${buildTime}ms\n`);
+
+// ── Copy bundled fonts into dist/fonts/ ──────────────────────────────────────
+// Fonts live in frontend/fonts/ (populated by cmake/frontend.cmake at
+// configure time, or by:  python3 scripts/download_fonts.py download).
+// Copy them into dist/ so saucer_embed() picks them up alongside JS/CSS.
+const fontsSource = path.join(process.cwd(), "..", "..", "fonts");
+const fontsDest   = path.join(outdir, "fonts");
+if (existsSync(fontsSource)) {
+  await cp(fontsSource, fontsDest, { recursive: true, force: true });
+  const count = (await Array.fromAsync(
+    new Bun.Glob("*.{ttf,woff,woff2,otf,eot}").scan(fontsDest)
+  )).length;
+  console.log(`\n📦  Copied ${count} font file(s) \u2192 ${path.relative(process.cwd(), fontsDest)}/\n`);
+} else {
+  // cmake/frontend.cmake normally handles the download before reaching here.
+  // If running bun directly outside cmake, fonts may be missing at runtime.
+  console.warn(
+    `\n⚠️  frontend/fonts/ not found — fonts will be absent at runtime.` +
+    `\n   Fix: python3 scripts/download_fonts.py download\n`,
+  );
+}

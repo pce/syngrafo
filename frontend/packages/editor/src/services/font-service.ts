@@ -62,9 +62,10 @@ export const BUNDLED_FONTS: BundledFont[] = [
     category: "sans-serif",
     description: "Clean, highly legible UI and document sans-serif",
     faces: [
-      { weight: "400", style: "normal", file: "Inter-Regular.ttf" },
-      { weight: "600", style: "normal", file: "Inter-SemiBold.ttf" },
-      { weight: "700", style: "normal", file: "Inter-Bold.ttf" },
+      // Variable font: one file covers weights 100-900
+      { weight: "400", style: "normal", file: "InterVariable.ttf" },
+      { weight: "600", style: "normal", file: "InterVariable.ttf" },
+      { weight: "700", style: "normal", file: "InterVariable.ttf" },
     ],
   },
 

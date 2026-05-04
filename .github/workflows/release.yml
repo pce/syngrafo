@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: ["**"]
-    tags:     ["v*.*.*"]
+    tags: ["v*.*.*"]
   pull_request:
     branches: ["**"]
 
@@ -13,7 +13,6 @@ concurrency:
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
-
   # ── macOS ──────────────────────────────────────────────────────────────────
   build-macos:
     name: macOS 15 · AppleClang 16
@@ -34,14 +33,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cpm-cache
-          key:          cpm-macos-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
+          key: cpm-macos-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-macos-
 
       - name: Cache bun modules
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key:          bun-macos-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
+          key: bun-macos-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-macos-
 
       - name: Download NLP models
@@ -70,7 +69,6 @@ jobs:
           name: installer-macos-${{ github.sha }}
           path: build/Syngrafo-*.dmg
           if-no-files-found: warn
-
 
   # ── Linux ──────────────────────────────────────────────────────────────────
   build-linux:
@@ -115,14 +113,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cpm-cache
-          key:          cpm-linux-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
+          key: cpm-linux-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-linux-
 
       - name: Cache bun modules
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key:          bun-linux-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
+          key: bun-linux-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-linux-
 
       - name: Download NLP models
@@ -155,7 +153,6 @@ jobs:
             build/Syngrafo-*.tar.gz
           if-no-files-found: warn
 
-
   # ── Windows ────────────────────────────────────────────────────────────────
   build-windows:
     name: Windows 2025 · MSVC
@@ -181,14 +178,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/cpm-cache
-          key:          cpm-windows-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
+          key: cpm-windows-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-windows-
 
       - name: Cache bun modules
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key:          bun-windows-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
+          key: bun-windows-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-windows-
 
       - name: Download NLP models
@@ -230,7 +227,6 @@ jobs:
             build/Syngrafo-*.zip
           if-no-files-found: warn
 
-
   # ── Release (tag only) ─────────────────────────────────────────────────────
   release:
     name: GitHub Release
@@ -248,10 +244,10 @@ jobs:
       # CPack names them Syngrafo-<ver>-{Darwin,Linux,Windows}.{dmg,deb,…}
       # so the filenames are unique and can all live in one flat directory.
       - uses: actions/download-artifact@v4
-        with: { name: "installer-macos-${{ github.sha }}",   path: dist }
+        with: { name: "installer-macos-${{ github.sha }}", path: dist }
 
       - uses: actions/download-artifact@v4
-        with: { name: "installer-linux-${{ github.sha }}",   path: dist }
+        with: { name: "installer-linux-${{ github.sha }}", path: dist }
 
       - uses: actions/download-artifact@v4
         with: { name: "installer-windows-${{ github.sha }}", path: dist }

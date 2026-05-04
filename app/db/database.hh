@@ -781,54 +781,6 @@ inline bool Database::table_exists(std::string_view table) {
   return {p, p + bytes->size() / sizeof(float)};
 }
 
-/// @deprecated Use `pce::db::migration::apply()` (migration/runner.hh) instead.
-struct Migration {
-    int         version;
-    const char* description;
-    const char* sql;
-};
-
-/// Ensure `schema_migrations` table exists, then apply all pending migrations in order.
-/// Each migration is idempotent — already-applied versions are skipped.
-inline void apply_migrations(Database& db, std::span<const Migration> migrations) {
-    db.exec(R"sql(
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            version     INTEGER PRIMARY KEY,
-            description TEXT    NOT NULL DEFAULT '',
-            applied_at  INTEGER NOT NULL DEFAULT 0
-        );
-    )sql");
-
-    for (const auto& m : migrations) {
-        const auto row = db.from("schema_migrations")
-                           .where("version = ?", static_cast<int64_t>(m.version))
-                           .first();
-        if (row) continue;
-
-        if (m.sql && m.sql[0] != '\0') {
-            try { db.exec(m.sql); }
-            catch (const std::exception& e) {
-                std::print(stderr, "[db] migration v{} DDL warning: {}\n",
-                           m.version, e.what());
-            }
-        }
-        discard(db.insert_into("schema_migrations")
-            .value("version",     static_cast<int64_t>(m.version))
-            .value("description", std::string{m.description ? m.description : ""})
-            .value("applied_at",  now_unix())
-            .execute());
-    }
-}
-
-/// Highest applied migration version, or 0 if none.
-[[nodiscard]] inline int64_t current_schema_version(Database& db) {
-    try {
-        const auto row = db.from("schema_migrations")
-                           .select({"MAX(version) AS v"})
-                           .first();
-        return row ? row->try_get<int64_t>("v").value_or(0) : 0;
-    } catch (...) { return 0; }
-}
 
 } // namespace pce::db
 

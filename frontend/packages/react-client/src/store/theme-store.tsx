@@ -29,6 +29,8 @@ export interface ThemeTokens {
   radius: string;
   /** "compact" | "normal" | "roomy" */
   density: string;
+  /** Font pair preset id — e.g. "system" | "inter" | "ibm-plex" | "comic" */
+  fontPair: string;
 }
 
 export interface ThemePreset {
@@ -64,7 +66,59 @@ export const DEFAULT_THEME: ThemeTokens = {
   customColors: {},
   radius:       "medium",
   density:      "normal",
+  fontPair:     "inter",
 };
+
+export interface FontPair {
+  id: string;
+  label: string;
+  /** CSS font-family stack for --theme-font-sans */
+  sans: string;
+  /** CSS font-family stack for --theme-font-mono */
+  mono: string;
+  /** Short description / category label */
+  description: string;
+  experimental?: boolean;
+}
+
+export const FONT_PAIRS: FontPair[] = [
+  {
+    id: "system",
+    label: "System",
+    sans: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    mono: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    description: "OS default",
+  },
+  {
+    id: "inter",
+    label: "Inter",
+    sans: "'Inter', ui-sans-serif, system-ui, sans-serif",
+    mono: "'JetBrains Mono', ui-monospace, monospace",
+    description: "Inter + JetBrains Mono",
+  },
+  {
+    id: "ibm-plex",
+    label: "IBM Plex",
+    sans: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
+    mono: "'IBM Plex Mono', ui-monospace, monospace",
+    description: "IBM Plex Sans + Plex Mono",
+  },
+  {
+    id: "lora",
+    label: "Lora",
+    sans: "'Lora', Georgia, serif",
+    mono: "'JetBrains Mono', ui-monospace, monospace",
+    description: "Lora serif + JetBrains Mono",
+  },
+  {
+    id: "comic",
+    label: "Comic Neue",
+    sans: "'Comic Neue', cursive, sans-serif",
+    mono: "'JetBrains Mono', ui-monospace, monospace",
+    description: "Handwritten-style",
+    experimental: true,
+  },
+];
 
 const PREF_KEY = "syngrafo_theme";
 
@@ -101,12 +155,18 @@ function applyTheme(theme: ThemeTokens): void {
   for (const varName of [
     "--theme-bg", "--theme-surface", "--theme-border",
     "--theme-text", "--theme-text-muted", "--theme-primary", "--theme-danger",
+    "--theme-font-sans", "--theme-font-mono",
   ]) {
     root.removeProperty(varName);
   }
   for (const [varName, value] of Object.entries(theme.customColors)) {
     root.setProperty(varName, value);
   }
+
+  // Apply font pair
+  const pair = FONT_PAIRS.find((p) => p.id === theme.fontPair) ?? FONT_PAIRS[1]!;
+  root.setProperty("--theme-font-sans", pair.sans);
+  root.setProperty("--theme-font-mono", pair.mono);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

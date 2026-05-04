@@ -169,7 +169,9 @@ inline Expected<pce::db::Database> DMSHandle::open_zone_db(
             auto zdb=pce::db::Database::open(db_path.string());
             bootstrap_dms_schema(zdb);bootstrap_nlp_schema(zdb);
             bootstrap_palette_schema(zdb);
-            pce::db::apply_migrations(zdb,kDmsMigrations);
+            bootstrap_fts_schema(zdb);
+            bootstrap_chunks_schema(zdb);
+            pce::db::migration::apply(zdb, kDmsMigrations);
             return std::move(zdb);
         }
         const auto zone_name_str=zone_row->get<std::string>("name");
@@ -203,7 +205,9 @@ inline Expected<pce::db::Database> DMSHandle::open_zone_db(
         auto zdb=pce::db::Database::open_encrypted(db_path.string(),key);
         bootstrap_dms_schema(zdb);bootstrap_nlp_schema(zdb);
         bootstrap_palette_schema(zdb);
-        pce::db::apply_migrations(zdb,kDmsMigrations);
+        bootstrap_fts_schema(zdb);
+        bootstrap_chunks_schema(zdb);
+        pce::db::migration::apply(zdb, kDmsMigrations);
         return std::move(zdb);
     } catch(const std::exception& e){
         return std::unexpected(std::format("Failed to open zone DB: {}",e.what()));

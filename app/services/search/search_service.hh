@@ -1,22 +1,7 @@
 #pragma once
 /**
  * @file services/search/search_service.hh
- * @brief SearchService — two-strategy search over the DMS index.
- *
- * Strategy selection is automatic:
- *   - **Semantic** (embed service available): cosine similarity over
- *     `nlp_embeddings`, then hybrid keyword boost, then re-rank.
- *   - **Keyword fallback**: LIKE queries across filename, snippet, and
- *     `nlp_notes.keywords`.
- *
- * The semantic path is expressed as a `core/pipeline.hh` chain:
- * @code
- *   query_text
- *       | stage(embed_query)         → embedding vector
- *       | stage(scan_candidates)     → scored candidate list
- *       | stage(hybrid_boost)        → re-ranked candidate list
- *       | stage(fetch_and_build)     → json result array
- * @endcode
+ * @brief Hybrid document search: FTS5 BM25 → LIKE fallback → optional embedding re-rank.
  */
 
 #include "../../core/pipeline.hh"
@@ -84,23 +69,42 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
     if (top_k <= 0 || top_k > 500) top_k = 10;
     const std::string query{query_sv};
 
-    /** Candidate entry in the result map. */
     struct Cand { int64_t doc_id; float score; std::string match; };
     std::unordered_map<int64_t, Cand> merged;
 
-    /**
-     * Keyword pass — the sole source of candidates.
-     *
-     * Scoring tiers (descending priority):
-     *   filename  0.85  — query term appears in the document filename
-     *   snippet   0.75  — query term appears in the stored text snippet
-     *   keyword   0.65  — query term appears in NLP-extracted keyword list
-     *   fulltext  0.60  — query term found anywhere in the full indexed text
-     *
-     * A document may match in several tiers; only the highest score is kept.
-     */
-    const std::string q_like = "%" + query + "%";
+    bool fts_used = false;
     {
+        std::lock_guard lk{db_mutex_};
+        try {
+            auto* stmt = active_db_().prepare_cached(
+                "SELECT rowid, rank FROM dms_fts WHERE dms_fts MATCH ? ORDER BY rank LIMIT ?");
+            pce::db::Database::bind(stmt, 1, pce::db::to_db_value(query));
+            pce::db::Database::bind(stmt, 2, pce::db::to_db_value(int64_t(top_k) * 3));
+
+            std::vector<std::pair<int64_t, float>> fts_hits;
+            float min_rank = 0.0f;
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const int64_t id = sqlite3_column_int64(stmt, 0);
+                const float   rk = static_cast<float>(sqlite3_column_double(stmt, 1));
+                fts_hits.emplace_back(id, rk);
+                if (rk < min_rank) min_rank = rk;
+            }
+            if (!fts_hits.empty()) {
+                fts_used = true;
+                // BM25 rank is negative; normalise to (0, 0.90] via rk/min_rank
+                for (const auto& [id, rk] : fts_hits) {
+                    const float score = std::min(0.90f,
+                        min_rank < 0.0f ? rk / min_rank : 0.50f);
+                    merged[id] = {id, score, "bm25"};
+                }
+            }
+        } catch (...) {
+            // FTS5 not available or query syntax error — fall through to LIKE.
+        }
+    }
+
+    const std::string q_like = "%" + query + "%";
+    if (!fts_used) {
         std::lock_guard lk{db_mutex_};
         for (const auto& row : active_db_().from("dms_documents")
                  .where("filename LIKE ?", q_like).limit(int64_t(top_k) * 2).execute()) {
@@ -135,16 +139,7 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
         }
     }
 
-    /**
-     * Semantic re-rank (optional) — only adjusts scores of candidates already
-     * found by keyword; never introduces new candidates.
-     *
-     * Rationale: embedding models often produce degenerate similarity scores
-     * (all document vectors cluster together, cosine_sim ≈ 0.97 for everything).
-     * Restricting semantic to re-ranking ensures a degenerate model cannot
-     * surface irrelevant documents.  When the model improves, this design
-     * naturally rewards it without changing the interface.
-     */
+    // Semantic re-rank: only boosts scores of keyword candidates; never introduces new ones.
     bool used_semantic = false;
     if (!merged.empty()) {
         if (const auto qemb = embed_text(query_sv); qemb) {
@@ -165,7 +160,7 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
             }
             for (const auto& [id, score] : sem) {
                 auto it = merged.find(id);
-                if (it == merged.end()) continue; // never add from semantic alone
+                if (it == merged.end()) continue;
                 const float boosted = std::min(score, 0.95f);
                 if (boosted > it->second.score) {
                     it->second.score = boosted;
@@ -175,7 +170,6 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
         }
     }
 
-    // Collect, sort by score, trim to top_k, fetch rows, build JSON.
     std::vector<Cand> cands;
     cands.reserve(merged.size());
     for (auto& [id, c] : merged) cands.push_back(c);
@@ -198,7 +192,7 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
         if (!ctx.empty()) rj["snippet"] = ctx;
         results.push_back(std::move(rj));
     }
-    const std::string strategy = used_semantic ? "hybrid" : "keyword";
+    const std::string strategy = used_semantic ? "hybrid" : (fts_used ? "bm25" : "keyword");
     return json{{"strategy", strategy}, {"query", query}, {"results", std::move(results)}};
 }
 
@@ -235,4 +229,3 @@ inline Expected<std::vector<float>> SearchService::embed_text(std::string_view t
 }
 
 } // namespace pce::dms
-

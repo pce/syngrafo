@@ -8,8 +8,8 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useTheme, THEME_PRESETS } from "../store/theme-store";
-import type { ThemePreset } from "../store/theme-store";
+import { useTheme, THEME_PRESETS, FONT_PAIRS } from "../store/theme-store";
+import type { ThemePreset, FontPair } from "../store/theme-store";
 import { useSettings } from "../store/settings-store";
 import { useLocale } from "../store/locale-store";
 import { LOCALES, type SupportedLocale } from "../i18n";
@@ -599,6 +599,63 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
       </section>
 
+      {/* Divider */}
+      <div className="h-px bg-[var(--theme-border)]" />
+
+      {/* Typography */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
+          Typography
+        </h3>
+        <div className="flex flex-col gap-1.5">
+          {FONT_PAIRS.map((pair) => (
+            <button
+              key={pair.id}
+              onClick={() => setTheme({ fontPair: pair.id })}
+              className={`
+                flex items-center justify-between px-3 py-2 border transition-all text-left
+                ${theme.fontPair === pair.id
+                  ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/10"
+                  : "border-[var(--theme-border)] hover:border-[var(--theme-primary)]/50"}
+              `}
+              style={{ borderRadius: "var(--theme-radius)" }}
+            >
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span
+                  className={`text-sm font-semibold truncate leading-tight ${theme.fontPair === pair.id ? "text-[var(--theme-primary)]" : "text-[var(--theme-text)]"}`}
+                  style={{ fontFamily: pair.sans }}
+                >
+                  {pair.label}
+                  {pair.experimental && (
+                    <span className="ml-1.5 text-[9px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] opacity-60">exp</span>
+                  )}
+                </span>
+                <span
+                  className="text-[10px] text-[var(--theme-text-muted)] truncate"
+                  style={{ fontFamily: pair.mono }}
+                >
+                  {pair.description}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-0.5 shrink-0 ml-3">
+                <span className="text-[10px] text-[var(--theme-text-muted)] opacity-60" style={{ fontFamily: pair.sans }}>Aa</span>
+                <span className="text-[9px] font-mono text-[var(--theme-text-muted)] opacity-50" style={{ fontFamily: pair.mono }}>01</span>
+              </div>
+            </button>
+          ))}
+        </div>
+        {theme.density === "compact" && (
+          <p className="mt-2 text-[9px] text-[var(--theme-text-muted)] opacity-60">
+            Compact mode removes all corner rounding.
+          </p>
+        )}
+        {theme.radius === "none" && theme.density !== "compact" && (
+          <p className="mt-2 text-[9px] text-[var(--theme-text-muted)] opacity-60">
+            Radius: None — all rounded corners are suppressed.
+          </p>
+        )}
+      </section>
+
       {/* Preview swatch */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
@@ -614,14 +671,22 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             <span className="text-xs font-bold text-[var(--theme-text)] ml-1">Syngrafo</span>
           </div>
           <div className="p-3 bg-[var(--theme-bg)] flex flex-col gap-1.5">
-            <div className="h-2 rounded-full bg-[var(--theme-text-muted)]/30 w-3/4" style={{ borderRadius: "var(--theme-radius-sm)" }} />
-            <div className="h-2 rounded-full bg-[var(--theme-text-muted)]/20 w-1/2" style={{ borderRadius: "var(--theme-radius-sm)" }} />
+            <div className="h-2 bg-[var(--theme-text-muted)]/30 w-3/4" style={{ borderRadius: "var(--theme-radius-sm)" }} />
+            <div className="h-2 bg-[var(--theme-text-muted)]/20 w-1/2" style={{ borderRadius: "var(--theme-radius-sm)" }} />
             <div className="flex gap-2 mt-1">
               <span className="text-[10px] px-2 py-0.5 font-bold text-[var(--theme-bg)] bg-[var(--theme-primary)]" style={{ borderRadius: "var(--theme-radius-sm)" }}>
                 Primary
               </span>
               <span className="text-[10px] px-2 py-0.5 font-bold text-white bg-[var(--theme-danger)]" style={{ borderRadius: "var(--theme-radius-sm)" }}>
                 Danger
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 mt-1 pt-1.5 border-t border-[var(--theme-border)]">
+              <span className="text-[11px] text-[var(--theme-text)]" style={{ fontFamily: "var(--theme-font-sans)" }}>
+                The quick brown fox
+              </span>
+              <span className="text-[10px] text-[var(--theme-text-muted)]" style={{ fontFamily: "var(--theme-font-mono)" }}>
+                const x = 42;
               </span>
             </div>
           </div>

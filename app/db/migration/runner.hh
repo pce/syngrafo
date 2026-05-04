@@ -43,6 +43,10 @@ void apply(Db& db, const Source& source) {
         );
     )sql");
 
+    // Rename legacy 'description' column created by the old apply_migrations helper.
+    try { db.exec("ALTER TABLE schema_migrations RENAME COLUMN description TO name;"); }
+    catch (...) {}
+
     for (const auto& m : source.migrations()) {
         const bool already = db.from("schema_migrations")
                                .where("version = ?", m.version)
@@ -52,7 +56,7 @@ void apply(Db& db, const Source& source) {
         if (!m.sql.empty())
             db.exec(m.sql);
 
-        db.insert_into("schema_migrations")
+        (void)db.insert_into("schema_migrations")
           .value("version",    m.version)
           .value("name",       m.name)
           .value("applied_at", detail::now_unix())
@@ -60,5 +64,21 @@ void apply(Db& db, const Source& source) {
     }
 }
 
+/// Returns the highest migration version already recorded in
+/// `schema_migrations`, or 0 when the table does not exist or is empty.
+template<typename Db>
+[[nodiscard]] inline int64_t current_schema_version(Db& db) noexcept {
+    try {
+        const auto rows = db.from("schema_migrations")
+                              .order_by("version", false)
+                              .limit(1)
+                              .execute();
+        if (!rows.empty())
+            return rows[0].template try_get<int64_t>("version").value_or(0);
+    } catch (...) {}
+    return 0;
+}
+
 } // namespace pce::db::migration
+
 #endif //PCE_DB_RUNNER_HH

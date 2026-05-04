@@ -1,15 +1,7 @@
 #pragma once
 /**
  * @file services/indexing/index_service.hh
- * @brief IndexService — document indexing expressed as a core/pipeline.hh chain.
- *
- * Pipeline per document:
- * @code
- *   FilePayload{path, mime, text}
- *       | stage(store_doc)      → AnalyzedPayload{doc_id, ...}
- *       | stage(analyze_nlp)    → AnalyzedPayload{kw, ents, sent, lang}
- *       | stage(embed_persist)  → json result
- * @endcode
+ * @brief IndexService — indexes documents through a store → NLP → embed pipeline.
  */
 
 #include "../../core/pipeline.hh"
@@ -169,7 +161,6 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
     auto blob_res     = safe_read_binary(p);
     auto content_blob = blob_res ? std::make_optional(std::move(*blob_res)) : std::nullopt;
 
-    // Early-exit: document unchanged
     {
         std::lock_guard lk{db_mutex_};
         const auto ex = active_db_().from("dms_documents").select({"id", "text_hash"})
@@ -184,7 +175,7 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
 
     return FilePayload{p, mime, std::string{content}}
 
-        // Stage 1: store document row, produce AnalyzedPayload with doc_id
+        // Stage 1: upsert dms_documents row
         | stage([&](FilePayload fp) -> Expected<AnalyzedPayload> {
             int64_t doc_id = 0;
             {
@@ -209,36 +200,31 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
             return AnalyzedPayload{std::move(fp), doc_id};
         })
 
-        // Stage 2: NLP analysis — keywords, entities, sentiment, language
+        // Stage 2: NLP — lang detected first so per-language stopwords/stemming apply everywhere
         | stage([&](AnalyzedPayload ap) -> Expected<AnalyzedPayload> {
             if (engine_) {
-                // Stage 0: strip bare URLs so forge/TLD tokens don't pollute keywords.
-                const std::string ts = pce::nlp::strip_urls(ap.file.text);
-                try { ap.kw_json   = engine_->keywords_to_json(engine_->extract_keywords(ts, 15, "")).dump(); } catch (...) {}
-                try { ap.ents_json = engine_->entities_to_json(engine_->extract_entities(ts, "")).dump();     } catch (...) {}
+                const std::string ts = pce::nlp::strip_urls(ap.file.text); // drop forge/TLD tokens
+                try { ap.lang = engine_->detect_language(ts).language; } catch (...) {}
+                try { ap.kw_json   = engine_->keywords_to_json(engine_->extract_keywords(ts, 15, ap.lang)).dump(); } catch (...) {}
+                try { ap.ents_json = engine_->entities_to_json(engine_->extract_entities(ts, ap.lang)).dump();     } catch (...) {}
                 try {
-                    const auto sr  = engine_->analyze_sentiment(ts, "");
+                    const auto sr  = engine_->analyze_sentiment(ts, ap.lang);
                     ap.sentiment   = (double)sr.score;
                     ap.sent_label  = sr.label;
                 } catch (...) {}
-                try { ap.lang = engine_->detect_language(ts).language; } catch (...) {}
             }
             return ap;
         })
 
-        // Stage 3: persist NLP notes + embedding, return final result JSON
+        // Stage 3: persist notes + embedding + FTS, return result JSON
         | stage([&](AnalyzedPayload ap) -> Expected<json> {
-            const auto now2 = pce::db::now_unix(); // may differ slightly from above
+            const auto now2 = pce::db::now_unix();
             {
                 std::lock_guard lk{db_mutex_};
                 discard(active_db_().insert_into("nlp_notes")
                     .value("row_type",       std::string{"dms_doc"})
                     .value("row_id",         ap.doc_id)
-                    // Store the full document text (not just the 280-char snippet) so
-                    // that keyword searches can match terms anywhere in the content —
-                    // especially important for OCR-indexed images where the search term
-                    // may appear well past the first 280 characters.
-                    .value("note_text",      std::string{ap.file.text})
+                    .value("note_text",      std::string{ap.file.text}) // full text, not snippet — needed for FTS/keyword search
                     .value("keywords",       ap.kw_json)
                     .value("entities",       ap.ents_json)
                     .value("sentiment",      ap.sentiment)
@@ -263,6 +249,36 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                     .on_conflict_replace()
                     .execute());
             }
+            // FTS5 upsert — raw text, no stopword stripping (FTS5 unicode61 handles IDF weighting)
+            {
+                // flatten JSON keyword array → space-separated plain text
+                auto kw_plain = [](const std::string& kw_json) -> std::string {
+                    try {
+                        std::string out;
+                        for (const auto& k : json::parse(kw_json))
+                            if (k.is_string()) {
+                                if (!out.empty()) out += ' ';
+                                out += k.get<std::string>();
+                            }
+                        return out;
+                    } catch (...) { return {}; }
+                };
+                std::lock_guard lk{db_mutex_};
+                try {
+                    auto* del = active_db_().prepare_cached(
+                        "DELETE FROM dms_fts WHERE rowid = ?");
+                    pce::db::Database::bind(del, 1, pce::db::to_db_value(ap.doc_id));
+                    sqlite3_step(del);
+                    auto* ins = active_db_().prepare_cached(
+                        "INSERT INTO dms_fts(rowid, filename, keywords, body) VALUES(?,?,?,?)");
+                    pce::db::Database::bind(ins, 1, pce::db::to_db_value(ap.doc_id));
+                    pce::db::Database::bind(ins, 2, pce::db::to_db_value(ap.file.path.filename().string()));
+                    pce::db::Database::bind(ins, 3, pce::db::to_db_value(kw_plain(ap.kw_json)));
+                    pce::db::Database::bind(ins, 4, pce::db::to_db_value(std::string{ap.file.text}));
+                    sqlite3_step(ins);
+                } catch (...) {}  // FTS5 not compiled in — silently skip
+            }
+
             auto parse_arr = [](std::string_view s) -> json {
                 try { return json::parse(s); } catch (...) { return json::array(); }
             };

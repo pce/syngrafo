@@ -58,4 +58,3 @@ add_custom_target(syngrafo_frontend
 # Embed frontend assets into the binary.
 # Generated sources land in build/embedded/ — never in the source tree.
 set(FRONTEND_EMBEDDED_DIR "${CMAKE_BINARY_DIR}/embedded")
-
