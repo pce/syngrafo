@@ -4,6 +4,7 @@ import { useSignal } from "./hooks/useSignal";
 import type { Block } from "./models/block";
 import type { NLPVisibilityFlags } from "./models/editor-context";
 import { posColor, NER_COLORS } from "./models/nlp";
+import { Icon } from "./components/Icon";
 
 interface EditorCanvasProps {
   className?: string;
@@ -153,7 +154,10 @@ function BlockView({ block, isSelected, readOnly, nlpFlags }: { block: Block; is
           onClick={handleClick}
         >
           <div className="flex-1 border-t border-dashed border-current" />
-          <span>✂ page break</span>
+          <span className="flex items-center gap-1">
+            <Icon name="scissors" size="xs" />
+            page break
+          </span>
           <div className="flex-1 border-t border-dashed border-current" />
         </div>
       );
@@ -182,8 +186,9 @@ function BlockView({ block, isSelected, readOnly, nlpFlags }: { block: Block; is
           {meta.src ? (
             <img src={String(meta.src)} alt={content || "image"} className="max-w-full h-auto rounded" />
           ) : (
-            <div className="flex items-center justify-center h-24 bg-[var(--theme-bg)] border border-dashed border-[var(--theme-border)] rounded text-[var(--theme-text-muted)] text-xs">
-              🖼 {content || "Image (no src)"}
+            <div className="flex items-center justify-center gap-1.5 h-24 bg-[var(--theme-bg)] border border-dashed border-[var(--theme-border)] rounded text-[var(--theme-text-muted)] text-xs">
+              <Icon name="image" size="xs" />
+              {content || "Image (no src)"}
             </div>
           )}
         </div>
@@ -211,7 +216,9 @@ function BlockView({ block, isSelected, readOnly, nlpFlags }: { block: Block; is
           <p onInput={handleInput} {...ce}>
             {content || "(stream idle)"}
           </p>
-          <span className="absolute top-1 right-1 text-[8px] opacity-40">⟳</span>
+          <span className="absolute top-1 right-1 text-[8px] opacity-40">
+            <Icon name="refresh" size="xs" />
+          </span>
         </div>
       );
     default:
@@ -258,7 +265,7 @@ export function EditorCanvas({ className = "", readOnly = false }: EditorCanvasP
       >
         {rootBlocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-gray-300 gap-2">
-            <span className="text-4xl">□</span>
+            <Icon name="layout" size="xl" />
             <span className="text-sm font-medium">Empty document — add a block to begin</span>
           </div>
         ) : (

@@ -3,29 +3,33 @@ import { useEditor, useEditorDoc, useSelectedBlock } from "../../store/editor-st
 import { runAnalysis, analyzeText } from "../../services/nlp-analyzer";
 import type { NLPVisibilityFlags } from "../../models/editor-context";
 import { POS_COLORS, NER_COLORS, posLabel } from "../../models/nlp";
+import { Icon } from "../Icon";
+import type { IconName } from "../Icon";
 
 interface FlagMeta {
   key: keyof NLPVisibilityFlags;
   label: string;
-  icon: string;
+  icon: IconName;
   desc: string;
 }
 
 const FLAGS: FlagMeta[] = [
-  { key: "showPOS", label: "POS Tags", icon: "🏷", desc: "Colour-code tokens by part of speech" },
-  { key: "showNER", label: "Entities", icon: "🔖", desc: "Badge named entities (PERSON, ORG, GPE…)" },
-  { key: "showKeywords", label: "Keywords", icon: "⚷", desc: "Outline high TF-IDF keyword tokens" },
-  { key: "showSpellErrors", label: "Spell Check", icon: "✎", desc: "Underline spelling errors" },
-  { key: "showReadability", label: "Readability", icon: "📊", desc: "Grade badge at end of each block" },
-  { key: "showSentiment", label: "Sentiment", icon: "⟁", desc: "Polarity indicator per sentence" },
-  { key: "showSynonyms", label: "Synonyms", icon: "⟺", desc: "Synonym tooltip on hover (nouns, verbs)" },
-  { key: "showDepTree", label: "Dep. Tree", icon: "⌥", desc: "Dependency arcs above block" },
+  { key: "showPOS", label: "POS Tags", icon: "tag", desc: "Colour-code tokens by part of speech" },
+  { key: "showNER", label: "Entities", icon: "bookmark", desc: "Badge named entities (PERSON, ORG, GPE…)" },
+  { key: "showKeywords", label: "Keywords", icon: "key", desc: "Outline high TF-IDF keyword tokens" },
+  { key: "showSpellErrors", label: "Spell Check", icon: "spell-check", desc: "Underline spelling errors" },
+  { key: "showReadability", label: "Readability", icon: "bar-chart", desc: "Grade badge at end of each block" },
+  { key: "showSentiment", label: "Sentiment", icon: "sentiment", desc: "Polarity indicator per sentence" },
+  { key: "showSynonyms", label: "Synonyms", icon: "shuffle", desc: "Synonym tooltip on hover (nouns, verbs)" },
+  { key: "showDepTree", label: "Dep. Tree", icon: "git-branch", desc: "Dependency arcs above block" },
 ];
 
 function ToggleRow({ meta, value, onChange }: { meta: FlagMeta; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center gap-2 py-1 group">
-      <span className="text-[11px] shrink-0 w-4 text-center leading-none">{meta.icon}</span>
+      <span className="shrink-0 flex items-center justify-center w-4 text-[var(--theme-text-muted)]">
+        <Icon name={meta.icon} size="xs" />
+      </span>
       <span className="flex-1 text-[10px] text-[var(--theme-text)] leading-tight" title={meta.desc}>
         {meta.label}
       </span>
@@ -236,7 +240,10 @@ export function NLPPanel() {
                 : "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90",
             ].join(" ")}
           >
-            {isAnalyzing ? "⟳ Analyzing…" : "⚡ Analyze All Blocks"}
+            <span className="flex items-center justify-center gap-1.5">
+              <Icon name={isAnalyzing ? "refresh" : "zap"} size="xs" />
+              {isAnalyzing ? "Analyzing…" : "Analyze All Blocks"}
+            </span>
           </button>
 
           {block && (
@@ -250,7 +257,10 @@ export function NLPPanel() {
                   : "border-[var(--theme-primary)] text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10",
               ].join(" ")}
             >
-              {blockAnalyzing ? "⟳ Analyzing…" : "🏷 Analyze Block"}
+              <span className="flex items-center justify-center gap-1.5">
+                <Icon name={blockAnalyzing ? "refresh" : "tag"} size="xs" />
+                {blockAnalyzing ? "Analyzing…" : "Analyze Block"}
+              </span>
             </button>
           )}
 

@@ -3,6 +3,8 @@ import { useEditor, useEditorDoc, useSelectedBlock } from "../../store/editor-st
 import { useSignal, useSignalState } from "../../hooks/useSignal";
 import type { Block, CalloutVariant } from "../../models/block";
 import type { StyleClass } from "../../models/style";
+import { Icon } from "../Icon";
+import type { IconName } from "../Icon";
 
 const CALLOUT_COLORS: Record<CalloutVariant, string> = {
   info: "bg-blue-100 border-blue-400 text-blue-800",
@@ -13,13 +15,13 @@ const CALLOUT_COLORS: Record<CalloutVariant, string> = {
   note: "bg-slate-100 border-slate-400 text-slate-700",
 };
 
-const CALLOUT_ICONS: Record<CalloutVariant, string> = {
-  info: "ℹ",
-  tip: "💡",
-  warning: "⚠",
-  danger: "🚨",
-  success: "✓",
-  note: "📝",
+const CALLOUT_ICONS: Record<CalloutVariant, IconName> = {
+  info: "info",
+  tip: "lightbulb",
+  warning: "warning",
+  danger: "alert-circle",
+  success: "check",
+  note: "file-text",
 };
 
 const CALLOUT_VARIANTS: CalloutVariant[] = ["info", "tip", "warning", "danger", "success", "note"];
@@ -148,7 +150,7 @@ function StylePanelContent({ block, doc }: { block: Block; doc: ReturnType<typeo
                     isActive ? "ring-2 ring-offset-1 ring-current opacity-100" : "opacity-70 hover:opacity-90",
                   ].join(" ")}
                 >
-                  <span>{CALLOUT_ICONS[v]}</span>
+                  <Icon name={CALLOUT_ICONS[v]} size="xs" />
                   <span>{v}</span>
                 </button>
               );
@@ -227,7 +229,7 @@ export function StylePanel() {
   if (!block) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-muted)] opacity-50 gap-2 p-4">
-        <span className="text-2xl">✦</span>
+        <Icon name="sparkles" size="md" />
         <span className="text-[9px] font-medium uppercase tracking-wide text-center">Select a block to edit its style</span>
       </div>
     );

@@ -34,6 +34,7 @@
 
 #include <nlohmann/json.hpp>
 #include "nlp/nlp_engine.hh"
+#include "nlp/nlp_pipeline.hh"
 
 #ifdef NLP_WITH_ONNX
 #  include "nlp/addons/onnx_addon.hh"
@@ -211,7 +212,8 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
         // Stage 2: NLP analysis — keywords, entities, sentiment, language
         | stage([&](AnalyzedPayload ap) -> Expected<AnalyzedPayload> {
             if (engine_) {
-                const std::string ts{ap.file.text};
+                // Stage 0: strip bare URLs so forge/TLD tokens don't pollute keywords.
+                const std::string ts = pce::nlp::strip_urls(ap.file.text);
                 try { ap.kw_json   = engine_->keywords_to_json(engine_->extract_keywords(ts, 15, "")).dump(); } catch (...) {}
                 try { ap.ents_json = engine_->entities_to_json(engine_->extract_entities(ts, "")).dump();     } catch (...) {}
                 try {
@@ -363,4 +365,3 @@ inline std::string IndexService::ocr_quality(const std::string& text) {
 }
 
 } // namespace pce::dms
-

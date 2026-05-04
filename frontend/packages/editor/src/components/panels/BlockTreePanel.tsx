@@ -2,32 +2,34 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useEditor, useEditorDoc } from "../../store/editor-store";
 import { useSignal } from "../../hooks/useSignal";
 import { Block, type BlockType } from "../../models/block";
+import { Icon } from "../Icon";
+import type { IconName } from "../Icon";
 
-const EMOJI: Record<string, string> = {
-  h1: "⬛",
-  h2: "■",
-  h3: "▪",
-  p: "¶",
-  ul: "•",
-  ol: "•",
-  li: "·",
-  img: "🖼",
-  figure: "🖼",
-  figcaption: "🖼",
-  table: "⊞",
-  code: "</>",
-  hr: "—",
-  callout: "💬",
-  reveal: "⊟",
-  stream: "⟳",
-  "nlp-block": "🏷",
-  "nlp-tree": "🏷",
-  columns: "⊞",
-  hbox: "⊞",
-  vbox: "⊟",
-  pagebreak: "✂",
-  embed: "⊞",
-  "raw-html": "</>",
+const BLOCK_ICON: Record<string, IconName> = {
+  h1: "heading1",
+  h2: "heading2",
+  h3: "heading3",
+  p: "paragraph",
+  ul: "list",
+  ol: "list",
+  li: "list",
+  img: "image",
+  figure: "image",
+  figcaption: "image",
+  table: "grid",
+  code: "code",
+  hr: "minus",
+  callout: "message-square",
+  reveal: "layers",
+  stream: "refresh",
+  "nlp-block": "tag",
+  "nlp-tree": "tag",
+  columns: "columns",
+  hbox: "columns",
+  vbox: "rows",
+  pagebreak: "scissors",
+  embed: "grid",
+  "raw-html": "code",
 };
 
 const LABELS: Record<string, string> = {
@@ -57,8 +59,8 @@ const LABELS: Record<string, string> = {
   "raw-html": "Raw HTML",
 };
 
-function blockIcon(type: BlockType): string {
-  return EMOJI[type] ?? "□";
+function blockIconName(type: BlockType): IconName {
+  return BLOCK_ICON[type] ?? "grid";
 }
 function blockLabel(type: BlockType): string {
   return LABELS[type] ?? "Block";
@@ -289,7 +291,9 @@ export function BlockTreePanel() {
             <span className="w-3.5 shrink-0" />
           )}
 
-          <span className="shrink-0 text-[10px] opacity-70 font-mono leading-none">{blockIcon(btype)}</span>
+          <span className="shrink-0 opacity-60 flex items-center">
+            <Icon name={blockIconName(btype)} size="xs" />
+          </span>
 
           <span className="flex-1 truncate font-mono" title={block.getContent()}>
             <span className="opacity-50 text-[9px] uppercase mr-1">{btype}</span>
@@ -298,14 +302,14 @@ export function BlockTreePanel() {
           </span>
 
           <button
-            className="opacity-0 group-hover:opacity-100 text-[9px] px-1 rounded hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] transition-opacity"
+            className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
               setCtxMenu({ blockId: id, x: e.clientX, y: e.clientY });
             }}
             title="More options"
           >
-            ⋯
+            <Icon name="ellipsis" size="xs" />
           </button>
         </div>
 
@@ -371,22 +375,25 @@ export function BlockTreePanel() {
         >
           <button
             onClick={() => ctxAddAfter(ctxMenu.blockId)}
-            className="w-full text-left px-3 py-1.5 hover:bg-[var(--theme-bg)] text-[var(--theme-text)] transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--theme-bg)] text-[var(--theme-text)] transition-colors"
           >
-            ¶ Add Block After
+            <Icon name="plus" size="xs" />
+            Add Block After
           </button>
           <div className="h-px bg-[var(--theme-border)] my-1" />
           <button
             onClick={() => ctxDuplicate(ctxMenu.blockId)}
-            className="w-full text-left px-3 py-1.5 hover:bg-[var(--theme-bg)] text-[var(--theme-text)] transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--theme-bg)] text-[var(--theme-text)] transition-colors"
           >
-            ⎘ Duplicate
+            <Icon name="copy" size="xs" />
+            Duplicate
           </button>
           <button
             onClick={() => ctxDelete(ctxMenu.blockId)}
-            className="w-full text-left px-3 py-1.5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors"
           >
-            ✕ Delete
+            <Icon name="trash" size="xs" />
+            Delete
           </button>
         </div>
       )}

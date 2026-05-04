@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { useEditorDoc } from "../../store/editor-store";
 import { useSignal } from "../../hooks/useSignal";
 import type { Block } from "../../models/block";
+import { Icon } from "../../components/Icon";
 
 function blockToHTML(block: Block): string {
   const type = block.getType();
@@ -151,7 +152,10 @@ export function ExportPanel({ onExportPDF, onExportHTML }: ExportPanelProps) {
 
       <div className={sectionCls}>
         <div>
-          <h3 className="text-xs font-black uppercase tracking-wider mb-0.5">🖨 PDF Export</h3>
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
+            <Icon name="print" size="xs" />
+            PDF Export
+          </h3>
           <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">
             Uses browser print dialog (@media print). Page size: <strong>{pageSize.toUpperCase()}</strong>, margins: <strong>{pageMarginMm} mm</strong>.
             Interactive blocks (reveal sliders) become static two-panel splits in PDF.
@@ -167,7 +171,10 @@ export function ExportPanel({ onExportPDF, onExportHTML }: ExportPanelProps) {
 
       <div className={sectionCls}>
         <div>
-          <h3 className="text-xs font-black uppercase tracking-wider mb-0.5">🌐 HTML Export</h3>
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
+            <Icon name="globe" size="xs" />
+            HTML Export
+          </h3>
           <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">Generates clean semantic HTML from all blocks.</p>
         </div>
 
@@ -188,7 +195,10 @@ export function ExportPanel({ onExportPDF, onExportHTML }: ExportPanelProps) {
 
       <div className={sectionCls}>
         <div>
-          <h3 className="text-xs font-black uppercase tracking-wider mb-0.5">📄 Plain Text</h3>
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
+            <Icon name="file-text" size="xs" />
+            Plain Text
+          </h3>
           <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60">Strips all markup — just the raw text content of every block.</p>
         </div>
         <button onClick={handleCopyText} className={btnOutline}>
@@ -198,7 +208,8 @@ export function ExportPanel({ onExportPDF, onExportHTML }: ExportPanelProps) {
 
       {copyMsg && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--theme-text)] text-[var(--theme-bg)] text-xs font-bold px-4 py-2 rounded-full shadow-lg pointer-events-none animate-fade-in z-50">
-          ✓ {copyMsg}
+          <Icon name="check" size="xs" />
+          {copyMsg}
         </div>
       )}
     </div>

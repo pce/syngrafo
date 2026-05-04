@@ -4,6 +4,7 @@ import { useSignal } from "../../hooks/useSignal";
 import { runAnalysis } from "../../services/nlp-analyzer";
 import type { DocumentNLPSummary } from "../../models/nlp";
 import { NER_COLORS } from "../../models/nlp";
+import { Icon } from "../Icon";
 
 function ReadabilityMeter({ grade }: { grade: number }) {
   const pct = Math.min(100, Math.max(0, (grade / 18) * 100));
@@ -141,7 +142,10 @@ export function StatsPanel() {
               : "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 active:scale-[0.98]",
           ].join(" ")}
         >
-          {isAnalyzing ? "⟳ Analyzing…" : "⚡ Analyze Document"}
+          <span className="flex items-center justify-center gap-1.5">
+            <Icon name={isAnalyzing ? "refresh" : "zap"} size="xs" />
+            {isAnalyzing ? "Analyzing…" : "Analyze Document"}
+          </span>
         </button>
         {analyzeError && <p className="text-[9px] text-rose-500">{analyzeError}</p>}
         {nlpSummary && (

@@ -11,14 +11,16 @@ import type { DocumentModel } from "./models/document";
 import type { WorkspaceContext, DocumentIntent } from "./models/editor-context";
 import { WORKSPACE_CONTEXT_META } from "./models/editor-context";
 import { encodePdfProj } from "./services/project";
+import { Icon } from "./components/Icon";
+import type { IconName } from "./components/Icon";
 
-const CTX_ICONS: Record<WorkspaceContext, string> = {
-  compose: "✏",
-  layout: "⊞",
-  review: "👁",
-  stats: "📊",
-  nlp: "🏷",
-  export: "⬇",
+const CTX_ICONS: Record<WorkspaceContext, IconName> = {
+  compose: "edit",
+  layout: "layout",
+  review: "eye",
+  stats: "bar-chart",
+  nlp: "tag",
+  export: "download",
 };
 
 export interface EditorShellProps {
@@ -78,14 +80,19 @@ export function EditorShell({ document: docProp, initialContext = "layout", init
                     : "text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] hover:text-[var(--theme-text)]",
                 ].join(" ")}
               >
-                <span>{CTX_ICONS[meta.id]}</span>
+                <Icon name={CTX_ICONS[meta.id]} size="xs" />
                 <span className="hidden sm:inline">{meta.label}</span>
               </button>
             );
           })}
         </div>
 
-        {isAnalyzing && <span className="text-[9px] text-[var(--theme-text-muted)] animate-pulse font-mono">⟳ analyzing</span>}
+        {isAnalyzing && (
+          <span className="flex items-center gap-1 text-[9px] text-[var(--theme-text-muted)] animate-pulse">
+            <Icon name="refresh" size="xs" />
+            <span className="font-mono">analyzing</span>
+          </span>
+        )}
 
         {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Unsaved changes" />}
 
@@ -159,8 +166,8 @@ export function EditorShell({ document: docProp, initialContext = "layout", init
           ].join(" ")}
         >
           <span className="flex-1">{statusMessage.text}</span>
-          <button onClick={() => dispatch({ type: "CLEAR_STATUS" })} className="text-[9px] opacity-50 hover:opacity-100">
-            ✕
+          <button onClick={() => dispatch({ type: "CLEAR_STATUS" })} className="opacity-50 hover:opacity-100">
+            <Icon name="close" size="xs" />
           </button>
         </div>
       )}
