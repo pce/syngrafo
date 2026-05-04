@@ -169,7 +169,7 @@ const ModelsTab: React.FC = () => {
     if (!isConnected) return;
 
     models.list().then(setCatalog).catch(() => {});
-    models.getModelsDir().then((dir) => { setModelsDirState(dir); setDirInput(dir); }).catch(() => {});
+    models.getModelsDir().then((dir: string) => { setModelsDirState(dir); setDirInput(dir); }).catch(() => {});
   }, []);
 
   // Poll progress for all active downloads

@@ -12,90 +12,16 @@
 
 import React, { useState, useEffect } from "react";
 import { useDms } from "../../store/dms-store";
-import { dms, type Bookmark, type DiskUsageInfo } from "@/services/dms-service.ts";
+import { dms, type Bookmark, type DiskUsageInfo, type ZoneDiskUsage } from "@/services/dms-service.ts";
 import Icon from "../Icon";
 import type { IconName } from "../Icon";
+import NetHealthWidget from "../widgets/NetHealthWidget";
+import WelcomeToDayWidget from "../widgets/WelcomeToDayWidget";
+import Widget from "../ui/Widget";
+import { useNetHealth } from "../../hooks/useNetHealth";
 
-// Workaround: cast newly added icon names until TS language server re-indexes Icon.tsx
 const IC = (n: string) => n as IconName;
 
-// TODO why helpers, do we relly need help in the Zone?
-const DAYS   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const MONTHS = ["January","February","March","April","May","June",
-                "July","August","September","October","November","December"];
-
-function fmtDate(d: Date) {
-  return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-function fmtTime(d: Date) {
-  const h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, "0");
-  const ampm = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${m} ${ampm}`;
-}
-function greeting(d: Date) {
-  const h = d.getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-//  Widget wrappe
-const Widget: React.FC<{
-  title?: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-  accent?: string;
-}> = ({ title, icon, children, className = "", accent }) => (
-  <div
-    className={`rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface)] overflow-hidden flex flex-col ${className}`}
-    style={accent ? { borderColor: `${accent}40` } : undefined}
-  >
-    {title && (
-      <div
-        className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--theme-border)] shrink-0"
-        style={accent ? { borderBottomColor: `${accent}30`, background: `${accent}08` } : undefined}
-      >
-        {icon && <span className="opacity-70">{icon}</span>}
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
-          {title}
-        </span>
-      </div>
-    )}
-    <div className="flex-1 p-4">{children}</div>
-  </div>
-);
-
-//  DateTimeWidget
-const DateTimeWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-
-  return (
-    <Widget className="col-span-2 row-span-1" accent="var(--theme-primary)">
-      <div className="flex flex-col gap-1">
-        <p className="text-[11px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">
-          {greeting(now)}
-        </p>
-        <p className="text-2xl font-black text-[var(--theme-text)] leading-tight tracking-tight">
-          {fmtTime(now)}
-        </p>
-        <p className="text-xs text-[var(--theme-text-muted)]">{fmtDate(now)}</p>
-        {zoneName && (
-          <span className="mt-2 inline-flex items-center gap-1.5 self-start px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
-          style={{ background: "var(--theme-primary)", color: "var(--theme-primary-fg)" }}>
-          <Icon name={IC("map-pin")} size="xs" />
-            {zoneName}
-          </span>
-        )}
-      </div>
-    </Widget>
-  );
-};
 
 // ZoneInfoWidget
 const ZoneInfoWidget: React.FC<{
@@ -207,48 +133,31 @@ const BookmarksWidget: React.FC<{
   );
 };
 
-// StatsWidget
-const StatsWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
-  const [stats, setStats] = useState<{
-    total: number; indexed: number; lastIndexed?: number;
-  } | null>(null);
+interface StatsData { total: number; indexed: number; lastIndexed?: number }
 
-  useEffect(() => {
-    if (!zoneName) return;
-    dms.indexStatus().then((r) => {
-      if (r.ok && r.data) {
-        setStats({
-          total:       r.data.totalDocs,
-          indexed:     r.data.totalDocs,
-          lastIndexed: r.data.lastIndexedAt,
-        });
-      }
-    });
-  }, [zoneName]);
-
-  return (
+/** Pure render — data fetching is owned by ZoneDashboard. */
+const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => (
     <Widget title="Overview" icon={<Icon name={IC("trending-up")} size="xs" />}>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-0.5">
-          <span className="text-2xl font-black text-[var(--theme-text)]">{stats?.total ?? "–"}</span>
+          <span className="text-2xl font-black text-[var(--theme-text)]">{data?.total ?? "–"}</span>
           <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">Docs indexed</span>
         </div>
         <div className="flex flex-col gap-0.5">
-          <span className="text-2xl font-black text-[var(--theme-text)]">{stats?.indexed ?? "–"}</span>
+          <span className="text-2xl font-black text-[var(--theme-text)]">{data?.indexed ?? "–"}</span>
           <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">Searchable</span>
         </div>
-        {stats?.lastIndexed && stats.lastIndexed > 0 && (
+        {data?.lastIndexed && data.lastIndexed > 0 && (
           <div className="col-span-2 flex items-center gap-1.5 mt-1">
             <Icon name={IC("clock")} size="xs" className="text-[var(--theme-text-muted)]" />
             <span className="text-[9px] text-[var(--theme-text-muted)]">
-              Last indexed {new Date(stats.lastIndexed).toLocaleDateString()}
+              Last indexed {new Date(data.lastIndexed).toLocaleDateString()}
             </span>
           </div>
         )}
       </div>
     </Widget>
-  );
-};
+);
 
 // ── ColorPaletteWidget ────────────────────────────────────────────────────────
 
@@ -440,23 +349,14 @@ const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label,
   );
 };
 
-const DiskUsageWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
-  const [data, setData]     = useState<import("../../services/dms-service").ZoneDiskUsage | null>(null);
-  const [error, setError]   = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+interface DiskUsageState {
+  data:    ZoneDiskUsage | null;
+  loading: boolean;
+  error:   string | null;
+}
 
-  useEffect(() => {
-    if (!zoneName) return;
-    setLoading(true);
-    setError(null);
-    dms.zone.diskUsage(zoneName).then((r) => {
-      if (r.ok && r.data) setData(r.data);
-      else setError(r.error ?? "Unknown error");
-      setLoading(false);
-    });
-  }, [zoneName]);
-
-  return (
+/** Pure render — data fetching is owned by ZoneDashboard. */
+const DiskUsageWidget: React.FC<DiskUsageState> = ({ data, loading, error }) => (
     <Widget title="Disk Usage" icon={<Icon name={IC("database")} size="xs" />}>
       {loading ? (
         <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">Loading…</p>
@@ -474,8 +374,7 @@ const DiskUsageWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
         </div>
       ) : null}
     </Widget>
-  );
-};
+);
 
 //  ZoneModeBadge
 const ZONE_MODE_LABELS: Record<string, { label: string; icon: string }> = {
@@ -551,6 +450,13 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
   const zone = state.zone;
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
+  // ── query state owned here; widgets are pure renderers ────────────────────
+  const [statsData, setStatsData]       = useState<StatsData | null>(null);
+  const [diskData, setDiskData]         = useState<ZoneDiskUsage | null>(null);
+  const [diskLoading, setDiskLoading]   = useState(true);
+  const [diskError, setDiskError]       = useState<string | null>(null);
+  const netHealth                       = useNetHealth(3000);
+
   // Zone Mode persisted to localStorage
   const modeKey = `zone_mode_${zone?.name ?? ""}`;
   const [zoneMode] = useState<string>(() => {
@@ -561,6 +467,25 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
     if (!zone?.name) return;
     dms.bookmark.list(zone.name).then((r) => {
       if (r.ok && r.data) setBookmarks(r.data);
+    });
+  }, [zone?.name]);
+
+  useEffect(() => {
+    if (!zone?.name) return;
+    dms.indexStatus().then((r) => {
+      if (r.ok && r.data)
+        setStatsData({ total: r.data.totalDocs, indexed: r.data.totalDocs, lastIndexed: r.data.lastIndexedAt });
+    });
+  }, [zone?.name]);
+
+  useEffect(() => {
+    if (!zone?.name) return;
+    setDiskLoading(true);
+    setDiskError(null);
+    dms.zone.diskUsage(zone.name).then((r) => {
+      if (r.ok && r.data) setDiskData(r.data);
+      else setDiskError(r.error ?? "Unknown error");
+      setDiskLoading(false);
     });
   }, [zone?.name]);
 
@@ -596,7 +521,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
 
           {/* [ col 0-1 ] Date & Time — spans 2 cols */}
           <div className="sm:col-span-2 lg:col-span-2">
-            <DateTimeWidget zoneName={zone.name} />
+            <WelcomeToDayWidget zoneName={zone.name} />
           </div>
 
           {/* [ col 2 ] Zone Info */}
@@ -628,17 +553,22 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
 
           {/* Stats */}
           <div className="sm:col-span-1 lg:col-span-1">
-            <StatsWidget zoneName={zone.name} />
+            <StatsWidget data={statsData} />
           </div>
 
           {/* Disk Usage */}
           <div className="sm:col-span-1 lg:col-span-2">
-            <DiskUsageWidget zoneName={zone.name} />
+            <DiskUsageWidget data={diskData} loading={diskLoading} error={diskError} />
           </div>
 
-          {/* Color Palette — spans 2 */}
+          {/* Color Palette */}
           <div className="sm:col-span-2 lg:col-span-2">
             <ColorPaletteWidget zoneName={zone.name} />
+          </div>
+
+          {/* Net Health — fills last col */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <NetHealthWidget {...netHealth} />
           </div>
 
         </div>
@@ -650,4 +580,3 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
 export { ZoneDashboard, ZONE_MODE_LABELS };
 export type { ZoneDashboardProps };
 export default ZoneDashboard;
-

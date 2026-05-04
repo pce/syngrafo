@@ -59,7 +59,7 @@ function parseCards(content: string): { cards: KanbanCard[]; rawLines: string[] 
     const m = line.match(TASK_RE);
     if (m) {
       const key = m[3] ?? crypto.randomUUID();
-      cards.push({ id: crypto.randomUUID(), key, lineIdx: idx, done: m[1].toLowerCase() === "x", title: m[2].trim(), description: "", comments: [] });
+      cards.push({ id: crypto.randomUUID(), key, lineIdx: idx, done: (m[1] ?? "").toLowerCase() === "x", title: (m[2] ?? "").trim(), description: "", comments: [] });
     }
   });
   return { cards, rawLines };
@@ -161,6 +161,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
 
   const toggleCard = async (laneIdx: number, cardId: string) => {
     const lane = lanes[laneIdx];
+    if (!lane) return;
     const updatedCards = lane.cards.map((c) => c.id === cardId ? { ...c, done: !c.done } : c);
     await writeLane({ ...lane, cards: updatedCards });
     await loadBoard();
@@ -168,6 +169,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
 
   const deleteCard = async (laneIdx: number, cardId: string) => {
     const lane = lanes[laneIdx];
+    if (!lane) return;
     const card = lane.cards.find((c) => c.id === cardId);
     if (!card) return;
     const { lineIdx } = card;
@@ -181,6 +183,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
   const addCard = async (laneIdx: number, title: string) => {
     if (!title.trim()) return;
     const lane = lanes[laneIdx];
+    if (!lane) return;
     const key = crypto.randomUUID();
     const newLine = `- [ ] ${title.trim()} <!-- id:${key} -->`;
     const updatedRawLines = [...lane.rawLines, newLine];
@@ -191,6 +194,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
 
   const deleteLane = async (laneIdx: number) => {
     const lane = lanes[laneIdx];
+    if (!lane) return;
     await dms.deleteFiles([lane.filePath]);
     await dms.deleteFiles([sidecarPath(lane.filePath)]).catch(() => {});
     if (detailCard?.laneIdx === laneIdx) setDetailCard(null);
@@ -200,6 +204,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
   const renameLane = async (laneIdx: number, newName: string) => {
     if (!newName.trim()) return;
     const lane = lanes[laneIdx];
+    if (!lane) return;
     const newPath = `${kanbanDir}/${newName.trim()}.md`;
     await dms.writeFile(newPath, serialiseCards(lane));
     const sc = await loadSidecar(lane.filePath);
@@ -221,10 +226,13 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
   const updateCardDescription = useCallback(async (laneIdx: number, cardId: string, description: string) => {
     setLanes((prev) => {
       const next = [...prev];
-      next[laneIdx] = { ...next[laneIdx], cards: next[laneIdx].cards.map((c) => c.id === cardId ? { ...c, description } : c) };
+      const cur = next[laneIdx];
+      if (!cur) return next;
+      next[laneIdx] = { ...cur, cards: cur.cards.map((c) => c.id === cardId ? { ...c, description } : c) };
       return next;
     });
     const lane = lanes[laneIdx];
+    if (!lane) return;
     const updatedCards = lane.cards.map((c) => c.id === cardId ? { ...c, description } : c);
     await saveSidecar(lane.filePath, buildSidecar(updatedCards));
   }, [lanes]);
@@ -234,10 +242,13 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     const newComment: KanbanComment = { id: crypto.randomUUID(), text: text.trim(), date: new Date().toISOString() };
     setLanes((prev) => {
       const next = [...prev];
-      next[laneIdx] = { ...next[laneIdx], cards: next[laneIdx].cards.map((c) => c.id === cardId ? { ...c, comments: [...c.comments, newComment] } : c) };
+      const cur = next[laneIdx];
+      if (!cur) return next;
+      next[laneIdx] = { ...cur, cards: cur.cards.map((c) => c.id === cardId ? { ...c, comments: [...c.comments, newComment] } : c) };
       return next;
     });
     const lane = lanes[laneIdx];
+    if (!lane) return;
     const updatedCards = lane.cards.map((c) => c.id === cardId ? { ...c, comments: [...c.comments, newComment] } : c);
     await saveSidecar(lane.filePath, buildSidecar(updatedCards));
   }, [lanes]);
@@ -250,6 +261,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     const drag = dragRef.current; dragRef.current = null;
     if (!drag || drag.laneIdx === targetLaneIdx) return;
     const srcLane = lanes[drag.laneIdx]; const tgtLane = lanes[targetLaneIdx];
+    if (!srcLane || !tgtLane) return;
     const card = srcLane.cards.find((c) => c.id === drag.cardId); if (!card) return;
     const { lineIdx } = card;
     const newSrcRaw = srcLane.rawLines.filter((_, i) => i !== lineIdx);
@@ -310,7 +322,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
       <div className="flex flex-row gap-4 p-4 flex-1 overflow-x-auto overflow-y-hidden">
         {lanes.map((lane, laneIdx) => (
           <LaneColumn key={lane.filePath} lane={lane} laneIdx={laneIdx}
-            color={LANE_COLORS[laneIdx % LANE_COLORS.length]}
+            color={LANE_COLORS[laneIdx % LANE_COLORS.length]!}
             onToggleCard={toggleCard} onDeleteCard={deleteCard} onAddCard={addCard}
             onDeleteLane={deleteLane} onRenameLane={renameLane}
             onDragStart={handleDragStart} onDrop={handleDrop}
@@ -343,7 +355,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
       {detailCard && (
         <CardDetailModal card={detailCard.card} laneIdx={detailCard.laneIdx}
           laneName={lanes[detailCard.laneIdx]?.name ?? ""}
-          laneColor={LANE_COLORS[detailCard.laneIdx % LANE_COLORS.length]}
+          laneColor={LANE_COLORS[detailCard.laneIdx % LANE_COLORS.length]!}
           onClose={() => setDetailCard(null)} onToggle={toggleCard}
           onUpdateDescription={updateCardDescription} onAddComment={addComment} />
       )}

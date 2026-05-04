@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useDms } from "../../store/dms-store";
-import { dms, Zone } from "../../services/dms-service";
+import { dms, type Zone } from "../../services/dms-service";
 
 interface ImportModalProps {
   filePath: string;

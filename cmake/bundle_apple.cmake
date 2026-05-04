@@ -1,16 +1,11 @@
 # cmake/bundle_apple.cmake — macOS post-build bundling for the syngrafo target.
 #
-# Bundles into syngrafo.app/Contents/:
-#   Frameworks/libonnxruntime.1.17.3.dylib   (when ONNX is enabled)
-#   Frameworks/<sqlcipher-dylib>             (when SQLCipher is found)
-#   Resources/data/                          (NLP models, vocab, etc.)
-#
-# The ONNX and SQLCipher blocks also set BUILD_WITH_INSTALL_RPATH so dyld
-# resolves bundled dylibs at runtime regardless of install location.
-#
-# This file is only included on Apple platforms.
+# Order matters: dylibs are copied and individually signed first, then the
+# whole bundle is deep-signed last.  Adding files to Contents/Frameworks/
+# after the executable is signed invalidates that signature — the final
+# deep-sign re-validates everything in one pass.
 
-# ONNX Runtime ──────────────────────────────────────────────────────────────
+# ONNX Runtime
 if(NOT DISABLE_ONNX)
     set(_ORT_DYLIB
         "${FETCHCONTENT_BASE_DIR}/onnxruntime-src/lib/libonnxruntime.1.17.3.dylib")
@@ -26,7 +21,9 @@ if(NOT DISABLE_ONNX)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${_ORT_DYLIB}"
             "$<TARGET_BUNDLE_DIR:syngrafo>/Contents/Frameworks/libonnxruntime.1.17.3.dylib"
-        COMMENT "[syngrafo] Bundling libonnxruntime → .app/Contents/Frameworks/"
+        COMMAND codesign --force --sign -
+            "$<TARGET_BUNDLE_DIR:syngrafo>/Contents/Frameworks/libonnxruntime.1.17.3.dylib"
+        COMMENT "[syngrafo] Bundling + ad-hoc signing libonnxruntime"
         VERBATIM
     )
 
@@ -74,7 +71,9 @@ if(SQLCIPHER_FOUND)
             "${_sc_install_name}"
             "@rpath/${_sc_dylib_name}"
             "$<TARGET_FILE:syngrafo>"
-        COMMENT "[syngrafo] Bundling ${_sc_dylib_name} → .app/Contents/Frameworks/"
+        COMMAND codesign --force --sign -
+            "$<TARGET_BUNDLE_DIR:syngrafo>/Contents/Frameworks/${_sc_dylib_name}"
+        COMMENT "[syngrafo] Bundling + ad-hoc signing ${_sc_dylib_name}"
         VERBATIM
     )
 
@@ -84,3 +83,12 @@ if(SQLCIPHER_FOUND)
     unset(_sc_dylib_realpath)
 endif()
 
+# Deep-sign the entire bundle last.  dyld on macOS 12+ sends SIGKILL (not
+# catchable, produces zero output) when any loaded image is unsigned or has a
+# team-ID mismatch.  An ad-hoc deep-sign satisfies dyld for CI/dev builds
+# without requiring an Apple Developer identity.
+add_custom_command(TARGET syngrafo POST_BUILD
+    COMMAND codesign --force --deep --sign - "$<TARGET_BUNDLE_DIR:syngrafo>"
+    COMMENT "[syngrafo] Ad-hoc deep-signing bundle"
+    VERBATIM
+)

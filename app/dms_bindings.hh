@@ -34,6 +34,7 @@
 #include "bindings/palette_bindings.hh"
 #include "bindings/model_bindings.hh"
 #include "bindings/bookmark_bindings.hh"
+#include "bindings/netmon_bindings.hh"
 
 namespace pce::dms {
 
@@ -767,6 +768,7 @@ inline void register_dms_bindings(saucer::smartview&                           w
     register_palette_bindings (wv, dms, desk);
     register_model_bindings   (wv, dl,  dms);
     register_bookmark_bindings(wv, dms);
+    pce::netmon::register_netmon_bindings(wv);
 }
 
 } // namespace pce::dms

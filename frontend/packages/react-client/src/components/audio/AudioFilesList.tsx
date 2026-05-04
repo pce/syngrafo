@@ -60,7 +60,7 @@ const AudioFilesList: React.FC<Props> = ({
       return;
     }
     try {
-      await play(file.blob, String(file.id ?? "unknown"));
+      await play(file.blob ?? file.path, String(file.id ?? "unknown"));
       onPlay?.(file);
     } catch (err) {
       console.error("[AudioFilesList] play error:", err);
@@ -141,7 +141,7 @@ const AudioFilesList: React.FC<Props> = ({
 
                 {/* Download */}
                 <a
-                  href={URL.createObjectURL(file.blob)}
+                  href={file.blob ? URL.createObjectURL(file.blob) : "#"}
                   download={file.name}
                   className="p-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
                   aria-label="Download"

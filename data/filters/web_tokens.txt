@@ -1,0 +1,36 @@
+# Web / URL protocol and domain tokens
+# Format : one word per line, lowercase, UTF-8
+# Lines starting with # are ignored by NLPModel::load_file_to_vec()
+#
+# == What belongs here ==
+# Tokens that are NEVER linguistic words in any natural language:
+#   · URL scheme names
+#   · Multi-character TLDs with no natural-language meaning
+#
+# == What does NOT belong here ==
+# 2-letter country-code TLDs such as "de", "fr", "uk", "co", "me", "at", "us"
+# are AMBIGUOUS — they are real words in other languages (e.g. "de" in French/
+# Spanish/German, "it" in English).  Those are handled structurally by the
+# URL pre-strip stage (Stage 0) in nlp_pipeline.hh, which removes complete
+# https://... URLs before tokenisation so the TLD never appears as a bare token.
+#
+# ── URL protocol names ────────────────────────────────────────────────────────
+http
+https
+ftp
+sftp
+ssh
+ssl
+www
+# ── Multi-char TLDs: clearly never a natural-language word ───────────────────
+com
+org
+net
+edu
+gov
+biz
+info
+io
+dev
+app
+

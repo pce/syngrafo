@@ -152,7 +152,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
       for (let i = 0; i < NUM_BARS; i++) {
         // Sample frequency bins mapped linearly to NUM_BARS slots
         const binIndex = Math.floor((i / NUM_BARS) * barData.length);
-        const val      = barData[binIndex];
+        const val      = barData[binIndex] ?? 0;
         const barH     = (val / 255) * maxBarH * fadeProgress;
         if (barH < 1) continue;
 

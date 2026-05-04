@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { CollectionConfig } from "../../services/collection-service";
+import type { IconName } from "../Icon";
 import ConfirmDialog from "./ConfirmDialog";
 import Icon from "../Icon";
 
@@ -319,4 +320,3 @@ function CollectionListView<T extends { id: number }>({
 }
 
 export default CollectionListView;
-

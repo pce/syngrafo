@@ -87,7 +87,7 @@ const SpectrumAnalyzer: React.FC<SpectrumAnalyzerProps> = ({
       const barW = W / binCount;
 
       for (let i = 0; i < binCount; i++) {
-        const value   = freqData[i];
+        const value   = freqData[i] ?? 0;
         const barH    = (value / 255) * H;
 
         // Log-scaled x position: compress high frequencies, expand low

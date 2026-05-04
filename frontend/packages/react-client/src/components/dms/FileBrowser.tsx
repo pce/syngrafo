@@ -183,7 +183,7 @@ const ImportSelectBox: React.FC = () => {
     // When queue has items and no modal is open, pop the next one.
     useEffect(() => {
         if (!currentFile && queue.length > 0) {
-            setCurrentFile(queue[0]);
+            setCurrentFile(queue[0] ?? null);
             setQueue(q => q.slice(1));
         }
     }, [currentFile, queue]);

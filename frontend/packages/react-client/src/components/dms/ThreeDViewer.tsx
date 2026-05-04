@@ -97,9 +97,9 @@ function parseXyzToPoints(text: string): THREE.Points {
     if (!line || line.startsWith("#")) continue;
     const p = line.split(/\s+/);
     if (p.length < 3) continue;
-    pos.push(parseFloat(p[0]), parseFloat(p[1]), parseFloat(p[2]));
+    pos.push(parseFloat(p[0] ?? "0"), parseFloat(p[1] ?? "0"), parseFloat(p[2] ?? "0"));
     if (p.length >= 6) {
-      const r = parseFloat(p[3]), g = parseFloat(p[4]), b = parseFloat(p[5]);
+      const r = parseFloat(p[3] ?? "0"), g = parseFloat(p[4] ?? "0"), b = parseFloat(p[5] ?? "0");
       const s = (r > 1 || g > 1 || b > 1) ? 1 / 255 : 1;
       col.push(r * s, g * s, b * s); hasColor = true;
     } else { col.push(0.6, 0.65, 1.0); }
@@ -298,7 +298,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
       case "obj": {
         const dir     = url.substring(0, url.lastIndexOf("/") + 1);
         const mtlPath = filePath.replace(/\.obj$/i, ".mtl");
-        const loadObj = (mtl?: THREE.MtlCreator) => {
+        const loadObj = (mtl?: MTLLoader.MaterialCreator) => {
           const ldr = new OBJLoader();
           if (mtl) { mtl.preload(); ldr.setMaterials(mtl); }
           ldr.load(url, (obj) => {
@@ -484,4 +484,3 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
 };
 
 export default ThreeDViewer;
-

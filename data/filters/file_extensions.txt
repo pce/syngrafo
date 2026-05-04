@@ -1,0 +1,78 @@
+# File extension tokens — corpus normalisation filter
+# Format : one word per line, lowercase, UTF-8
+# Lines starting with # are ignored by NLPModel::load_file_to_vec()
+#
+# These tokens appear as isolated lowercase words after URL / path tokenisation
+# in link-heavy documents (markdown, README files, documentation).
+# They carry no semantic meaning in NLP tasks.
+#
+# ── Web / markup ─────────────────────────────────────────────────────────────
+html
+htm
+xhtml
+php
+asp
+aspx
+# ── Data formats ─────────────────────────────────────────────────────────────
+xml
+json
+yaml
+yml
+toml
+csv
+tsv
+# ── Image formats ─────────────────────────────────────────────────────────────
+svg
+png
+jpg
+jpeg
+gif
+webp
+bmp
+ico
+tiff
+avif
+# ── Document formats ─────────────────────────────────────────────────────────
+pdf
+doc
+docx
+xls
+xlsx
+ppt
+pptx
+odt
+# ── Source / web assets ───────────────────────────────────────────────────────
+css
+js
+ts
+jsx
+tsx
+wasm
+# ── Archive / compression ─────────────────────────────────────────────────────
+zip
+tar
+gz
+bz2
+xz
+zst
+rar
+dmg
+pkg
+deb
+rpm
+# ── Text / config ─────────────────────────────────────────────────────────────
+txt
+md
+rst
+ini
+cfg
+conf
+env
+# ── Common project convention files (appear as tokens in link paths) ──────────
+readme
+license
+changelog
+contributing
+makefile
+dockerfile
+

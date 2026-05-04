@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import Icon from "./Icon";
-import { nlpService } from "../services/nlp-service";
+import { markov } from "../services/markov-service";
 import StatsDashboard from "./StatsDashboard";
 import { useTheme } from "../hooks/useTheme";
+import type { ThemeName } from "../hooks/useTheme";
 import MarkovDropdown from "./header/MarkovDropdown";
 import ToolkitDropdown from "./header/ToolkitDropdown";
 import SystemDropdown from "./header/SystemDropdown";
@@ -56,8 +57,9 @@ const Header: React.FC<HeaderProps> = ({
   const setIsGenerating = setExternalIsGenerating || setInternalIsGenerating;
 
   useEffect(() => {
-    nlpService.getAvailableModels().then((models) => {
-      if (models && models.length > 0) {
+    markov.getAvailableModels().then((res) => {
+      const models = res.ok && res.data ? res.data : [];
+      if (models.length > 0) {
         setAvailableModels(models);
         if (models.includes("generic_novel")) setSelectedModel("generic_novel");
         else if (models[0]) setSelectedModel(models[0]);
@@ -65,7 +67,7 @@ const Header: React.FC<HeaderProps> = ({
     });
   }, []);
 
-  const handleAction = async (method: string, options: any = {}) => {
+  const handleAction = async (method: string, options: Record<string, string> = {}) => {
     const textareas = Array.from(document.querySelectorAll("textarea"));
     const visibleTextarea =
       textareas.find((t) => t.offsetParent !== null) || textareas[0];
@@ -83,20 +85,19 @@ const Header: React.FC<HeaderProps> = ({
           : method;
       const currentText = visibleTextarea.value;
 
-      let response;
       if (isDedupe) {
-        response = await nlpService.analyze({
+        const res = await markov.analyze({
           seed: currentText,
           model: "deduplication",
           options: {
             ...options,
             mode: "detect",
-            min_length: options.min_length || "1",
+            min_length: options.min_length ?? "1",
           },
         });
-        onAnalysisResults?.(JSON.stringify(response, null, 2));
+        onAnalysisResults?.(JSON.stringify(res.data ?? res, null, 2));
       } else {
-        response = await nlpService.generateMarkov({
+        const res = await markov.generate({
           seed: currentText,
           model: pluginName,
           options: {
@@ -110,11 +111,10 @@ const Header: React.FC<HeaderProps> = ({
           top_p: genOptions.top_p,
           length: genOptions.length,
         });
-
         if (isFractal) {
-          onContentChange?.(response.output, "output");
+          if (res.ok && res.data) onContentChange?.(res.data.output, "output");
         } else {
-          onContentChange?.(response.output, "editor");
+          if (res.ok && res.data) onContentChange?.(res.data.output, "editor");
         }
       }
     } catch (error) {
@@ -130,18 +130,18 @@ const Header: React.FC<HeaderProps> = ({
 
     setIsGenerating(true);
     try {
-      const result = await nlpService.trainModel({
+      const res = await markov.train({
         category,
         text: textarea.value,
         ngram_size: ngram,
       });
 
-      if (result.status === "success") {
-        const models = await nlpService.getAvailableModels();
-        setAvailableModels(models);
-        setSelectedModel(result.model);
+      if (res.ok && res.data && res.data.status === "success") {
+        const mRes = await markov.getAvailableModels();
+        if (mRes.ok && mRes.data) setAvailableModels(mRes.data);
+        setSelectedModel(res.data.model);
         onAnalysisResults?.(
-          `[Log] Model training complete: ${result.model}\nN-Gram size: ${result.ngram_size}`,
+          `[Log] Model training complete: ${res.data.model}\nN-Gram size: ${res.data.ngram_size}`,
         );
       }
     } catch (error) {
@@ -189,22 +189,22 @@ const Header: React.FC<HeaderProps> = ({
 
       if (useStream) {
         let accumulated = "";
-        await nlpService.generateMarkovStream(
+        await markov.generateStream(
           request,
-          (chunk, is_final) => {
+          (chunk: string, is_final: boolean) => {
             accumulated += chunk;
             // Ensure we update the output textarea specifically
             onContentChange?.(baseText + accumulated, "output");
             if (is_final) setIsGenerating(false);
           },
-          (err) => {
+          (err: unknown) => {
             console.error("Stream error:", err);
             setIsGenerating(false);
           },
         );
       } else {
-        const res = await nlpService.generateMarkov(request);
-        if (res.output) onContentChange?.(baseText + res.output, "output");
+        const res = await markov.generate(request);
+        if (res.ok && res.data && res.data.output) onContentChange?.(baseText + res.data.output, "output");
         setIsGenerating(false);
       }
     } catch (error) {
@@ -281,7 +281,7 @@ const Header: React.FC<HeaderProps> = ({
 
           <SystemDropdown
             theme={theme}
-            setTheme={(t: string) => setTheme(t as any)}
+            setTheme={(t: string) => setTheme(t as ThemeName)}
             availableThemes={availableThemes}
           />
 

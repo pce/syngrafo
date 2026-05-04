@@ -3,6 +3,7 @@ import { useDms } from "../../store/dms-store";
 import { dms, isImageFile, isDocFile, isAudioFile, isTextFile, isSvgFile } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
 import Icon from "../Icon";
+import type { IconName } from "../Icon";
 
 
 function relativeDay(ts: number): string {
@@ -33,7 +34,7 @@ function fmtSize(bytes?: number): string {
   return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
-function fileIconName(entry: FsEntry): string {
+function fileIconName(entry: FsEntry): IconName {
   if (entry.kind === "dir")           return "folder";
   if (isSvgFile(entry.path))          return "image";
   if (isImageFile(entry.path))        return "image";

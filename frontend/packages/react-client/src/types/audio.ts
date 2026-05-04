@@ -7,6 +7,7 @@ export interface AudioRecordingDocument {
   id?:        number;   // DB row id
   name:       string;   // display name
   path:       string;   // absolute path to the audio file on disk
+  blob?:      Blob;     // in-memory blob for immediate playback/download
   mimeType:   string;   // e.g. "audio/webm" | "audio/mp4"
   duration?:  number;   // seconds
   createdAt?: number;   // Unix ms

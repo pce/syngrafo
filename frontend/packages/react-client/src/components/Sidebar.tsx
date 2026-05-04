@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  nlpService,
-  type StreamChunk,
-  type HealthStatus,
-} from "../services/nlp-service";
+import { nlp, type StreamChunk, type HealthStatus, type NLPStreamRequest } from "../services/nlp-service";
 import Icon from "./Icon";
+import type { IconName } from "./Icon";
 
 interface SidebarProps {
   documentContent: string;
@@ -54,7 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const status = await nlpService.checkHealth();
+        const status = await nlp.checkHealth();
         setHealth(status);
       } catch (e) {
         setHealth({ status: "error", engine_ready: false });
@@ -148,16 +145,17 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
     if (streamCleanupRef.current) streamCleanupRef.current();
 
     try {
-      const cleanup = await nlpService.streamNLP(
-        {
-          text: documentContent || "The",
-          plugin: "default",
-          options: {
-            terminology: config.terminology ? "true" : "false",
-            pos_tagging: config.posTagging ? "true" : "false",
-            safety: config.safety ? "true" : "false",
-          },
+      const request: NLPStreamRequest = {
+        text: documentContent || "The",
+        plugin: "default",
+        options: {
+          terminology: config.terminology ? "true" : "false",
+          pos_tagging: config.posTagging ? "true" : "false",
+          safety: config.safety ? "true" : "false",
         },
+      };
+      const cleanup = await nlp.streamNLP(
+        request,
         (data: StreamChunk) => {
           if (data.chunk) {
             setStreamLog((prev) => prev + data.chunk);
@@ -168,7 +166,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
           }
           if (data.is_final) setIsStreaming(false);
         },
-        (err) => {
+        (err: unknown) => {
           console.error("Stream connection error:", err);
           setStreamLog(
             (prev) =>
@@ -222,10 +220,10 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                   }
                 : { color: "var(--theme-text-muted)" }
             }
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as "analysis" | "settings")}
           >
             <Icon
-              name={tab.icon as any}
+              name={tab.icon as IconName}
               size="sm"
               style={
                 activeTab === tab.id ? { color: "var(--theme-primary)" } : {}
@@ -471,15 +469,15 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
               Configuration
             </h2>
             <div className="space-y-3">
-              {[
-                { id: "posTagging", label: "POS Tagging", icon: "activity" },
+              {([
+                { id: "posTagging" as const, label: "POS Tagging", icon: "activity" as IconName },
                 {
-                  id: "terminology",
+                  id: "terminology" as const,
                   label: "Terminology Extraction",
-                  icon: "sparkles",
+                  icon: "sparkles" as IconName,
                 },
-                { id: "safety", label: "Content Safety", icon: "safety" },
-              ].map((item) => (
+                { id: "safety" as const, label: "Content Safety", icon: "safety" as IconName },
+              ] satisfies Array<{ id: keyof typeof config; label: string; icon: IconName }>).map((item) => (
                 <label
                   key={item.id}
                   className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group"
@@ -490,7 +488,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                 >
                   <div className="flex items-center gap-3">
                     <Icon
-                      name={item.icon as any}
+                      name={item.icon}
                       size="sm"
                       className="text-slate-400 group-hover:text-blue-500 transition-colors"
                       style={{ color: "var(--theme-text-muted)" }}
@@ -505,7 +503,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                   <div className="relative flex items-center">
                     <input
                       type="checkbox"
-                      checked={(config as any)[item.id]}
+                      checked={config[item.id]}
                       onChange={(e) =>
                         setConfig({ ...config, [item.id]: e.target.checked })
                       }
@@ -514,7 +512,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                     <div
                       className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 transition-all flex items-center justify-center"
                       style={{
-                        borderColor: (config as any)[item.id]
+                        borderColor: config[item.id]
                           ? "var(--theme-primary)"
                           : "var(--theme-border)",
                       }}

@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import {
-  nlpService,
-  type NLPRequest,
-  type StreamChunk,
-} from "../services/nlp-service";
+import { nlp, type StreamChunk, type NLPStreamRequest } from "../services/nlp-service";
+import { markov } from "../services/markov-service";
 import { DocumentModel, type DocumentState } from "../models/document";
 import Icon from "./Icon";
 import AnalysisDashboard from "./analysis/AnalysisDashboard";
@@ -196,22 +193,21 @@ const DocumentPanel = ({
     if (!textToProcess.trim()) return;
 
     // Switch to results tab to show streaming analysis
-    setActiveTab("results");
+    setActiveTab("analysis");
     setIsProcessing(true);
     setResults("");
 
     try {
-      const request: NLPRequest = {
+      const request: NLPStreamRequest = {
         text: textToProcess || " ",
         plugin: "default",
-        streaming: true,
         options: {
           pos_tagging: "true",
           terminology: "true",
         },
       };
 
-      const cleanup = await nlpService.streamNLP(
+      const cleanup = await nlp.streamNLP(
         request,
         (chunk: StreamChunk) => {
           setResults((prev) => prev + chunk.chunk);
@@ -219,7 +215,7 @@ const DocumentPanel = ({
             setIsProcessing(false);
           }
         },
-        (error) => {
+        (error: unknown) => {
           console.error("Linguistic streaming error:", error);
           setIsProcessing(false);
           setResults((prev) => prev + "\n\n[Error: Processing failed]");
@@ -648,7 +644,7 @@ const DocumentPanel = ({
                       setIsProcessing(true);
 
                       try {
-                        const res = await nlpService.analyze({
+                        const res = await markov.analyze({
                           seed: text,
                           model: "deduplication",
                           options: {
@@ -660,19 +656,19 @@ const DocumentPanel = ({
                           },
                         });
 
-                        // Use the standardized ProcessingResponse contract
-                        const data = res;
-                        const hits = Array.isArray(data.duplicates)
-                          ? data.duplicates
-                          : [];
+                        // Unwrap NlpEnvelope — data may be undefined on failure
+                        type DedupeHit = { offset: unknown; length: unknown };
+                        const data = (res.ok && res.data)
+                          ? res.data as { duplicates?: DedupeHit[] }
+                          : undefined;
+                        const hits = data?.duplicates ?? [];
 
                         // Reactive state update - trigger re-render for counter
                         // Strict numeric conversion for counter and highlights
-                        const safeHits = Array.isArray(hits) ? hits : [];
-                        setOutputDuplicates(safeHits.length);
+                        setOutputDuplicates(hits.length);
 
                         setOutputHighlights(
-                          safeHits.map((h: any) => {
+                          hits.map((h) => {
                             const off = parseInt(String(h.offset), 10);
                             const len = parseInt(String(h.length), 10);
                             return {
@@ -688,8 +684,8 @@ const DocumentPanel = ({
                           );
                         }
 
-                        // Switch tab to show results if we found hits and weren't already there
-                        if (hits.length > 0 && activeTab !== "analysis") {
+                        // Switch tab to show results if we found hits
+                        if (hits.length > 0) {
                           setActiveTab("analysis");
                         }
                       } catch (e) {

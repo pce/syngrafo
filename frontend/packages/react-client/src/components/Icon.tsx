@@ -95,7 +95,9 @@ export type IconName =
   | "trending-up"
   | "tag"
   | "color-swatch"
-  | "tray";
+  | "tray"
+  | "play"
+  | "dino";
 
 type IconSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -961,6 +963,11 @@ const ICONS: Record<
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     </svg>
   ),
+  play: (props) => (
+    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  ),
   cube: (props) => (
     <svg {...props} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -1076,19 +1083,13 @@ const ICONS: Record<
    */
   dino: (props) => (
     <svg {...props} viewBox="0 0 16 16" shapeRendering="crispEdges">
-      {/* body */}
       <rect x="5" y="6" width="6" height="3" fill="currentColor" />
-      {/* head */}
       <rect x="10" y="5" width="3" height="2" fill="currentColor" />
-      {/* eye */}
       <rect x="12" y="5" width="1" height="1" fill="black" />
-      {/* tail */}
       <rect x="2" y="7" width="3" height="1" fill="currentColor" />
       <rect x="1" y="6" width="2" height="1" fill="currentColor" />
-      {/* legs */}
       <rect x="6" y="9" width="1" height="2" fill="currentColor" />
       <rect x="9" y="9" width="1" height="2" fill="currentColor" />
-      {/* back spikes */}
       <rect x="6" y="5" width="1" height="1" fill="currentColor" />
       <rect x="8" y="5" width="1" height="1" fill="currentColor" />
     </svg>

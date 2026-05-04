@@ -1,0 +1,48 @@
+# Repository / forge URL path segments
+# Format : one word per line, lowercase, UTF-8
+# Lines starting with # are ignored by NLPModel::load_file_to_vec()
+#
+# These tokens appear as isolated words after tokenising forge URLs
+# (GitHub, GitLab, Forgejo, Gitea, SourceHut …).
+# e.g.  "https://github.com/user/repo/blob/main/src/foo.cc"
+#       → after URL-strip: these tokens never appear.  This file is
+#         the safety-net for documents that embed partial URLs or
+#         reference forge paths inline as plain text.
+#
+# This filter list is DISABLED by default in FilterConfig (repo = false).
+# Enable it for zones that index developer documentation or changelogs
+# where forge URL fragments are common noise.
+#
+# ── GitHub / GitLab / Forgejo path segments ───────────────────────────────────
+blob
+tree
+raw
+releases
+issues
+pulls
+wiki
+commit
+compare
+actions
+packages
+security
+insights
+settings
+discussions
+milestones
+labels
+graphs
+network
+pulse
+community
+# ── SourceHut / Gitea ─────────────────────────────────────────────────────────
+refs
+heads
+tags
+browse
+# ── CI / pipeline tokens ──────────────────────────────────────────────────────
+workflows
+pipelines
+artifacts
+runners
+
