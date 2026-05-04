@@ -43,8 +43,10 @@
 #  include "nlp/addons/ocr_addon.hh"
 #  include "nlp/addons/onnx_addon.hh"
 #  include "nlp/addons/platform_services.hh"
-#  include "nlp/addons/rectifier_addon.hh"
 #endif
+// RectifierAddon only depends on onnx_service.hh (safe to include without ONNX Runtime)
+// and platform_services.hh (stubbed on non-Apple platforms). It compiles everywhere.
+#include "nlp/addons/rectifier_addon.hh"
 #include "nlp/nlp_engine.hh"
 #include "nlp/3rdparty/stb_image.h"
 #include "image_decode.hh"
@@ -96,9 +98,8 @@ struct DMSHandle {
     std::jthread                                         bulk_thread;
     pce::nlp::NLPEngine*                                 engine{nullptr};
     std::shared_ptr<pce::nlp::onnx::IOnnxService>        embed_svc;
-#ifdef NLP_WITH_ONNX
+    /** Perspective-rectification addon. Null onnx_ → platform-only path (macOS) or no-op. */
     std::shared_ptr<pce::nlp::RectifierAddon>            rectifier;
-#endif
     std::atomic<saucer::webview*>                        wv_ptr{nullptr};
 
     IndexService       index_svc_;
@@ -107,16 +108,11 @@ struct DMSHandle {
 
     //  Construction
     explicit DMSHandle(pce::nlp::NLPEngine& eng,
-                       std::shared_ptr<pce::nlp::onnx::IOnnxService> embed = nullptr
-#ifdef NLP_WITH_ONNX
-                       , std::shared_ptr<pce::nlp::RectifierAddon> rect = nullptr
-#endif
-                       )
+                       std::shared_ptr<pce::nlp::onnx::IOnnxService> embed = nullptr,
+                       std::shared_ptr<pce::nlp::RectifierAddon>     rect  = nullptr)
         : db(open_db_()), engine(&eng),
-          embed_svc(embed)
-#ifdef NLP_WITH_ONNX
-          , rectifier(std::move(rect))
-#endif
+          embed_svc(embed),
+          rectifier(std::move(rect))
           // Services receive lambdas so they always resolve through active_db()
           , index_svc_([this]() -> pce::db::Database& { return active_db(); },
                        db_mutex, &eng, embed)

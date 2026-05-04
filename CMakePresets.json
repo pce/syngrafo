@@ -104,7 +104,8 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl",
-        "DISABLE_ONNX": "ON"
+        "DISABLE_ONNX": "ON",
+        "CMAKE_DISABLE_FIND_PACKAGE_SW": "TRUE"
       }
     }
   ],

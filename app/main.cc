@@ -600,7 +600,12 @@ if (typeof window.__dms_progress === 'undefined')
       std::print("[main] rectifier addon ready\n");
     }
 #else
-    pce::dms::DMSHandle dms{*nlp.engine, nullptr};
+    // No ONNX: create the rectifier anyway so macOS platform-native rectification
+    // (Apple Vision corner detection + CoreImage warp) still works.
+    // On Linux/Windows the platform stubs return no corners, so rectify() will
+    // fail gracefully when called — no crash, no undefined behaviour.
+    auto rectifier = std::make_shared<pce::nlp::RectifierAddon>();
+    pce::dms::DMSHandle dms{*nlp.engine, nullptr, rectifier};
 #endif
 
     // Wire all JS ↔ C++ bindings directly — no bridge class.

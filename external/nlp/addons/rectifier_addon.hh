@@ -53,17 +53,23 @@ public:
 
     /**
      * @brief Rectifies a document image.
-     * @param input_path Path to the source image.
+     *
+     * @param input_path  Path to the source image.
      * @param output_path Path to save the rectified image.
      * @return true if successful.
+     *
+     * Strategy:
+     *   1. Platform-native corner detection (Apple Vision on macOS; stub elsewhere).
+     *   2. ONNX segmentation model fallback — only attempted when `onnx_` is set and loaded.
+     *   3. Manual C++ perspective warp once corners are known.
      */
     bool rectify(const std::string& input_path, const std::string& output_path) {
         auto corners = platform::detect_document_corners(input_path);
 
         if (corners.empty()) {
-            std::print("[rectifier] No platform corners found, attempting ONNX segmentation...\n");
+            // No platform corners — require a loaded ONNX segmentation model.
+            if (!onnx_ || !onnx_->is_loaded()) return false;
 
-            // Load and resize image for ONNX
             int w, h, c;
             unsigned char* data = stbi_load(input_path.c_str(), &w, &h, &c, 3);
             if (!data) return false;
@@ -72,7 +78,6 @@ public:
             stbir_resize_uint8_linear(data, w, h, 0, (unsigned char*)tensor.data(), 640, 640, 0, (stbir_pixel_layout)STBIR_RGB);
             stbi_image_free(data);
 
-            // Normalize
             for (float& v : tensor) v /= 255.0f;
 
             auto result = onnx_->infer_raw(tensor, {1, 640, 640, 3});
@@ -81,12 +86,9 @@ public:
             if (corners.empty()) return false;
         }
 
-        // Try platform-native rectification (e.g. CoreImage on macOS)
-        if (platform::rectify_image(input_path, output_path, corners)) {
+        if (platform::rectify_image(input_path, output_path, corners))
             return true;
-        }
 
-        // Fallback to manual C++ implementation
         return rectify_manual(input_path, output_path, corners);
     }
 

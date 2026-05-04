@@ -2,43 +2,27 @@ import React from "react";
 import { useDms } from "../../store/dms-store";
 import type { SearchResult } from "@/services/dms-service.ts";
 import Icon from "../Icon";
+import { pathKind, resultScoreLabel, splitAtMatch } from "./search-utils";
 
 /**
- * Highlight every occurrence of `query` inside `text`.
- * @param text - The full string to render.
- * @param query - The search term to highlight.
+ * Renders a text snippet with the first occurrence of `query` highlighted.
+ *
+ * @param text  - Full snippet string to display.
+ * @param query - The active search term.
  */
 function SnippetText({ text, query }: { text: string; query: string }) {
   if (!text) return null;
-  if (!query) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx < 0) return <>{text}</>;
+  const parts = splitAtMatch(text, query);
+  if (!parts) return <>{text}</>;
   return (
     <>
-      {text.slice(0, idx)}
+      {parts.before}
       <mark className="bg-[var(--theme-primary)]/25 text-[var(--theme-primary)] font-semibold not-italic rounded-sm px-0.5">
-        {text.slice(idx, idx + query.length)}
+        {parts.hit}
       </mark>
-      {text.slice(idx + query.length)}
+      {parts.after}
     </>
   );
-}
-
-/**
- * Classify a search result path into its display category.
- * @param path - Absolute path of the result.
- * @param zone - Active zone, used to detect `.notes` / `.kanban` subdirs.
- * @returns `"notes"` | `"kanban"` | `"file"`
- */
-function pathKind(path: string, zone: { out_path: string } | null): "notes" | "kanban" | "file" {
-  if (zone) {
-    if (path.startsWith(zone.out_path + "/.notes")) return "notes";
-    if (path.startsWith(zone.out_path + "/.kanban")) return "kanban";
-  }
-  // fallback: check for common patterns
-  if (path.includes("/.notes/")) return "notes";
-  if (path.includes("/.kanban/")) return "kanban";
-  return "file";
 }
 
 const SearchResults: React.FC = () => {
@@ -135,7 +119,7 @@ const SearchResults: React.FC = () => {
                   : result.mimeType.startsWith("image/") ? "image" : "file"
               );
               // "exact" only for verified keyword filename matches; everything else shows %.
-              const scoreLabel = result.match === "filename" ? "exact" : `${Math.round(result.score * 100)}%`;
+              const scoreLabel = resultScoreLabel(result.match, result.score);
 
               return (
                 <button

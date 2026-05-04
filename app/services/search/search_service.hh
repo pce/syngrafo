@@ -84,20 +84,21 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
     if (top_k <= 0 || top_k > 500) top_k = 10;
     const std::string query{query_sv};
 
-    /**
-     * Unified candidate map: doc_id → {score, match_type}.
-     * match values: "filename" | "snippet" | "keyword" | "fulltext" | "semantic" | "hybrid"
-     *
-     * The keyword pass always runs first so that exact filename / content matches are
-     * guaranteed to surface regardless of whether an embedding exists for the document.
-     * The semantic pass (when available) then merges its cosine scores: if a document
-     * exists in both, the higher score wins; a new semantic-only candidate is added only
-     * when cosine_sim > 0.15 (noise floor).
-     */
+    /** Candidate entry in the result map. */
     struct Cand { int64_t doc_id; float score; std::string match; };
     std::unordered_map<int64_t, Cand> merged;
 
-    // Keyword pass — scoring tiers: filename(0.85) > snippet(0.75) > keyword(0.65) > fulltext(0.60)
+    /**
+     * Keyword pass — the sole source of candidates.
+     *
+     * Scoring tiers (descending priority):
+     *   filename  0.85  — query term appears in the document filename
+     *   snippet   0.75  — query term appears in the stored text snippet
+     *   keyword   0.65  — query term appears in NLP-extracted keyword list
+     *   fulltext  0.60  — query term found anywhere in the full indexed text
+     *
+     * A document may match in several tiers; only the highest score is kept.
+     */
     const std::string q_like = "%" + query + "%";
     {
         std::lock_guard lk{db_mutex_};
@@ -134,40 +135,47 @@ inline Expected<json> SearchService::search(std::string_view query_sv, int top_k
         }
     }
 
-    // Semantic pass — optional, merges cosine-similarity scores into the candidate map.
-    // Scores are capped at 0.97 so that semantic similarity never triggers the "exact"
-    // label in the UI — "exact" is reserved for verified keyword/filename matches.
+    /**
+     * Semantic re-rank (optional) — only adjusts scores of candidates already
+     * found by keyword; never introduces new candidates.
+     *
+     * Rationale: embedding models often produce degenerate similarity scores
+     * (all document vectors cluster together, cosine_sim ≈ 0.97 for everything).
+     * Restricting semantic to re-ranking ensures a degenerate model cannot
+     * surface irrelevant documents.  When the model improves, this design
+     * naturally rewards it without changing the interface.
+     */
     bool used_semantic = false;
-    if (const auto qemb = embed_text(query_sv); qemb) {
-        used_semantic = true;
-        std::vector<std::pair<int64_t, float>> sem_scores;
-        {
-            std::lock_guard lk{db_mutex_};
-            const auto rows = active_db_().from("nlp_embeddings")
-                                  .where("row_type = ?", std::string{"dms_doc"}).execute();
-            sem_scores.reserve(rows.size());
-            for (const auto& row : rows) {
-                const auto id  = row.try_get<int64_t>("row_id").value_or(0);
-                const auto vec = pce::db::try_blob_to_floats(row["vector"]);
-                if (id == 0 || vec.empty()) continue;
-                sem_scores.push_back({id, cosine_similarity(
-                    {qemb->data(), qemb->size()}, {vec.data(), vec.size()})});
+    if (!merged.empty()) {
+        if (const auto qemb = embed_text(query_sv); qemb) {
+            used_semantic = true;
+            std::vector<std::pair<int64_t, float>> sem;
+            {
+                std::lock_guard lk{db_mutex_};
+                const auto rows = active_db_().from("nlp_embeddings")
+                                      .where("row_type = ?", std::string{"dms_doc"}).execute();
+                sem.reserve(rows.size());
+                for (const auto& row : rows) {
+                    const auto id  = row.try_get<int64_t>("row_id").value_or(0);
+                    const auto vec = pce::db::try_blob_to_floats(row["vector"]);
+                    if (id == 0 || vec.empty()) continue;
+                    sem.push_back({id, cosine_similarity(
+                        {qemb->data(), qemb->size()}, {vec.data(), vec.size()})});
+                }
             }
-        }
-        for (auto& [id, score] : sem_scores) {
-            if (score < 0.15f) continue;
-            score = std::min(score, 0.97f);
-            auto it = merged.find(id);
-            if (it == merged.end()) {
-                merged[id] = {id, score, "semantic"};
-            } else if (score > it->second.score) {
-                it->second.score = score;
-                it->second.match = (it->second.match == "semantic") ? "semantic" : "hybrid";
+            for (const auto& [id, score] : sem) {
+                auto it = merged.find(id);
+                if (it == merged.end()) continue; // never add from semantic alone
+                const float boosted = std::min(score, 0.95f);
+                if (boosted > it->second.score) {
+                    it->second.score = boosted;
+                    it->second.match = "hybrid";
+                }
             }
         }
     }
 
-    // Sort, trim to top_k, fetch doc rows, and build the result array.
+    // Collect, sort by score, trim to top_k, fetch rows, build JSON.
     std::vector<Cand> cands;
     cands.reserve(merged.size());
     for (auto& [id, c] : merged) cands.push_back(c);
