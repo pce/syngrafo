@@ -5,6 +5,7 @@ import { dms, isImageFile, isDocFile, is3DFile } from "../../services/dms-servic
 import Icon from "../Icon";
 import type { IconName } from "../Icon";
 import { isAudioFile, isVideoFile, isSvgFile, isArchiveFile, isHtmlFile } from "../../services/dms-service";
+import type { GltfMode } from "../../services/dms-service";
 import { useAudioPlaybackWithVisualization } from "../../hooks/useAudioPlaybackWithVisualization";
 import SlidingAudioVisualizer from "../audio/SlidingAudioVisualizer";
 import SpectrumAnalyzer from "../audio/SpectrumAnalyzer";
@@ -22,6 +23,9 @@ const DocumentViewer: React.FC = () => {
   const [isToSvgTriLoading,  setIsToSvgTriLoading]  = useState(false);
   const [svgPalette, setSvgPalette] = useState<string>("db16");
   const [svgFabExpanded,     setSvgFabExpanded]     = useState(false);
+  const [isToGltfLoading,    setIsToGltfLoading]    = useState(false);
+  const [gltfFabExpanded,    setGltfFabExpanded]    = useState(false);
+  const [gltfMode,           setGltfMode]           = useState<GltfMode>("solid");
   const [ocrQuality, setOcrQuality] = useState<"ok" | "low" | "garbage" | null>(null);
   const [isIndexLoading,  setIsIndexLoading]  = useState(false);
   const [isImportLoading, setIsImportLoading] = useState(false);
@@ -282,6 +286,26 @@ const DocumentViewer: React.FC = () => {
         dispatch({ type: "SET_ENTRIES", entries: scanRes.data.entries });
     } else {
       dispatch({ type: "SET_ERROR", error: res.error ?? "Triangle SVG conversion failed" });
+    }
+  };
+
+  const doImageToGltf = async (overrideMode?: GltfMode) => {
+    setGltfFabExpanded(false);
+    if (!state.viewerPath) return;
+    const mode = overrideMode ?? gltfMode;
+    setIsToGltfLoading(true);
+    const res = await dms.imageToGltf(state.viewerPath, {
+      palette: svgPalette as any,
+      mode,
+      smooth:  true,
+    });
+    setIsToGltfLoading(false);
+    if (res.ok && res.data?.outPath) {
+      const scanRes = await dms.scanDir(state.currentPath);
+      if (scanRes.ok && scanRes.data)
+        dispatch({ type: "SET_ENTRIES", entries: scanRes.data.entries });
+    } else {
+      dispatch({ type: "SET_ERROR", error: res.error ?? "GLB conversion failed" });
     }
   };
 
@@ -651,6 +675,61 @@ const DocumentViewer: React.FC = () => {
                         {isToSvgTriLoading
                           ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                           : <span className="text-[8px] font-black tracking-tight leading-none" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.9), -1px 0 1px rgba(255,255,255,0.7)' }}>TRI</span>}
+                      </button>
+                    </>
+                  )}
+                  {/* 3D toggle — cube icon, accent variant */}
+                  <button
+                    onClick={() => setGltfFabExpanded(e => !e)}
+                    title={gltfFabExpanded ? "Close 3D options" : "Export to GLB (3D mesh)…"}
+                    className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 bg-[var(--theme-primary)]/40 border-2 border-[var(--theme-primary)]/70 text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/55"
+                  >
+                    {gltfFabExpanded ? (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        <path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/>
+                      </svg>
+                    )}
+                  </button>
+                  {/* GLB sub-options — SOL / WFR / PXL */}
+                  {gltfFabExpanded && (
+                    <>
+                      {/* SOL — Solid mesh, primary filled */}
+                      <button
+                        onClick={() => doImageToGltf("solid")}
+                        disabled={isToGltfLoading}
+                        title="Export GLB: Solid height-map mesh — saves as {name}_solid.glb"
+                        className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90"
+                      >
+                        {isToGltfLoading && gltfMode === "solid"
+                          ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          : <span className="text-[8px] font-black tracking-tight leading-none" style={{ textShadow: '0 1px 1px rgba(0,0,0,1), -1px 0 1px rgba(0,0,0,0.7)' }}>SOL</span>}
+                      </button>
+                      {/* WFR — Wireframe, outlined */}
+                      <button
+                        onClick={() => doImageToGltf("wireframe")}
+                        disabled={isToGltfLoading}
+                        title="Export GLB: Wireframe mesh — saves as {name}_wfr.glb"
+                        className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-surface)] border-2 border-[var(--theme-primary)] text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/15"
+                      >
+                        {isToGltfLoading && gltfMode === "wireframe"
+                          ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          : <span className="text-[8px] font-black tracking-tight leading-none" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.9), -1px 0 1px rgba(255,255,255,0.7)' }}>WFR</span>}
+                      </button>
+                      {/* PXL — Pixel-perfect, outlined */}
+                      <button
+                        onClick={() => doImageToGltf("pixelperfect")}
+                        disabled={isToGltfLoading}
+                        title="Export GLB: Pixel-perfect prism mesh — saves as {name}_pxl.glb"
+                        className="w-9 h-9 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.6),0_1px_3px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 bg-[var(--theme-surface)] border-2 border-[var(--theme-primary)] text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/15"
+                      >
+                        {isToGltfLoading && gltfMode === "pixelperfect"
+                          ? <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          : <span className="text-[8px] font-black tracking-tight leading-none" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.9), -1px 0 1px rgba(255,255,255,0.7)' }}>PXL</span>}
                       </button>
                     </>
                   )}

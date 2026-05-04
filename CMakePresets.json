@@ -104,27 +104,26 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl",
-        "DISABLE_ONNX": "ON",
-        "CMAKE_DISABLE_FIND_PACKAGE_SW": "TRUE"
+        "DISABLE_ONNX": "ON"
       }
     }
   ],
   "buildPresets": [
-    { "name": "build-default",      "configurePreset": "default" },
-    { "name": "build-debug",        "configurePreset": "debug" },
-    { "name": "build-llvm22",       "configurePreset": "llvm22-custom" },
-    { "name": "build-llvm22-asan",  "configurePreset": "llvm22-asan" },
-    { "name": "build-asan-system",  "configurePreset": "asan-system" },
-    { "name": "build-ci",           "configurePreset": "ci-linux-clang22" },
-    { "name": "build-ci-macos",     "configurePreset": "ci-macos" },
-    { "name": "build-ci-linux",     "configurePreset": "ci-linux" },
-    { "name": "build-ci-windows",   "configurePreset": "ci-windows" }
+    { "name": "build-default", "configurePreset": "default" },
+    { "name": "build-debug", "configurePreset": "debug" },
+    { "name": "build-llvm22", "configurePreset": "llvm22-custom" },
+    { "name": "build-llvm22-asan", "configurePreset": "llvm22-asan" },
+    { "name": "build-asan-system", "configurePreset": "asan-system" },
+    { "name": "build-ci", "configurePreset": "ci-linux-clang22" },
+    { "name": "build-ci-macos", "configurePreset": "ci-macos" },
+    { "name": "build-ci-linux", "configurePreset": "ci-linux" },
+    { "name": "build-ci-windows", "configurePreset": "ci-windows" }
   ],
   "testPresets": [
-    { "name": "test-default",     "configurePreset": "default",         "output": { "outputOnFailure": true } },
-    { "name": "test-ci",          "configurePreset": "ci-linux-clang22","output": { "outputOnFailure": true } },
-    { "name": "test-ci-macos",    "configurePreset": "ci-macos",        "output": { "outputOnFailure": true } },
-    { "name": "test-ci-linux",    "configurePreset": "ci-linux",        "output": { "outputOnFailure": true } },
-    { "name": "test-ci-windows",  "configurePreset": "ci-windows",      "output": { "outputOnFailure": true } }
+    { "name": "test-default", "configurePreset": "default", "output": { "outputOnFailure": true } },
+    { "name": "test-ci", "configurePreset": "ci-linux-clang22", "output": { "outputOnFailure": true } },
+    { "name": "test-ci-macos", "configurePreset": "ci-macos", "output": { "outputOnFailure": true } },
+    { "name": "test-ci-linux", "configurePreset": "ci-linux", "output": { "outputOnFailure": true } },
+    { "name": "test-ci-windows", "configurePreset": "ci-windows", "output": { "outputOnFailure": true } }
   ]
 }

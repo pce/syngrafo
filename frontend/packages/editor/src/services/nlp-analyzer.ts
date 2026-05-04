@@ -7,6 +7,7 @@ import type { Block } from "../models/block";
 declare global {
   interface Window {
     saucer?: {
+      call<T = string>(name: string, params?: unknown[]): Promise<T>;
       exposed?: Record<string, (...args: unknown[]) => Promise<string>>;
     };
   }

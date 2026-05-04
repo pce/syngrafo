@@ -12,6 +12,7 @@
     "i18n": "bun run i18n:extract && bun run i18n:compile"
   },
   "dependencies": {
+    "@syngrafo/editor": "workspace:*",
     "@lingui/core": "^6.0.1",
     "@lingui/format-po": "^6.0.1",
     "@lingui/react": "^6.0.1",

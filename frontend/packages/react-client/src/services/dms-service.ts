@@ -261,6 +261,28 @@ export interface SvgConvertOpts {
   gridSize?: number;
 }
 
+export type GltfMode = "solid" | "wireframe" | "pixelperfect";
+
+export interface GltfConvertOpts {
+  palette?: SvgPalette;
+  smooth?:  boolean;
+  mode?:    GltfMode;
+  gridSize?: number;
+  depthScale?: number;
+  useVertexColors?: boolean;
+  maxDim?: number;
+  blurSigma?: number;
+}
+
+export interface MeshConvertResult {
+  outPath:    string;
+  sizeBytes:  number;
+  mode:       string;
+  gridSize:   number;
+  depthScale: number;
+  sourceSize?: { w: number; h: number };
+}
+
 export interface Keyword {
   term:       string;
   frequency:  number;
@@ -620,25 +642,35 @@ export const dms = {
   },
 
   /** Convert a raster image to SVG using greedy rect-merge. Saves next to source. */
-  imageToSvg: async (path: string, opts: SvgConvertOpts = {}): Promise<NlpEnvelope<{ outPath: string; palette: string; colors: number }>> => {
-    return call<{ outPath: string; palette: string; colors: number }>(
+  imageToSvg: async (path: string, opts: SvgConvertOpts = {}): Promise<NlpEnvelope<{ outPath: string; palette: string; colors: number; sourceSize?: { w: number; h: number } }>> => {
+    return call<{ outPath: string; palette: string; colors: number; sourceSize?: { w: number; h: number } }>(
       binding("dms_image_to_svg"),
       JSON.stringify({ path, ...opts })
     );
   },
 
   /** Convert a raster image to SVG using connected-component polygon boundary tracing. */
-  imageToSvgPoly: async (path: string, opts: SvgConvertOpts = {}): Promise<NlpEnvelope<{ outPath: string; palette: string; colors: number }>> => {
-    return call<{ outPath: string; palette: string; colors: number }>(
+  imageToSvgPoly: async (path: string, opts: SvgConvertOpts = {}): Promise<NlpEnvelope<{ outPath: string; palette: string; colors: number; sourceSize?: { w: number; h: number } }>> => {
+    return call<{ outPath: string; palette: string; colors: number; sourceSize?: { w: number; h: number } }>(
       binding("dms_image_to_svg_poly"),
       JSON.stringify({ path, ...opts })
     );
   },
 
   /** Convert a raster image to low-poly triangulated SVG. */
-  imageToSvgTri: async (path: string, opts: SvgConvertOpts = {}): Promise<NlpEnvelope<{ outPath: string; palette: string; colors: number; gridSize: number }>> => {
-    return call<{ outPath: string; palette: string; colors: number; gridSize: number }>(
+  imageToSvgTri: async (path: string, opts: SvgConvertOpts = {}): Promise<NlpEnvelope<{ outPath: string; palette: string; colors: number; gridSize: number; sourceSize?: { w: number; h: number } }>> => {
+    return call<{ outPath: string; palette: string; colors: number; gridSize: number; sourceSize?: { w: number; h: number } }>(
       binding("dms_image_to_svg_tri"),
+      JSON.stringify({ path, ...opts })
+    );
+  },
+
+  /** Convert a raster image to a binary glTF 2.0 (.glb) height-map mesh.
+   *  Palette-quantises vertex colours when `opts.palette` is set.
+   *  Output is saved next to the source as `[name]_solid.glb` / `_wfr.glb` / `_pxl.glb`. */
+  imageToGltf: async (path: string, opts: GltfConvertOpts = {}): Promise<NlpEnvelope<MeshConvertResult>> => {
+    return call<MeshConvertResult>(
+      binding("dms_image_to_gltf"),
       JSON.stringify({ path, ...opts })
     );
   },

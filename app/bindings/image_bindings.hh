@@ -28,6 +28,8 @@
 #include "../core/image.hh"
 #include "../core/mesh.hh"
 #include "../core/pipeline.hh"
+#include "../core/image_ops.hh"
+#include "../core/gltf.hh"
 #include "../media/topology.hh"
 
 #include <algorithm>
@@ -212,28 +214,53 @@ inline void write_svg_regions(std::ofstream& f, const std::vector<int>& pidx,
 
 struct SvgArgs {
     std::string path;
-    std::string palette   {"db16"};
-    bool        smooth    {true};
-    int         gridSize  {8};
-    float       rdpEpsilon{1.5f};  ///< RDP tolerance in pixels (1.0=crisp, 3.0=loose)
-    bool        useLab    {false}; ///< use LAB-space palette mapping (better for photos)
+    std::string palette    {"db16"};
+    bool        smooth     {true};
+    int         gridSize   {8};
+    float       rdpEpsilon {1.5f};
+    bool        useLab     {false};
+    // pre-pass
+    int         maxDim     {512};   ///< normalize: cap max(w,h) to this; 0 = off
+    float       blurSigma  {0.5f}; ///< gaussian blur sigma before quantisation; 0 = off
+    bool        edgeMode   {false}; ///< burn Sobel contours into image
+    float       edgeWeight {0.4f}; ///< edge intensity [0..1]
+    int         pixelBlock {0};     ///< pixelate block size; 0/1 = off
 };
 
 [[nodiscard]] inline SvgArgs parse_svg_args(const std::string& raw) {
     SvgArgs a;
     try {
-        auto j=json::parse(raw);
-        a.path       =j.value("path",       std::string{});
-        a.palette    =j.value("palette",    std::string{"db16"});
-        a.smooth     =j.value("smooth",     true);
-        a.gridSize   =j.value("gridSize",   8);
-        a.rdpEpsilon =float(j.value("rdpEpsilon", 1.5));
-        a.useLab     =j.value("useLab",     false);
+        auto j       = json::parse(raw);
+        a.path       = j.value("path",        std::string{});
+        a.palette    = j.value("palette",     std::string{"db16"});
+        a.smooth     = j.value("smooth",      true);
+        a.gridSize   = j.value("gridSize",    8);
+        a.rdpEpsilon = float(j.value("rdpEpsilon", 1.5));
+        a.useLab     = j.value("useLab",      false);
+        a.maxDim     = j.value("maxDim",      512);
+        a.blurSigma  = float(j.value("blurSigma",  0.5));
+        a.edgeMode   = j.value("edgeMode",    false);
+        a.edgeWeight = float(j.value("edgeWeight", 0.4));
+        a.pixelBlock = j.value("pixelBlock",  0);
     } catch (...) {}
-    if (a.path.empty()) a.path=raw;
-    a.gridSize   = std::clamp(a.gridSize, 2, 64);
+    if (a.path.empty()) a.path = raw;
+    a.gridSize   = std::clamp(a.gridSize,   2,    64);
     a.rdpEpsilon = std::clamp(a.rdpEpsilon, 0.1f, 20.f);
+    a.maxDim     = std::clamp(a.maxDim,     0,    4096);
+    a.blurSigma  = std::clamp(a.blurSigma,  0.0f, 10.f);
+    a.edgeWeight = std::clamp(a.edgeWeight, 0.0f, 1.0f);
+    a.pixelBlock = std::clamp(a.pixelBlock, 0,    64);
     return a;
+}
+
+/// Apply the optional image pre-pass according to SvgArgs.
+/// Runs: normalize → blur → edge_overlay → pixelate (each skipped when disabled).
+[[nodiscard]] inline Expected<Image> preprocess(Expected<Image> img, const SvgArgs& a) {
+    if (a.maxDim > 0)     img = std::move(img) | stage(ops::normalize(a.maxDim));
+    if (a.blurSigma > 0)  img = std::move(img) | stage(ops::gaussian_blur(a.blurSigma));
+    if (a.edgeMode)       img = std::move(img) | stage(ops::edge_overlay(a.blurSigma, a.edgeWeight));
+    if (a.pixelBlock > 1) img = std::move(img) | stage(ops::pixelate(a.pixelBlock));
+    return img;
 }
 
 [[nodiscard]] inline fs::path unique_out(const fs::path& src,
@@ -242,6 +269,37 @@ struct SvgArgs {
     for (int n=2; fs::exists(out)&&n<1000; ++n)
         out = src.parent_path()/(src.stem().string()+std::string{suffix}+std::to_string(n)+std::string{ext});
     return out;
+}
+
+/// Reconstruct an Image where every pixel is replaced by its mapped palette color.
+/// Used to palette-quantise before mesh building so vertex colors match the palette.
+[[nodiscard]] inline Image recolor(const Image& img,
+                                    const pal::Palette& palette,
+                                    const std::vector<int>& pidx) {
+    Image out;
+    out.width = img.width; out.height = img.height;
+    out.pixels.resize(img.pixels.size(), 0);
+    const int n = img.width * img.height;
+    for (int i = 0; i < n; ++i) {
+        const int ci = pidx[i];
+        if (ci >= 0 && ci < static_cast<int>(palette.size())) {
+            const auto& c = palette[static_cast<size_t>(ci)];
+            out.pixels[static_cast<size_t>(i)*4+0] = c.r;
+            out.pixels[static_cast<size_t>(i)*4+1] = c.g;
+            out.pixels[static_cast<size_t>(i)*4+2] = c.b;
+            out.pixels[static_cast<size_t>(i)*4+3] = 255u;
+        }
+    }
+    return out;
+}
+
+/// Returns a short suffix string for the given MeshMode.
+[[nodiscard]] inline std::string_view mode_suffix(MeshMode m) noexcept {
+    switch (m) {
+        case MeshMode::Wireframe:    return "_wfr";
+        case MeshMode::PixelPerfect: return "_pxl";
+        default:                     return "_solid";
+    }
 }
 
 } // namespace svg_detail
@@ -256,7 +314,7 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         const fs::path src{a.path}; std::error_code ec;
         if (!fs::exists(src,ec)) return DMSHandle::err_str(std::format("'{}' does not exist",a.path));
         if (fs::is_directory(src,ec)) return DMSHandle::err_str("path is a directory");
-        auto img = Image::load(a.path);
+        auto img = svg_detail::preprocess(Image::load(a.path), a);
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
@@ -272,7 +330,7 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         svg_detail::write_svg_rects(file,pidx,palette,w,h);
         file << "</svg>\n";
         if (file.fail()) return DMSHandle::err_str("I/O error writing SVG");
-        return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},{"colors",(int)palette.size()}});
+        return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},{"colors",(int)palette.size()},{"sourceSize",json{{"w",w},{"h",h}}}});
     });
 
     wv.expose("dms_image_to_svg_poly", [](string arg) -> string {
@@ -280,7 +338,7 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         const fs::path src{a.path}; std::error_code ec;
         if (!fs::exists(src,ec)) return DMSHandle::err_str(std::format("'{}' does not exist",a.path));
         if (fs::is_directory(src,ec)) return DMSHandle::err_str("path is a directory");
-        auto img = Image::load(a.path);
+        auto img = svg_detail::preprocess(Image::load(a.path), a);
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
@@ -296,7 +354,7 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         svg_detail::write_svg_poly(file,pidx,palette,w,h,a.rdpEpsilon);
         file << "</svg>\n";
         if (file.fail()) return DMSHandle::err_str("I/O error writing SVG");
-        return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},{"colors",(int)palette.size()}});
+        return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},{"colors",(int)palette.size()},{"sourceSize",json{{"w",w},{"h",h}}}});
     });
 
     wv.expose("dms_image_to_svg_tri", [](string arg) -> string {
@@ -304,7 +362,7 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         const fs::path src{a.path}; std::error_code ec;
         if (!fs::exists(src,ec)) return DMSHandle::err_str(std::format("'{}' does not exist",a.path));
         if (fs::is_directory(src,ec)) return DMSHandle::err_str("path is a directory");
-        auto img = Image::load(a.path);
+        auto img = svg_detail::preprocess(Image::load(a.path), a);
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
@@ -321,18 +379,15 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         file << "</svg>\n";
         if (file.fail()) return DMSHandle::err_str("I/O error writing SVG");
         return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},
-                                       {"colors",(int)palette.size()},{"gridSize",a.gridSize}});
+                                       {"colors",(int)palette.size()},{"gridSize",a.gridSize},{"sourceSize",json{{"w",w},{"h",h}}}});
     });
 
-    // Full region-graph pipeline:
-    //   pixels → LAB quantisation (optional) → smooth → union-find CC regions
-    //          → per-region boundary-edge walk → RDP simplification → SVG <path>
     wv.expose("dms_image_to_svg_region", [](string arg) -> string {
         const auto a = svg_detail::parse_svg_args(arg);
         const fs::path src{a.path}; std::error_code ec;
         if (!fs::exists(src,ec)) return DMSHandle::err_str(std::format("'{}' does not exist",a.path));
         if (fs::is_directory(src,ec)) return DMSHandle::err_str("path is a directory");
-        auto img = Image::load(a.path);
+        auto img = svg_detail::preprocess(Image::load(a.path), a);
         if (!img) return DMSHandle::err_str(img.error());
         const int w=img->width, h=img->height;
         auto palette = pal::resolve(a.palette,img->data(),w,h);
@@ -349,7 +404,7 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         file << "</svg>\n";
         if (file.fail()) return DMSHandle::err_str("I/O error writing SVG");
         return DMSHandle::ok_str(json{{"outPath",out.string()},{"palette",a.palette},
-                                       {"colors",(int)palette.size()},{"rdpEpsilon",a.rdpEpsilon}});
+                                       {"colors",(int)palette.size()},{"rdpEpsilon",a.rdpEpsilon},{"sourceSize",json{{"w",w},{"h",h}}}});
     });
 
     wv.expose("dms_image_analyze", [](string arg) -> string {
@@ -386,17 +441,23 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
             {"histogram",json{{"r",rR},{"g",rG},{"b",rB}}}});
     });
 
-    // Asset → Transform → View: Image::load | build_mesh | save_as_ply
+    // Asset → Transform → View: Image::load | normalize | build_mesh | save_as_ply
     wv.expose("dms_image_to_mesh", [](string arg) -> string {
-        std::string path; std::string modeStr="solid";
+        std::string path; std::string modeStr="solid"; std::string palette;
         uint32_t gridSize=8; float depthScale=50.f; bool useColors=true;
+        bool smooth=false;
+        int maxDim=0; float blurSigma=0.0f;
         try {
             auto j=json::parse(arg);
-            path      =j.value("path",          std::string{});
-            modeStr   =j.value("mode",          std::string{"solid"});
+            path      =j.value("path",            std::string{});
+            modeStr   =j.value("mode",            std::string{"solid"});
             gridSize  =uint32_t(std::clamp(j.value("gridSize",8),1,64));
             depthScale=float(j.value("depthScale",50.0));
-            useColors =j.value("useVertexColors",true);
+            useColors =j.value("useVertexColors", true);
+            palette   =j.value("palette",         std::string{});
+            smooth    =j.value("smooth",          false);
+            maxDim    =j.value("maxDim",          0);
+            blurSigma =float(j.value("blurSigma", 0.0));
         } catch (...) {}
         if (path.empty()) path=arg;
         const fs::path src{path}; std::error_code ec;
@@ -404,18 +465,84 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
         MeshMode mode=MeshMode::Solid;
         if      (modeStr=="wireframe")    mode=MeshMode::Wireframe;
         else if (modeStr=="pixelperfect") mode=MeshMode::PixelPerfect;
-        const MeshExportOptions opts{mode,gridSize,depthScale,useColors};
-        auto result = Image::load(path)
-            | stage([&opts](Image img) -> Expected<MeshData> {
-                  return build_mesh(ImageView::from(img),opts);
-              })
-            | stage([&src,&opts](MeshData mesh) -> Expected<std::string> {
-                  return save_as_ply(mesh,svg_detail::unique_out(src,"_mesh",".ply").string(),opts);
-              });
-        if (!result) return DMSHandle::err_str(result.error());
-        const int64_t sz=(int64_t)fs::file_size(fs::path{*result},ec);
-        return DMSHandle::ok_str(json{{"outPath",*result},{"sizeBytes",ec?int64_t{0}:sz},
-            {"mode",modeStr},{"gridSize",(int)gridSize},{"depthScale",depthScale}});
+
+        // Preprocess step — captures dimensions after normalise/blur
+        auto img = Image::load(path);
+        if (maxDim > 0)    img = std::move(img) | stage(ops::normalize(maxDim));
+        if (blurSigma > 0) img = std::move(img) | stage(ops::gaussian_blur(blurSigma));
+        if (!img) return DMSHandle::err_str(img.error());
+        const int sw=img->width, sh=img->height;
+
+        // Optional palette quantisation → recolor so vertex colors match palette
+        if (!palette.empty() && useColors) {
+            auto pal_colors = pal::resolve(palette, img->data(), sw, sh);
+            auto pidx       = pal::map_pixels(img->data(), sw, sh, pal_colors);
+            if (smooth) pal::smooth(pidx, sw, sh);
+            *img = svg_detail::recolor(*img, pal_colors, pidx);
+        }
+
+        const MeshExportOptions opts{mode, gridSize, depthScale, useColors};
+        const auto out_path = svg_detail::unique_out(src, svg_detail::mode_suffix(mode), ".ply");
+        auto mesh = build_mesh(ImageView::from(*img), opts);
+        if (!mesh) return DMSHandle::err_str(mesh.error());
+        auto saved = save_as_ply(*mesh, out_path.string(), opts);
+        if (!saved) return DMSHandle::err_str(saved.error());
+        const int64_t sz=(int64_t)fs::file_size(fs::path{*saved},ec);
+        return DMSHandle::ok_str(json{{"outPath",*saved},{"sizeBytes",ec?int64_t{0}:sz},
+            {"mode",modeStr},{"gridSize",(int)gridSize},{"depthScale",depthScale},
+            {"sourceSize",json{{"w",sw},{"h",sh}}}});
+    });
+
+    // Image → normalize → build_mesh → save_as_gltf (.glb)
+    wv.expose("dms_image_to_gltf", [](string arg) -> string {
+        std::string path; std::string modeStr="solid"; std::string palette;
+        uint32_t gridSize=8; float depthScale=50.f; bool useColors=true;
+        bool smooth=false;
+        int maxDim=0; float blurSigma=0.0f;
+        try {
+            auto j=json::parse(arg);
+            path      =j.value("path",            std::string{});
+            modeStr   =j.value("mode",            std::string{"solid"});
+            gridSize  =uint32_t(std::clamp(j.value("gridSize",8),1,64));
+            depthScale=float(j.value("depthScale",50.0));
+            useColors =j.value("useVertexColors", true);
+            palette   =j.value("palette",         std::string{});
+            smooth    =j.value("smooth",          false);
+            maxDim    =j.value("maxDim",          0);
+            blurSigma =float(j.value("blurSigma", 0.0));
+        } catch (...) {}
+        if (path.empty()) path=arg;
+        const fs::path src{path}; std::error_code ec;
+        if (!fs::exists(src,ec)) return DMSHandle::err_str(std::format("'{}' does not exist",path));
+        MeshMode mode=MeshMode::Solid;
+        if      (modeStr=="wireframe")    mode=MeshMode::Wireframe;
+        else if (modeStr=="pixelperfect") mode=MeshMode::PixelPerfect;
+
+        // Preprocess — captures dimensions after normalise/blur
+        auto img = Image::load(path);
+        if (maxDim > 0)    img = std::move(img) | stage(ops::normalize(maxDim));
+        if (blurSigma > 0) img = std::move(img) | stage(ops::gaussian_blur(blurSigma));
+        if (!img) return DMSHandle::err_str(img.error());
+        const int sw=img->width, sh=img->height;
+
+        // Optional palette quantisation → recolor vertex colors
+        if (!palette.empty() && useColors) {
+            auto pal_colors = pal::resolve(palette, img->data(), sw, sh);
+            auto pidx       = pal::map_pixels(img->data(), sw, sh, pal_colors);
+            if (smooth) pal::smooth(pidx, sw, sh);
+            *img = svg_detail::recolor(*img, pal_colors, pidx);
+        }
+
+        const MeshExportOptions opts{mode, gridSize, depthScale, useColors};
+        const auto out_path = svg_detail::unique_out(src, svg_detail::mode_suffix(mode), ".glb");
+        auto mesh = build_mesh(ImageView::from(*img), opts);
+        if (!mesh) return DMSHandle::err_str(mesh.error());
+        auto saved = save_as_gltf(*mesh, out_path.string(), opts);
+        if (!saved) return DMSHandle::err_str(saved.error());
+        const int64_t sz=(int64_t)fs::file_size(fs::path{*saved},ec);
+        return DMSHandle::ok_str(json{{"outPath",*saved},{"sizeBytes",ec?int64_t{0}:sz},
+            {"mode",modeStr},{"gridSize",(int)gridSize},{"depthScale",depthScale},
+            {"sourceSize",json{{"w",sw},{"h",sh}}}});
     });
 
     wv.expose("dms_ocr_document", [&dms](string path, string zone) -> string {
@@ -460,4 +587,3 @@ inline void register_image_bindings(saucer::smartview& wv, DMSHandle& dms,
 }
 
 } // namespace pce::dms
-

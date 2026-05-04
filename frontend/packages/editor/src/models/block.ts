@@ -1,5 +1,5 @@
 import { signal, type Signal } from "@preact/signals-core";
-import { BlockStyleReference, defaultBlockStyles, type CSSProperties } from "./style";
+import { type BlockStyleReference, defaultBlockStyles, type CSSProperties } from "./style";
 import type { NLPBlockAnnotation } from "./nlp";
 
 export type BlockType =

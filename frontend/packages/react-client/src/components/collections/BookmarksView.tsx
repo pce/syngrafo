@@ -36,7 +36,7 @@ interface DraftRow {
 }
 
 interface BookmarksViewProps {
-  onNavigate: (absPath: string) => void;
+  onNavigate: (absPath: string, isDir: boolean) => void;
   onClose?:   () => void;
 }
 
@@ -209,7 +209,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClose }) =>
   const goTo = useCallback(async (target: string) => {
     if (!zoneName) return;
     const res = await dms.bookmark.resolve(zoneName, target);
-    if (res.ok && res.data?.abs_path) onNavigate(res.data.abs_path);
+    if (res.ok && res.data?.abs_path)
+      onNavigate(res.data.abs_path, res.data.kind === "folder");
     else setError(res.error ?? "Could not resolve path");
   }, [zoneName, onNavigate]);
 
@@ -456,4 +457,3 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClose }) =>
 };
 
 export default BookmarksView;
-

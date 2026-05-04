@@ -88,13 +88,18 @@ endif()
 if(NOT APPLE OR NOT NLP_APPLE_VISION)
     find_package(Tesseract QUIET)
     if(NOT Tesseract_FOUND AND NOT TARGET Tesseract::libtesseract)
-        set(BUILD_PROG           OFF CACHE BOOL "" FORCE)
+        # On MSVC leptonica defaults SW_BUILD=ON, which calls find_package(SW REQUIRED).
+        # SW is the sw.io package manager — we never want it; disable before the subdir runs.
+        set(BUILD_PROG  OFF CACHE BOOL "" FORCE)
+        set(SW_BUILD    OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(
             leptonica
             URL https://github.com/DanBloomberg/leptonica/archive/refs/tags/1.84.1.tar.gz
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         FetchContent_MakeAvailable(leptonica)
+        # Tell tesseract's find_package(Leptonica REQUIRED) where the just-built tree lives.
+        set(Leptonica_DIR "${leptonica_BINARY_DIR}" CACHE PATH "" FORCE)
 
         set(DISABLE_TIFF         ON  CACHE BOOL "" FORCE)
         set(DISABLE_CURL         ON  CACHE BOOL "" FORCE)

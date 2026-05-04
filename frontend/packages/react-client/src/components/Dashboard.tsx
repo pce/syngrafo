@@ -18,6 +18,7 @@ import BookmarksView from "./collections/BookmarksView";
 import Icon from "./Icon";
 import TimelinePage from "./dms/TimelinePage";
 import ZoneDashboard from "./dms/ZoneDashboard";
+import { EditorPortal } from "./EditorPortal";
 
 // Zone avatar colour (stable hash)
 const PALETTE = [
@@ -238,6 +239,7 @@ const CreateDirModal: React.FC<{
 
 const Dashboard: React.FC = () => {
   const { state, dispatch } = useDms();
+  const [showEditor,  setShowEditor]  = useState(false);
   const [showZone,   setShowZone]   = useState(false);
   const [showTheme,  setShowTheme]  = useState(false);
   const [activeView, setActiveView] = useState<"dms" | "timeline">("dms");
@@ -451,6 +453,15 @@ const Dashboard: React.FC = () => {
 
         {/* ── Right: theme + zone profile dropdown + engine status ────────── */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* New Document */}
+          <button
+            onClick={() => setShowEditor(true)}
+            title="New Document"
+            className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
+          >
+            <Icon name="edit" size="xs" />
+          </button>
+          <div className="h-4 w-px bg-[var(--theme-border)]" />
           {/* Palette / Theme button */}
           <button
             onClick={() => setShowTheme(true)}
@@ -589,9 +600,16 @@ const Dashboard: React.FC = () => {
             <KanbanView kanbanDir={state.zone.out_path + "/.kanban"} />
           ) : centerView === "zone-dashboard" ? (
             <ZoneDashboard
-              onNavigate={(absPath) => {
+              onNavigate={async (absPath, isDir) => {
                 setCenterView("default");
-                dispatch({ type: "SELECT_FILE", path: absPath });
+                if (isDir) {
+                  dispatch({ type: "SET_PATH", path: absPath });
+                  const res = await dms.scanDir(absPath);
+                  if (res.ok && res.data)
+                    dispatch({ type: "SET_ENTRIES", entries: res.data.entries });
+                } else {
+                  dispatch({ type: "SELECT_FILE", path: absPath });
+                }
               }}
               onManageBookmarks={() => setCenterView("bookmarks")}
               onEditZone={() => setShowZone(true)}
@@ -600,9 +618,16 @@ const Dashboard: React.FC = () => {
             />
           ) : centerView === "bookmarks" ? (
             <BookmarksView
-              onNavigate={(absPath) => {
+              onNavigate={async (absPath, isDir) => {
                 setCenterView("default");
-                dispatch({ type: "SELECT_FILE", path: absPath });
+                if (isDir) {
+                  dispatch({ type: "SET_PATH", path: absPath });
+                  const res = await dms.scanDir(absPath);
+                  if (res.ok && res.data)
+                    dispatch({ type: "SET_ENTRIES", entries: res.data.entries });
+                } else {
+                  dispatch({ type: "SELECT_FILE", path: absPath });
+                }
               }}
               onClose={() => setCenterView("default")}
             />
@@ -731,6 +756,7 @@ const Dashboard: React.FC = () => {
           onRefresh={handleCommandBarRefresh}
         />
       )}
+      <EditorPortal open={showEditor} onClose={() => setShowEditor(false)} />
     </div>
   );
 };

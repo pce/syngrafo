@@ -14,7 +14,7 @@ frontend/packages/editor/dist/
 # frontend/packages/**/node_modules/
 # frontend/packages/**/dist/
 
-# frontend/node_modules/
+frontend/node_modules/
 
 # Old staging dirs (removed — use frontend/packages/react-client/dist directly)
 # webapp/

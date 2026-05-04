@@ -1,7 +1,7 @@
 import { DocumentModel } from "./document";
-import { Block, BlockType } from "./block";
+import { Block, type BlockType } from "./block";
 import { StyleClass, StyleLibrary } from "./style";
-import { DocumentIntent } from "./editor-context";
+import type { DocumentIntent } from "./editor-context";
 
 export const PDFPROJ_VERSION = 3;
 

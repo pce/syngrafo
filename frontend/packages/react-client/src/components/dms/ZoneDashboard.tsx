@@ -70,12 +70,13 @@ const ZoneInfoWidget: React.FC<{
 const BookmarksWidget: React.FC<{
   bookmarks: Bookmark[];
   zoneName: string;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, isDir: boolean) => void;
   onManage: () => void;
 }> = ({ bookmarks, zoneName, onNavigate, onManage }) => {
   const handleGoTo = async (bm: Bookmark) => {
     const res = await dms.bookmark.resolve(zoneName, bm.target);
-    if (res.ok && res.data?.abs_path) onNavigate(res.data.abs_path);
+    if (res.ok && res.data?.abs_path)
+      onNavigate(res.data.abs_path, res.data.kind === "folder");
   };
 
   return (
@@ -432,7 +433,7 @@ const QuickActionsWidget: React.FC<{
 // ── Main ZoneDashboard ────────────────────────────────────────────────────────
 
 interface ZoneDashboardProps {
-  onNavigate:        (absPath: string) => void;
+  onNavigate:        (absPath: string, isDir: boolean) => void;
   onManageBookmarks: () => void;
   onEditZone:        () => void;
   onTheme:           () => void;
