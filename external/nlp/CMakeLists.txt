@@ -51,6 +51,7 @@ if(APPLE)
         addons/ocr_addon_apple.mm
         addons/rectifier_addon_apple.mm
         addons/exif_addon_apple.mm
+        addons/platform_services_apple.mm   # reveal_in_file_manager via NSWorkspace
     )
     target_link_libraries(nlp_engine PUBLIC
         "-framework Vision"
@@ -61,6 +62,27 @@ if(APPLE)
         "-framework ImageIO"
         "-framework PDFKit"
     )
+elseif(WIN32)
+    target_sources(nlp_engine PRIVATE
+        addons/platform_services_windows.cpp   # reveal_in_file_manager via SHOpenFolderAndSelectItems
+    )
+elseif(UNIX)
+    target_sources(nlp_engine PRIVATE
+        addons/platform_services_linux.cpp     # reveal_in_file_manager via D-Bus FileManager1
+    )
+    # dbus-1 is optional: enables the real ShowItems call; falls back to no-op without it.
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(DBUS QUIET dbus-1)
+        if(DBUS_FOUND)
+            message(STATUS "[nlp] D-Bus found — reveal_in_file_manager will use FileManager1")
+            target_include_directories(nlp_engine PRIVATE ${DBUS_INCLUDE_DIRS})
+            target_link_libraries(nlp_engine PRIVATE ${DBUS_LIBRARIES})
+            target_compile_definitions(nlp_engine PRIVATE HAVE_DBUS=1)
+        else()
+            message(STATUS "[nlp] D-Bus not found — reveal_in_file_manager will be a no-op")
+        endif()
+    endif()
 else()
     target_sources(nlp_engine PRIVATE
         addons/platform_services_stub.cpp

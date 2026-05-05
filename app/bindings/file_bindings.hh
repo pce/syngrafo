@@ -15,16 +15,58 @@
 #include "../dms_handle.hh"
 #include <saucer/modules/desktop.hpp>
 
-// Platform services give us reveal_in_finder (NSWorkspace on macOS, stub elsewhere).
+// Platform services: reveal_in_file_manager (NSWorkspace / SHOpenFolderAndSelectItems / D-Bus FileManager1).
 #include "../../external/nlp/addons/platform_services.hh"
 
+#include <algorithm>
+#include <fstream>
+
 namespace pce::dms {
+
+inline Expected<json> DMSHandle::collect_svgs(std::string_view folder_path) noexcept {
+    try {
+        const fs::path dir{folder_path};
+        if (!fs::exists(dir) || !fs::is_directory(dir))
+            return std::unexpected("not a directory: " + std::string{folder_path});
+
+        json result = json::array();
+        for (const auto& entry : fs::directory_iterator(dir)) {
+            if (entry.path().extension() != ".svg") continue;
+
+            std::ifstream f(entry.path(), std::ios::in);
+            if (!f) continue;
+            std::string content((std::istreambuf_iterator<char>(f)),
+                                 std::istreambuf_iterator<char>());
+
+            // Strip XML declaration if present
+            if (content.starts_with("<?xml")) {
+                const auto end_pos = content.find("?>");
+                if (end_pos != std::string::npos) content = content.substr(end_pos + 2);
+            }
+            // Trim leading whitespace
+            const auto first = content.find_first_not_of(" \t\n\r");
+            if (first != std::string::npos) content = content.substr(first);
+
+            result.push_back({
+                {"name",    entry.path().stem().string()},
+                {"content", std::move(content)}
+            });
+        }
+        // Sort by name for deterministic sprite order
+        std::sort(result.begin(), result.end(), [](const json& a, const json& b){
+            return a["name"].get<std::string>() < b["name"].get<std::string>();
+        });
+        return result;
+    } catch (const std::exception& e) {
+        return std::unexpected(std::string{"collect_svgs: "} + e.what());
+    }
+}
 
 inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
                                     saucer::modules::desktop& desk) {
     using std::string;
 
-    // ── Path normalisation (strips file:// scheme + percent-decode) ───────────
+    ///  Path normalisation (strips file:// scheme + percent-decode)
     auto normalise_picker_path = [](const std::string& raw) -> std::string {
         std::string p = raw;
         if      (p.starts_with("file:///"))          p = p.substr(7);
@@ -54,21 +96,18 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return dec;
     };
 
-    // ── dms_scan_dir ─────────────────────────────────────────────────────────
     wv.expose("dms_scan_dir", [&dms](string path, bool recursive) -> string {
         const auto r = dms.scan_dir(path, recursive);
         if (!r) return DMSHandle::err_str(r.error());
         return DMSHandle::ok_str(*r);
     });
 
-    // ── dms_read_file ─────────────────────────────────────────────────────────
     wv.expose("dms_read_file", [&dms](string path) -> string {
         const auto r = dms.read_file(path);
         if (!r) return DMSHandle::err_str(r.error());
         return DMSHandle::ok_str(*r);
     });
 
-    // dms_write_file
     wv.expose("dms_write_file", [](string path, string content) -> string {
         const fs::path p{path};
         std::error_code ec;
@@ -84,7 +123,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"written",true}});
     });
 
-    // dms_fetch_data_url
     wv.expose("dms_fetch_data_url", [](string path) -> string {
         const fs::path p(path);
         if (!fs::exists(p))
@@ -118,7 +156,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
             std::format("data:{};base64,{}", mime, out)}});
     });
 
-    // dms_file_stats
     wv.expose("dms_file_stats", [&dms](string path_str) -> string {
         const fs::path p{path_str};
         const auto ext       = p.extension().string();
@@ -153,7 +190,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
             {"mtime",file_mtime_unix(p)},{"indexed",false},{"inDb",false}});
     });
 
-    // dms_register_file
     wv.expose("dms_register_file", [&dms](string path_str) -> string {
         const fs::path p{path_str};
         std::error_code ec;
@@ -190,7 +226,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
             {"registered",newly},{"kind",kind},{"size",fsize},{"mtime",mtime}});
     });
 
-    // dms_path_exists
     wv.expose("dms_path_exists", [](string path) -> string {
         std::error_code ec;
         const bool ex=fs::exists(fs::path{path},ec);
@@ -198,7 +233,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"exists",ex},{"is_dir",id}});
     });
 
-    // dms_create_dir
     wv.expose("dms_create_dir", [](string path) -> string {
         std::error_code ec;
         if (fs::exists(fs::path{path},ec))
@@ -209,7 +243,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"created",true},{"path",path}});
     });
 
-    // dms_select_directory
     wv.expose("dms_select_directory",
               [&desk, normalise_picker_path]() mutable -> string {
         namespace picker = saucer::modules::picker;
@@ -219,7 +252,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"path",normalise_picker_path(res->string())}});
     });
 
-    // dms_select_files
     wv.expose("dms_select_files",
               [&desk, normalise_picker_path]() mutable -> string {
         namespace picker = saucer::modules::picker;
@@ -231,7 +263,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"paths",paths}});
     });
 
-    // dms_copy_files
     wv.expose("dms_copy_files",
               [](string sources_json, string dest_dir, string conflict) -> string {
         std::vector<std::string> sources;
@@ -245,13 +276,17 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         for (const auto& ss : sources) {
             fs::path src{ss};
             if (!fs::exists(src,ec)){errors.push_back(std::format("'{}' not found",ss));continue;}
-            fs::path tgt=dest/src.filename();
-            if (fs::exists(tgt,ec)){
-                if (conflict=="skip"){++skipped;continue;}
-                else if (conflict=="keep"){
-                    auto stem=tgt.stem().string(),ext=tgt.extension().string();
-                    for(int n=1;fs::exists(tgt,ec);++n)
+            fs::path tgt = dest/src.filename();
+            if (fs::exists(tgt,ec)) {
+                if (conflict == "skip"){
+                    ++skipped;
+                    continue;
+                }
+                else if (conflict == "keep"){
+                    auto stem = tgt.stem().string(),ext = tgt.extension().string();
+                    for(int n=1;fs::exists(tgt,ec);++n) {
                         tgt=dest/std::format("{} ({}){}", stem, n, ext);
+                    }
                 }
             }
             try {
@@ -266,7 +301,6 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"copied",copied},{"skipped",skipped},{"errors",errors}});
     });
 
-    // dms_move_files
     wv.expose("dms_move_files",
               [](string sources_json, string dest_dir, string conflict) -> string {
         std::vector<std::string> sources;
@@ -307,7 +341,7 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"moved",moved},{"skipped",skipped},{"errors",errors}});
     });
 
-    // dms_delete_files
+    /// dms_delete_files
     wv.expose("dms_delete_files", [](string paths_json) -> string {
         std::vector<std::string> paths;
         try { for(auto& p:json::parse(paths_json)) paths.push_back(p.get<std::string>()); }
@@ -325,22 +359,23 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"deleted",deleted},{"errors",errors}});
     });
 
-    // dms_share_file
-    // Reveals the file in the native Finder/Explorer window.
-    // macOS: delegates to NSWorkspace.shared.activateFileViewerSelectingURLs (no child process).
-    // Other platforms: not yet supported.
+    /// @brief Reveals a file in the native file manager with the item selected.
+    ///        No child process is spawned on any platform.
+    ///        macOS   — @c NSWorkspace activateFileViewerSelectingURLs
+    ///        Windows — @c SHOpenFolderAndSelectItems (Shell API)
+    ///        Linux   — @c org.freedesktop.FileManager1.ShowItems (D-Bus; requires dbus-1 at build time)
     wv.expose("dms_share_file", [](string path) -> string {
-        const bool ok = pce::nlp::platform::reveal_in_finder(path);
+        const bool ok = pce::nlp::platform::reveal_in_file_manager(path);
         if (!ok) return DMSHandle::err_str(
             "Reveal in file manager is not supported on this platform");
         return DMSHandle::ok_str(json{{"shared", true}});
     });
 
-    // ── dms_save_preference ────────────────────────────────────────────────────
-    // Persists an app-level string preference in the global SQLite DB.
-    // Keys are owned by the frontend (e.g. "syngrafo_theme", "syngrafo_locale").
-    // Thread-safe; uses db_mutex.  Zone DBs are intentionally NOT used — preferences
-    // are global to the installation, not per-zone.
+    /// dms_save_preference
+    /// Persists an app-level string preference in the global SQLite DB.
+    /// Keys are owned by the frontend (e.g. "syngrafo_theme", "syngrafo_locale").
+    /// Thread-safe; uses db_mutex.  Zone DBs are intentionally NOT used — preferences
+    /// are global to the installation, not per-zone.
     wv.expose("dms_save_preference", [&dms](string key, string value) -> string {
         if (key.empty()) return DMSHandle::err_str("key must not be empty");
         if (key.size() > 256) return DMSHandle::err_str("key too long (max 256 chars)");
@@ -360,8 +395,8 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"saved", true}, {"key", key}});
     });
 
-    // ── dms_load_preference ────────────────────────────────────────────────────
-    // Returns { "value": "<string>" } or { "value": null } when key not found.
+    /// dms_load_preference
+    /// Returns { "value": "<string>" } or { "value": null } when key not found.
     wv.expose("dms_load_preference", [&dms](string key) -> string {
         if (key.empty()) return DMSHandle::err_str("key must not be empty");
         std::optional<pce::db::Row> row;
@@ -375,7 +410,13 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         if (!row) return DMSHandle::ok_str(json{{"value", nullptr}});
         return DMSHandle::ok_str(json{{"value", row->get<std::string>("value")}});
     });
+
+    /// dms_collect_svgs
+    /// Returns JSON array of { name, content } for every .svg in the given folder.
+    wv.expose("dms_collect_svgs", [&dms](string path) -> string {
+        auto r = dms.collect_svgs(path);
+        return r ? DMSHandle::ok_str(*r) : DMSHandle::err_str(r.error());
+    });
 }
 
 } // namespace pce::dms
-

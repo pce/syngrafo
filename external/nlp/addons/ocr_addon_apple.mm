@@ -1,9 +1,11 @@
 /**
  * @file ocr_addon_apple.mm
- * @brief Apple-platform implementations: OCR backend and OS-specific services.
+ * @brief Apple-platform OCR backend (Apple Vision).
  *
  * - `pce::nlp::backend` — Apple Vision OCR, compiled when `NLP_APPLE_VISION` is defined.
- * - `pce::nlp::platform` — macOS OS services (`reveal_in_finder`), always compiled on Apple.
+ *
+ * OS services (reveal_in_file_manager, detect_document_corners, rectify_image, extract_exif)
+ * are implemented in their respective addon files (platform_services_apple.mm, etc.).
  */
 #import <Foundation/Foundation.h>
 #import <Vision/Vision.h>
@@ -177,20 +179,3 @@ std::string extract_text_from_pdf(const std::string& input_path) {
 #endif // NLP_APPLE_VISION
 
 } // namespace pce::nlp::backend
-
-// ─── OS-specific platform services ───────────────────────────────────────────
-
-namespace pce::nlp::platform {
-
-/** Reveal the file in a Finder window using NSWorkspace. */
-bool reveal_in_finder(const std::string& path) {
-    @autoreleasepool {
-        NSString* nsPath = [NSString stringWithUTF8String:path.c_str()];
-        NSURL*    url    = [NSURL fileURLWithPath:nsPath];
-        if (!url) return false;
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[url]];
-        return true;
-    }
-}
-
-} // namespace pce::nlp::platform

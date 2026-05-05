@@ -179,9 +179,42 @@ inline void bootstrap_chunks_schema(pce::db::Database& db) {
             "ON dms_chunks (doc_id, position);");
 }
 
+/// Initialise workspaces and workspace_items tables. Safe to call on every startup.
+inline void bootstrap_workspace_schema(pce::db::Database& db) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            description TEXT    NOT NULL DEFAULT '',
+            icon        TEXT    NOT NULL DEFAULT 'workspace',
+            color       TEXT    NOT NULL DEFAULT '',
+            is_pinned   INTEGER NOT NULL DEFAULT 0,
+            sort_order  INTEGER NOT NULL DEFAULT 0,
+            created_at  INTEGER NOT NULL DEFAULT 0,
+            updated_at  INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS workspace_items (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            doc_id       INTEGER REFERENCES dms_documents(id) ON DELETE SET NULL,
+            kind         TEXT    NOT NULL DEFAULT 'document',
+            target       TEXT    NOT NULL DEFAULT '',
+            note         TEXT    NOT NULL DEFAULT '',
+            position     INTEGER NOT NULL DEFAULT 0,
+            added_at     INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_workspaces_pinned "
+            "ON workspaces (is_pinned DESC, sort_order);");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_workspace_items_ws "
+            "ON workspace_items (workspace_id, position);");
+}
 
 
-inline constexpr pce::db::migration::StaticSource<14> kDmsMigrations{{{
+
+inline constexpr pce::db::migration::StaticSource<16> kDmsMigrations{{{
     {1,  "baseline",                        ""},
     {2,  "dms_documents: content_blob",
          "ALTER TABLE dms_documents ADD COLUMN content_blob BLOB;"},
@@ -263,6 +296,37 @@ inline constexpr pce::db::migration::StaticSource<14> kDmsMigrations{{{
              FOREIGN KEY (doc_id) REFERENCES dms_documents(id) ON DELETE CASCADE
          );
          CREATE INDEX IF NOT EXISTS idx_dms_chunks_doc ON dms_chunks (doc_id, position);
+         )sql"},
+    {15, "workspaces",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS workspaces (
+             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+             name        TEXT    NOT NULL,
+             description TEXT    NOT NULL DEFAULT '',
+             icon        TEXT    NOT NULL DEFAULT 'workspace',
+             color       TEXT    NOT NULL DEFAULT '',
+             is_pinned   INTEGER NOT NULL DEFAULT 0,
+             sort_order  INTEGER NOT NULL DEFAULT 0,
+             created_at  INTEGER NOT NULL DEFAULT 0,
+             updated_at  INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE INDEX IF NOT EXISTS idx_workspaces_pinned
+             ON workspaces (is_pinned DESC, sort_order);
+         )sql"},
+    {16, "workspace_items",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS workspace_items (
+             id           INTEGER PRIMARY KEY AUTOINCREMENT,
+             workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+             doc_id       INTEGER REFERENCES dms_documents(id) ON DELETE SET NULL,
+             kind         TEXT    NOT NULL DEFAULT 'document',
+             target       TEXT    NOT NULL DEFAULT '',
+             note         TEXT    NOT NULL DEFAULT '',
+             position     INTEGER NOT NULL DEFAULT 0,
+             added_at     INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE INDEX IF NOT EXISTS idx_workspace_items_ws
+             ON workspace_items (workspace_id, position);
          )sql"},
 }}};
 

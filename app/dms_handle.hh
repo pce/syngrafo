@@ -126,6 +126,7 @@ struct DMSHandle {
         bootstrap_bookmark_schema(db);
         bootstrap_fts_schema(db);
         bootstrap_chunks_schema(db);
+        bootstrap_workspace_schema(db);
         pce::db::migration::apply(db, kDmsMigrations);
         discard(scan_dir("data", false));
         std::print("[dms] global database ready: '{}' (schema v{})\n",
@@ -174,6 +175,9 @@ struct DMSHandle {
                                                  std::string zone_name,
                                                  bool compress=false, bool scan=false);
     [[nodiscard]] Expected<json> file_to_zone(std::string path, std::string zone_name);
+
+    /// Collect all SVG files from a directory, returning their name + inline content.
+    [[nodiscard]] Expected<json> collect_svgs(std::string_view folder_path) noexcept;
 
     std::string ocr_document(std::string path, std::string zone_name="");
 

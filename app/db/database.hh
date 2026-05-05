@@ -11,6 +11,20 @@
 #pragma once
 
 #include <sqlite3.h>
+// SQLite3MultipleCiphers (FetchContent path): sqlite3_key() lives in
+// sqlite3mc.h, not sqlite3.h.  Include it when the CMake define reaches us.
+#ifdef SYNGRAFO_SQLITE3MC
+#  include <sqlite3mc.h>
+#endif
+// Safety-net forward declaration: covers any build where sqlite3mc.h wasn't
+// reachable above (PRIVATE link chain, system SQLite header found first, etc.).
+// sqlite3 is already declared by the #include above; the signature is identical
+// to both SQLCipher and sqlite3mc.  Redeclaration with matching types is
+// well-formed in both C and C++.
+#if (defined(SQLITE_HAS_CODEC) || defined(SQLCIPHER_CRYPTO_OPENSSL)) \
+    && !defined(SQLITE3MC_H_)
+extern "C" int sqlite3_key(sqlite3*, const void*, int);
+#endif
 
 #include "../internal/discard.hh"
 

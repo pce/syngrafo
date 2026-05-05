@@ -95,6 +95,11 @@ public:
     static float       ocr_alpha_ratio(const std::string& text);
     static std::string ocr_quality(const std::string& text);
 
+    /// Split text into overlapping chunks for passage-level indexing.
+    /// target_chars ≈ 2000 (≈ 500 tokens). overlap_chars ≈ 200 (≈ 50 tokens).
+    [[nodiscard]] static std::vector<std::string>
+    split_into_chunks(std::string_view text, int target_chars = 2000, int overlap_chars = 200);
+
 private:
     [[nodiscard]] Expected<std::vector<float>> embed_text(std::string_view text) const;
 
@@ -279,6 +284,41 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                 } catch (...) {}  // FTS5 not compiled in — silently skip
             }
 
+            // Chunk-level indexing — populates dms_chunks with per-passage embeddings.
+            // Embeddings are computed outside the DB lock (ONNX inference is CPU-bound).
+            {
+                struct ChunkData { std::string text; std::vector<float> embedding; };
+                const auto raw_chunks = split_into_chunks(ap.file.text);
+                std::vector<ChunkData> chunk_data;
+                chunk_data.reserve(raw_chunks.size());
+                for (const auto& chunk : raw_chunks) {
+                    ChunkData cd{chunk, {}};
+                    if (embed_svc_ && embed_svc_->is_loaded()) {
+                        auto r = embed_svc_->embed(chunk);
+                        if (r.success && !r.vector.empty())
+                            cd.embedding = std::move(r.vector);
+                    }
+                    chunk_data.push_back(std::move(cd));
+                }
+                std::lock_guard lk{db_mutex_};
+                auto* del_c = active_db_().prepare_cached(
+                    "DELETE FROM dms_chunks WHERE doc_id = ?");
+                pce::db::Database::bind(del_c, 1, pce::db::to_db_value(ap.doc_id));
+                sqlite3_step(del_c);
+                for (int i = 0; i < (int)chunk_data.size(); ++i) {
+                    const auto& cd = chunk_data[i];
+                    auto ins = active_db_().insert_into("dms_chunks")
+                        .value("doc_id",      ap.doc_id)
+                        .value("position",    (int64_t)i)
+                        .value("token_count", (int64_t)(cd.text.size() / 4))
+                        .value("chunk_text",  cd.text)
+                        .value("updated_at",  now2);
+                    if (!cd.embedding.empty())
+                        ins.value("embedding", pce::db::floats_to_blob(cd.embedding));
+                    discard(ins.execute());
+                }
+            }
+
             auto parse_arr = [](std::string_view s) -> json {
                 try { return json::parse(s); } catch (...) { return json::array(); }
             };
@@ -296,6 +336,7 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                 {"dimensions",      (int64_t)dims},
                 {"indexed_at",      now},
                 {"unchanged",       false},
+                {"chunks_indexed",  true},
             };
         });
 }
@@ -378,6 +419,28 @@ inline float IndexService::ocr_alpha_ratio(const std::string& text) {
 inline std::string IndexService::ocr_quality(const std::string& text) {
     const float r = ocr_alpha_ratio(text);
     return r >= 0.55f ? "ok" : r >= 0.30f ? "low" : "garbage";
+}
+
+inline std::vector<std::string>
+IndexService::split_into_chunks(std::string_view text, int target_chars, int overlap_chars) {
+    std::vector<std::string> chunks;
+    const int n = static_cast<int>(text.size());
+    if (n == 0) return chunks;
+
+    int start = 0;
+    while (start < n) {
+        int end = std::min(start + target_chars, n);
+        // Prefer to break at a sentence boundary
+        if (end < n) {
+            for (int i = end; i > start + target_chars / 2; --i) {
+                if (text[i] == '.' || text[i] == '\n') { end = i + 1; break; }
+            }
+        }
+        chunks.emplace_back(text.substr(start, end - start));
+        const int next = end - overlap_chars;
+        start = (next > start) ? next : end;
+    }
+    return chunks;
 }
 
 } // namespace pce::dms

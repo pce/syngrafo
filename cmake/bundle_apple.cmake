@@ -40,8 +40,10 @@ add_custom_command(TARGET syngrafo POST_BUILD
     VERBATIM
 )
 
-# SQLCipher dylib
-if(SQLCIPHER_FOUND)
+# SQLCipher dylib — only needed when using a system dylib (e.g. Homebrew sqlcipher).
+# When using the sqlite3mc FetchContent fallback the library is static and there
+# is nothing to copy or sign into the bundle.
+if(SQLCIPHER_FOUND AND SQLCIPHER_LIBRARIES)
     execute_process(
         COMMAND otool -D "${SQLCIPHER_LIBRARIES}"
         OUTPUT_VARIABLE _sc_otool_out
