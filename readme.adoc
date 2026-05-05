@@ -1,8 +1,6 @@
 = Syngrafo0
 
-
-
-:toc: auto
+:toc: preamble
 :toc-title: Contents
 :toclevels: 3
 :icons: font
@@ -11,10 +9,13 @@
 
 
 [.lead]
-A local-first system for transforming files into structured, searchable, and interactive data.
+A lifecycle-based document state machine.
 
-[.text-center]
-  “Asset → Transform → View”
+> Apparent structural similarity does not entail conceptual equivalence.
+
+
+
+
 
 image:https://img.shields.io/badge/status-active-brightgreen[]
 image:https://img.shields.io/badge/license-MIT-blue[]
@@ -22,12 +23,7 @@ image:https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-
 image:https://github.com/pce/syngrafo/actions/workflows/release.yml/badge.svg?branch=main[CI,link=https://github.com/pce/syngrafo/actions/workflows/release.yml]
 
 
-// Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview — native C++ core, React frontend.
-//
-// File browser + NLP + media + knowledge system
-// The Scope looks at first sight broad, that is  intentionally  to avoid early constraints on the UI/UX and data model:
 
-// That’s simply or simplified: “Asset → Transform → View”
 
 == Quick Start
 
@@ -75,15 +71,15 @@ Syngrafo treats every file as an asset that can be transformed and viewed in mul
 | Viewer · Kanban · Notes
 |===
 
+A local-first system for transforming files into structured, searchable, and interactive data.
+
+// Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview.
+// File browser + NLP + media + knowledge system
+// The Scope looks at first sight broad, that is  intentionally  to avoid early constraints on the UI/UX and data model:
+// That’s simply or simplified: “Asset → Transform → View”
+
 == Architecture
 
-// [cols="1,3",options="header", frame="none"]
-// |===
-// | Layer | Role
-// | *C++ Core* | DMS engine, OCR, NLP pipeline, SQLite/SQLCipher, saucer webview host
-// | *IPC* | `window.saucer.exposed.<name>()` — every binding returns `Promise<string>` (JSON envelope `{ok, data?, error?}`)
-// | *Frontend* | React 19 + TypeScript, Bun bundler, Tailwind CSS, LinguiJS i18n, Three.js 3D viewer
-// |===
 
 [cols="1,2", frame="none"]
 |===
@@ -120,30 +116,17 @@ Local markdown + boards
 PLY · OBJ · GLTF · STL
 |===
 
-//
-// [cols="1,3", frame="none"]
-// |===
-// | *File browser* | Multi-select, keyboard nav, breadcrumb, zone source/workspace toggle
-// | *Document viewer* | Image (OCR · rectify · PDF export · SVG conversion), PDF, audio, video, SVG inline, 3D models, text/code
-// | *3D preview* | PLY · OBJ (+MTL) · GLTF · GLB · STL — orbit controls (Three.js)
-// | *OCR* | macOS Vision framework; Tesseract as Fallback
-// | *NLP* | Keywords · NER · sentiment · embeddings — all local ONNX, no cloud
-// | *Zones* | Named workspaces with optional AES-256 encryption (SQLCipher + macOS Keychain)
-// | *Notes* | Markdown-lite `.notes` folder each zone
-// | *Kanban* | `.kanban` board each zone with drag-and-drop lanes and cards
-// | *Search* | Semantic (cosine) + keyword fallback
-// | *Themes* | 12 colour presets + custom CSS vars, radius/density toggles
-// | *i18n* | English · Deutsch · Ελληνικά — switch in *Settings → Language*
-// |===
-//
+
 
 == Search Index
 
-//    hybrid + chunked + language-aware retrieval
-// FTS5 BM25 first, LIKE fallback
 
 .Index Search in the zone
 image::data/inp/syngrafo_zonesearch_index.jpg[width=100%]
+
+//           hybrid + chunked + language-aware retrieval
+// FTS5 BM25 first, LIKE fallback
+
 
 [.text-right]
 Syngrafo0 uses a semantic search v0.1 index to find related contents
@@ -155,7 +138,7 @@ Syngrafo0 uses a semantic search v0.1 index to find related contents
 [cols="1,1", frame="none", grid="none"]
 |===
 | image:data/inp/syngrafo_image_ocr.jpg[width=100%]
-| image:data/inp/syngrafo0_svgImg.jpg[width=100%]
+| image:data/inp/syngrafo_img_2_svg.jpg[width=100%]
 
 | *OCR Extraction*
 | *SVG Reconstruction (Palette: AB)*

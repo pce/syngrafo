@@ -11,7 +11,7 @@ const randomColor = () => COLORS[Math.floor(Math.random() * COLORS.length)] ?? "
 const AudioTimelinePage = () => {
   const [tracks, setTracks] = useState<AudioTrack[]>(EMPTY_TRACKS);
 
-  // ── Track helpers ─────────────────────────────────────────────────────────
+
 
   const handleNoteRemove = useCallback((trackId: string, noteId: string) => {
     setTracks((prev) =>

@@ -1,221 +1,227 @@
-import { Block, BlockType } from "../models/block";
-import { DocumentModel } from "../models/document";
+import type { SBlock, SCodeBlock, SImgBlock, Span } from "../models/sdm";
+import { isTextBlock } from "../models/sdm";
+import { flattenBlocks, updateBlock } from "../models/sdm-factory";
 
 export type BlockPatchOp =
-  | { op: "create"; afterId: string | null; type: BlockType; content: string; styleId?: string }
-  | { op: "update"; id: string; content?: string; styleId?: string }
-  | { op: "delete"; id: string }
-  | { op: "move"; id: string; afterId: string | null };
+  | { op: "replace";       id: string; content: string }
+  | { op: "replace_spans"; id: string; spans: Span[] }
+  | { op: "insert";        after_id: string | null; block: SBlock }
+  | { op: "delete";        id: string }
+  | { op: "move";          id: string; after_id: string | null }
+  | { op: "set_style";     id: string; style: string | null }
+  | { op: "set_attr";      id: string; key: string; value: unknown };
 
-/**
- * Result from a block-patch LM call.
- * Distinguishes "intentional no-op" (ops=[]) from "parse failure" (failed=true).
- */
 export interface BlockPatchResult {
-  /** The operations to apply.  Empty array = intentional no-op. */
-  ops: BlockPatchOp[];
-  /** true when the model response could not be parsed as valid JSON ops. */
-  failed: boolean;
-  /** Raw model output for debugging. */
-  raw: string;
+  blocks:  SBlock[];
+  applied: number;
+  errors:  string[];
 }
 
-/**
- * A single entry in the compact block sketch sent to the LM.
- * Defined here (not in pdfproj.ts) because it is an LM context concern.
- */
-export interface BlockSketchEntry {
-  id: string;
-  type: string;
-  /** The CSS style class applied to this block (e.g. "heading1", "body"). */
-  styleId: string;
-  /** Plain-text content preview — 200 chars max; HTML tags stripped. */
-  preview: string;
-}
+/** Parse a JSON string (LM output) into an op array. Tolerant — skips malformed ops. */
+export function parseBlockPatch(raw: string): BlockPatchOp[] {
+  let cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim();
 
-export interface IBlockOperations {
-  /**
-   * Parse the model's raw text into a BlockPatchResult.
-   * Returns `failed=true` when no valid JSON array is found.
-   */
-  parseBlockPatch(raw: string): BlockPatchResult;
+  const start = cleaned.indexOf("[");
+  const end   = cleaned.lastIndexOf("]");
 
-  /**
-   * Apply a BlockPatchOp[] to a DocumentModel **atomically** (one signal fire).
-   * Returns the number of operations successfully applied.
-   */
-  applyBlockPatch(doc: DocumentModel, ops: BlockPatchOp[]): number;
+  if (start === -1 || end === -1 || end < start) {
+    console.warn("[parseBlockPatch] No JSON array found in:", cleaned.slice(0, 120));
+    return [];
+  }
 
-  /**
-   * For multi-page documents, return only the blocks on the same page as the
-   * focused block.  Falls back to a window of `maxBlocks` around the focus.
-   */
-  getPageFocusedBlocks(allBlocks: Block[], focusedBlockId: string | null | undefined, maxBlocks?: number): Block[];
+  cleaned = cleaned.slice(start, end + 1);
 
-  /**
-   * Produce a compact "block sketch" array for LM context.
-   * Each entry has: { id, type, styleId, preview }
-   */
-  blocksToSketch(blocks: Block[]): BlockSketchEntry[];
-}
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) return [];
 
-export class BlockOperations implements IBlockOperations {
-  parseBlockPatch(raw: string): BlockPatchResult {
-    let cleaned = raw
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/, "")
-      .trim();
-
-    const start = cleaned.indexOf("[");
-    const end = cleaned.lastIndexOf("]");
-
-    if (start === -1 || end === -1 || end < start) {
-      console.warn("[BlockOperations.parseBlockPatch] No JSON array found:", cleaned);
-      return { ops: [], failed: true, raw };
+    const ops: BlockPatchOp[] = [];
+    for (const item of parsed) {
+      if (typeof item?.op !== "string") {
+        console.warn("[parseBlockPatch] Skipping malformed op:", item);
+        continue;
+      }
+      ops.push(item as BlockPatchOp);
     }
+    return ops;
+  } catch (e) {
+    console.warn("[parseBlockPatch] JSON parse error:", e);
+    return [];
+  }
+}
 
-    cleaned = cleaned.slice(start, end + 1);
+function tryDeleteBlock(
+  blocks: SBlock[],
+  id: string,
+): { blocks: SBlock[]; found: boolean } {
+  const idx = blocks.findIndex((b) => b.id === id);
+  if (idx !== -1) {
+    return {
+      blocks: [...blocks.slice(0, idx), ...blocks.slice(idx + 1)],
+      found: true,
+    };
+  }
 
+  let found = false;
+  const result = blocks.map((b) => {
+    if (found) return b;
+    const children = (b as { children?: SBlock[] }).children;
+    if (Array.isArray(children)) {
+      const sub = tryDeleteBlock(children, id);
+      if (sub.found) {
+        found = true;
+        return { ...b, children: sub.blocks } as SBlock;
+      }
+    }
+    return b;
+  });
+  return { blocks: result, found };
+}
+
+function insertBlock(
+  blocks: SBlock[],
+  after_id: string | null,
+  block: SBlock,
+): SBlock[] {
+  if (after_id === null) return [block, ...blocks];
+  const idx = blocks.findIndex((b) => b.id === after_id);
+  if (idx !== -1) {
+    return [...blocks.slice(0, idx + 1), block, ...blocks.slice(idx + 1)];
+  }
+  return [...blocks, block];
+}
+
+function moveBlock(
+  blocks: SBlock[],
+  id: string,
+  after_id: string | null,
+): SBlock[] {
+  const target = flattenBlocks(blocks).find((b) => b.id === id);
+  if (!target) return blocks;
+  const { blocks: without } = tryDeleteBlock(blocks, id);
+  return insertBlock(without, after_id, target);
+}
+
+/** Apply an array of ops to a block list. Returns new blocks (immutable). */
+export function applyBlockPatch(
+  blocks: SBlock[],
+  ops: BlockPatchOp[],
+): BlockPatchResult {
+  const errors: string[] = [];
+  let applied = 0;
+  let current = blocks;
+
+  for (const op of ops) {
     try {
-      const parsed = JSON.parse(cleaned);
-      if (!Array.isArray(parsed)) {
-        return { ops: [], failed: true, raw };
-      }
-      const valid = parsed.filter((o: unknown) => typeof (o as { op?: unknown })?.op === "string");
-      if (valid.length < parsed.length) {
-        console.warn("[BlockOperations.parseBlockPatch] Some ops were malformed and skipped");
-      }
-      return { ops: valid as BlockPatchOp[], failed: false, raw };
-    } catch (e) {
-      console.warn("[BlockOperations.parseBlockPatch] JSON parse error:", e, "\nraw:", cleaned);
-      return { ops: [], failed: true, raw };
-    }
-  }
+      switch (op.op) {
+        case "replace":
+          current = updateBlock(current, op.id, (b) =>
+            isTextBlock(b) ? { ...b, spans: [{ text: op.content }] } : b,
+          );
+          applied++;
+          break;
 
-  applyBlockPatch(doc: DocumentModel, ops: BlockPatchOp[]): number {
-    if (!ops.length) return 0;
+        case "replace_spans":
+          current = updateBlock(current, op.id, (b) =>
+            isTextBlock(b) ? { ...b, spans: op.spans } : b,
+          );
+          applied++;
+          break;
 
-    let applied = 0;
-    let uid = 0;
-    const newId = (type: string) => `lm-patch-${type}-${Date.now()}-${uid++}`;
+        case "insert":
+          current = insertBlock(current, op.after_id, op.block);
+          applied++;
+          break;
 
-    // Work on a mutable copy — committed atomically below
-    const blocks: Block[] = doc.getBlocks().slice();
-
-    for (const op of ops) {
-      try {
-        if (op.op === "delete") {
-          const idx = blocks.findIndex((b) => b.getId() === op.id);
-          if (idx !== -1) {
-            blocks.splice(idx, 1);
+        case "delete": {
+          const { blocks: next, found } = tryDeleteBlock(current, op.id);
+          if (found) {
+            current = next;
             applied++;
-          }
-        } else if (op.op === "update") {
-          const b = blocks.find((b) => b.getId() === op.id);
-          if (!b) continue;
-          if (op.content !== undefined) b.setContent(op.content);
-          if (op.styleId !== undefined) b.setStyleId(op.styleId);
-          applied++;
-        } else if (op.op === "create") {
-          const block = new Block(newId(op.type), op.type, op.content, op.styleId);
-          if (op.afterId === null) {
-            blocks.unshift(block); // prepend to top
           } else {
-            const idx = blocks.findIndex((b) => b.getId() === op.afterId);
-            blocks.splice(idx === -1 ? blocks.length : idx + 1, 0, block);
+            errors.push(`delete: block "${op.id}" not found`);
           }
-          applied++;
-        } else if (op.op === "move") {
-          const fromIdx = blocks.findIndex((b) => b.getId() === op.id);
-          if (fromIdx === -1) continue;
-          const [block] = blocks.splice(fromIdx, 1);
-          if (!block) continue;
-          if (op.afterId === null) {
-            blocks.unshift(block);
-          } else {
-            const toIdx = blocks.findIndex((b) => b.getId() === op.afterId);
-            blocks.splice(toIdx === -1 ? blocks.length : toIdx + 1, 0, block);
-          }
-          applied++;
+          break;
         }
-      } catch (e) {
-        console.warn("[BlockOperations.applyBlockPatch] op failed:", op, e);
-      }
-    }
 
-    // Atomic commit — one signal fire
-    doc.setBlocks(blocks);
-    return applied;
+        case "move":
+          current = moveBlock(current, op.id, op.after_id);
+          applied++;
+          break;
+
+        case "set_style":
+          current = updateBlock(current, op.id, (b) => ({
+            ...b,
+            style: op.style ?? undefined,
+          } as SBlock));
+          applied++;
+          break;
+
+        case "set_attr":
+          current = updateBlock(current, op.id, (b) => ({
+            ...b,
+            [op.key]: op.value,
+          } as SBlock));
+          applied++;
+          break;
+      }
+    } catch (e) {
+      errors.push(
+        `op "${op.op}" on "${(op as { id?: string }).id ?? "?"}" failed: ${String(e)}`,
+      );
+    }
   }
 
-  getPageFocusedBlocks(allBlocks: Block[], focusedBlockId: string | null | undefined, maxBlocks = 60): Block[] {
-    if (!focusedBlockId || allBlocks.length <= maxBlocks) {
-      return allBlocks.length <= maxBlocks ? allBlocks : allBlocks.slice(0, maxBlocks);
-    }
-
-    // Build page boundary indices
-    const pageStarts: number[] = [0];
-    allBlocks.forEach((b, i) => {
-      if (b.getType() === "pagebreak" && i + 1 < allBlocks.length) {
-        pageStarts.push(i + 1);
-      }
-    });
-    pageStarts.push(allBlocks.length); // sentinel
-
-    const focusedIdx = allBlocks.findIndex((b) => b.getId() === focusedBlockId);
-    if (focusedIdx === -1) return allBlocks.slice(0, maxBlocks);
-
-    // Find the page the focused block lives on
-    let pageStart = 0;
-    let pageEnd = allBlocks.length;
-    for (let i = 0; i < pageStarts.length - 1; i++) {
-      if (focusedIdx >= (pageStarts[i] ?? 0) && focusedIdx < (pageStarts[i + 1] ?? allBlocks.length)) {
-        pageStart = pageStarts[i] ?? 0;
-        pageEnd = pageStarts[i + 1] ?? allBlocks.length;
-        break;
-      }
-    }
-
-    const pageBlocks = allBlocks.slice(pageStart, pageEnd);
-    if (pageBlocks.length <= maxBlocks) return pageBlocks;
-
-    // Page is still too large → take a symmetric window around the focused block
-    const relIdx = focusedIdx - pageStart;
-    const half = Math.floor(maxBlocks / 2);
-    const wStart = Math.max(0, relIdx - half);
-    const wEnd = Math.min(pageBlocks.length, wStart + maxBlocks);
-    return pageBlocks.slice(wStart, wEnd);
-  }
-
-  blocksToSketch(blocks: Block[]): BlockSketchEntry[] {
-    return blocks.map((b) => {
-      const raw = b
-        .getContent()
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      return {
-        id: b.getId(),
-        type: b.getType(),
-        styleId: b.getStyleId(),
-        preview: raw.length > 200 ? raw.slice(0, 197) + "…" : raw,
-      };
-    });
-  }
+  return { blocks: current, applied, errors };
 }
 
 /**
- * Default singleton — use directly or replace via DI container.
- *
- * @example
- *   // replace for testing:
- *   import { blockOperations } from "./block-patch";
- *   Object.assign(blockOperations, myMockOps);
+ * Get the text blocks visible on the "current page" based on pagebreak positions.
+ * Returns blocks from the last pagebreak (or start) to the next pagebreak (or end).
  */
-export const blockOperations: IBlockOperations = new BlockOperations();
+export function getPageFocusedBlocks(
+  blocks: SBlock[],
+  currentPage = 0,
+): SBlock[] {
+  const pages: SBlock[][] = [];
+  let page: SBlock[] = [];
 
-export const parseBlockPatch = (raw: string) => blockOperations.parseBlockPatch(raw);
-export const applyBlockPatch = (doc: DocumentModel, ops: BlockPatchOp[]) => blockOperations.applyBlockPatch(doc, ops);
-export const getPageFocusedBlocks = (blocks: Block[], focusedId: string | null | undefined, max?: number) =>
-  blockOperations.getPageFocusedBlocks(blocks, focusedId, max);
-export const blocksToSketch = (blocks: Block[]) => blockOperations.blocksToSketch(blocks);
+  for (const b of blocks) {
+    if (b.type === "pagebreak") {
+      pages.push(page);
+      page = [];
+    } else {
+      page.push(b);
+    }
+  }
+  pages.push(page);
+
+  const idx = Math.max(0, Math.min(currentPage, pages.length - 1));
+  return pages[idx] ?? [];
+}
+
+/** Produce a compact text sketch of blocks for LM context. */
+export function blocksToSketch(blocks: SBlock[]): string {
+  const lines: string[] = [];
+
+  for (const b of flattenBlocks(blocks)) {
+    let preview = "";
+
+    if (isTextBlock(b)) {
+      preview = b.spans.map((s) => s.text).join("");
+    } else if (b.type === "code") {
+      preview = (b as SCodeBlock).text;
+    } else if (b.type === "img") {
+      const img = b as SImgBlock;
+      preview = img.alt ?? img.src;
+    }
+
+    if (preview.length > 60) preview = `${preview.slice(0, 57)}…`;
+    lines.push(`${b.id} [${b.type}] ${preview}`);
+  }
+
+  return lines.join("\n");
+}

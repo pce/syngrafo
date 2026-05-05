@@ -120,6 +120,17 @@ if(NOT APPLE OR NOT NLP_APPLE_VISION)
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         FetchContent_MakeAvailable(leptonica)
+
+        # LeptonicaConfig.cmake in the build tree includes LeptonicaTargets.cmake
+        # at line ~31, but that file is only written by cmake's install step.
+        # Tesseract's find_package(Leptonica REQUIRED) therefore fails at configure
+        # time.  Export the build-tree targets now so the file exists when tesseract
+        # processes its find_package call.
+        export(EXPORT LeptonicaTargets
+            NAMESPACE Leptonica::
+            FILE "${leptonica_BINARY_DIR}/LeptonicaTargets.cmake"
+        )
+
         # Tell tesseract's find_package(Leptonica REQUIRED) where the just-built tree lives.
         set(Leptonica_DIR "${leptonica_BINARY_DIR}" CACHE PATH "" FORCE)
 

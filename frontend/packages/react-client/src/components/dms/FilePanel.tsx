@@ -41,7 +41,6 @@ import {
 import type { FsEntry } from "../../services/dms-service";
 import Icon from "../Icon";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
 
 function FileRowIcon({ entry }: { entry: FsEntry }) {
   if (entry.kind === "dir")
@@ -68,7 +67,6 @@ function fmtSize(bytes?: number): string {
   return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
-// ── types ─────────────────────────────────────────────────────────────────────
 
 export interface FilePanelProps {
   panelId: "left" | "right";
@@ -86,7 +84,6 @@ export interface FilePanelProps {
   onFocus?: (panelId: "left" | "right") => void;
 }
 
-// ── component ─────────────────────────────────────────────────────────────────
 
 const FilePanel: React.FC<FilePanelProps> = ({
   panelId,
@@ -107,7 +104,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
   const listRef         = useRef<HTMLUListElement>(null);
   const lastClickRef    = useRef<string | null>(null);   // last clicked path for shift-range
 
-  // ── navigation ──────────────────────────────────────────────────────────────
 
   const navigate = useCallback(
     async (newPath: string) => {
@@ -157,7 +153,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
     if (res.ok && res.data) navigate(res.data);
   }, [navigate]);
 
-  // ── selection helpers ────────────────────────────────────────────────────────
 
   const fileEntries = useCallback(
     () => entries.filter((e) => e.kind !== "dir"),
@@ -172,7 +167,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
     [panelId, onSelectionChange],
   );
 
-  // ── click handler ────────────────────────────────────────────────────────────
 
   const handleClick = useCallback(
     (entry: FsEntry, e: React.MouseEvent) => {
@@ -222,7 +216,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
     [selection, fileEntries, emitSelection, onFocus, onFileOpen, navigate, panelId],
   );
 
-  // ── keyboard navigation ───────────────────────────────────────────────────────
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -284,7 +277,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
     [entries, focusedPath, selection, fileEntries, emitSelection, onFileOpen, navigate, goUp],
   );
 
-  // ── scroll focused item into view ────────────────────────────────────────────
 
   useEffect(() => {
     if (!focusedPath || !listRef.current) return;
@@ -295,7 +287,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
     el?.scrollIntoView({ block: "nearest" });
   }, [focusedPath]);
 
-  // ── render ───────────────────────────────────────────────────────────────────
 
   const isAtRoot = !path || path === "/";
   const selCount = selection.size;

@@ -64,7 +64,6 @@ const AnalysisPanel: React.FC = () => {
     return null;
   }, [state.viewerContent, state.metadata?.snippet]);
 
-  // ── Universal colour extraction ────────────────────────────────────────────
   // Detects hex / rgb / rgba / hsl colour literals in any text content
   // (CSS, HTML, JSON, theme files, etc.) and surfaces them as swatches in the
   // panel.  Not locked to CSS — any file kind that has colour syntax triggers it.

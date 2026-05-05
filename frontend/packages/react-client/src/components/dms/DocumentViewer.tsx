@@ -30,11 +30,9 @@ const DocumentViewer: React.FC = () => {
   const [isIndexLoading,  setIsIndexLoading]  = useState(false);
   const [isImportLoading, setIsImportLoading] = useState(false);
 
-  // ── Media error state ─────────────────────────────────────────────────────
   const [mediaError, setMediaError] = useState(false);
   const [fetchKey,   setFetchKey]   = useState(0);
 
-  // ── File-type flags ───────────────────────────────────────────────────────
   // Declared first so they are available to every hook/expression below.
   const isImage   = state.viewerPath ? isImageFile(state.viewerPath)   : false;
   const isPdf     = state.viewerPath ? isDocFile(state.viewerPath)     : false;
@@ -45,7 +43,6 @@ const DocumentViewer: React.FC = () => {
   const isSvg     = state.viewerPath ? isSvgFile(state.viewerPath)     : false;
   const is3D      = state.viewerPath ? is3DFile(state.viewerPath)      : false;
 
-  // ── Large-file guard ─────────────────────────────────────────────────────
   // Files above this threshold are not buffered through Web Audio decodeAudioData
   // (which loads the full file into RAM and can freeze the process).
   // Instead they are played via the native <audio> HTML element, which streams
@@ -67,7 +64,6 @@ const DocumentViewer: React.FC = () => {
     state.currentPath.startsWith(state.zone.out_path));
   const isInZoneSource = !!(state.zone && !isInZoneWorkspace);
 
-  // ── SVG inline state ──────────────────────────────────────────────────────
   const [svgMarkup, setSvgMarkup] = useState<string | null>(null);
   const [svgError,  setSvgError]  = useState(false);
   const [svgSizeError, setSvgSizeError] = useState(false);
@@ -89,7 +85,6 @@ const DocumentViewer: React.FC = () => {
     setAudioError(null);
   }, [state.viewerPath, fetchKey]);
 
-  // ── local:// URL builder ──────────────────────────────────────────────────
   // Encode each path segment independently so that file names containing
   // spaces, brackets, or other URL-special characters survive the browser's
   // URL parser and reach the saucer scheme handler correctly.
@@ -102,7 +97,6 @@ const DocumentViewer: React.FC = () => {
     stop();
   }, [state.viewerPath]);
 
-  // ── SVG inline loader ─────────────────────────────────────────────────
   // SVG files are XML text — we fetch them via the local:// scheme and inject
   // the markup inline so the vector graphic renders at full quality without
   // hitting <img> / custom-scheme security restrictions on WebKitGTK / Edge.
@@ -141,7 +135,6 @@ const DocumentViewer: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSvg, state.viewerPath]);
 
-  // ── Metadata loader ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!state.viewerPath) return;
     dms.getMetadata(state.viewerPath).then((res) => {
@@ -318,7 +311,6 @@ const DocumentViewer: React.FC = () => {
     );
   }
 
-  // ── Shared media placeholder helpers ──────────────────────────────────────
   const MediaError = () => (
     <div className="w-full max-w-lg aspect-[3/4] flex flex-col items-center justify-center gap-4 p-12 rounded-lg border-2 border-dashed border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-text-muted)]">
       <Icon name={isPdf ? "document" : "image"} size="lg" className="opacity-20" />

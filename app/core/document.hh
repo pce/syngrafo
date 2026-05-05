@@ -45,14 +45,29 @@ namespace pce::dms {
 enum class BlockType : uint8_t {
     // Typography
     H1, H2, H3, P,
+    // Block-level text containers
+    Quote,
     // Lists
     UL, OL, LI,
     // Media
     Img, Figure, Figcaption,
-    // Layout containers (flex)
+    // Layout containers (flex / grid)
     HBox, VBox,
+    /// Flex column — child of HBox/VBox with explicit width fraction (e.g. w=33%).
+    Col,
+    /// CSS grid container — children are placed by row/column template.
+    Grid,
     // Structural
-    HR, Table, Code,
+    HR,
+    // Table primitives
+    Table,
+    /// Table row — direct child of Table.
+    TR,
+    /// Table data cell — direct child of TR.
+    TD,
+    /// Table header cell — direct child of TR.
+    TH,
+    Code,
     /// Hard page-break — forces a new PDF page.
     PageBreak,
     /// Catch-all for forward-compat / custom blocks.
@@ -66,6 +81,7 @@ enum class BlockType : uint8_t {
         case BlockType::H2:         return "h2";
         case BlockType::H3:         return "h3";
         case BlockType::P:          return "p";
+        case BlockType::Quote:      return "quote";
         case BlockType::UL:         return "ul";
         case BlockType::OL:         return "ol";
         case BlockType::LI:         return "li";
@@ -74,8 +90,13 @@ enum class BlockType : uint8_t {
         case BlockType::Figcaption: return "figcaption";
         case BlockType::HBox:       return "hbox";
         case BlockType::VBox:       return "vbox";
+        case BlockType::Col:        return "col";
+        case BlockType::Grid:       return "grid";
         case BlockType::HR:         return "hr";
         case BlockType::Table:      return "table";
+        case BlockType::TR:         return "tr";
+        case BlockType::TD:         return "td";
+        case BlockType::TH:         return "th";
         case BlockType::Code:       return "code";
         case BlockType::PageBreak:  return "pagebreak";
         case BlockType::Custom:     return "custom";
@@ -88,6 +109,7 @@ enum class BlockType : uint8_t {
     if (s=="h2")          return BlockType::H2;
     if (s=="h3")          return BlockType::H3;
     if (s=="p")           return BlockType::P;
+    if (s=="quote"||s=="blockquote") return BlockType::Quote;
     if (s=="ul")          return BlockType::UL;
     if (s=="ol")          return BlockType::OL;
     if (s=="li")          return BlockType::LI;
@@ -96,8 +118,13 @@ enum class BlockType : uint8_t {
     if (s=="figcaption")  return BlockType::Figcaption;
     if (s=="hbox")        return BlockType::HBox;
     if (s=="vbox")        return BlockType::VBox;
+    if (s=="col")         return BlockType::Col;
+    if (s=="grid")        return BlockType::Grid;
     if (s=="hr")          return BlockType::HR;
     if (s=="table")       return BlockType::Table;
+    if (s=="tr")          return BlockType::TR;
+    if (s=="td")          return BlockType::TD;
+    if (s=="th")          return BlockType::TH;
     if (s=="code")        return BlockType::Code;
     if (s=="pagebreak")   return BlockType::PageBreak;
     return BlockType::Custom;
@@ -158,13 +185,17 @@ struct Block {
 
     // ── Convenience predicates ────────────────────────────────────────────────
     [[nodiscard]] bool is_layout_container() const noexcept {
-        return type == BlockType::HBox || type == BlockType::VBox;
+        return type == BlockType::HBox || type == BlockType::VBox
+            || type == BlockType::Col  || type == BlockType::Grid;
     }
     [[nodiscard]] bool is_heading() const noexcept {
         return type == BlockType::H1 || type == BlockType::H2 || type == BlockType::H3;
     }
     [[nodiscard]] bool is_image() const noexcept {
         return type == BlockType::Img || type == BlockType::Figure;
+    }
+    [[nodiscard]] bool is_table_cell() const noexcept {
+        return type == BlockType::TD || type == BlockType::TH;
     }
     [[nodiscard]] bool is_list() const noexcept {
         return type == BlockType::UL || type == BlockType::OL;
@@ -317,4 +348,3 @@ namespace nlp { class NLPEngine; }
 // Expected<std::string> summarize(const Document& doc, nlp::NLPEngine& engine);
 
 } // namespace pce::dms
-

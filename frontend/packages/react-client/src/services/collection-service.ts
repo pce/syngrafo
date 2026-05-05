@@ -12,7 +12,7 @@
 import type React from "react";
 import type { IconName } from "../components/Icon";
 
-// ── Column definition ─────────────────────────────────────────────────────────
+
 
 export type CellType = "text" | "number" | "readonly";
 
@@ -42,7 +42,7 @@ export interface ColumnDef<T> {
   actions?: ColumnAction<T>[];
 }
 
-// ── Collection config ─────────────────────────────────────────────────────────
+
 
 export interface CollectionConfig<T extends { id: number }> {
   /** Column definitions in display order. */
@@ -66,4 +66,3 @@ export interface CollectionConfig<T extends { id: number }> {
    */
   newRowFactory?: () => Omit<T, "id">;
 }
-

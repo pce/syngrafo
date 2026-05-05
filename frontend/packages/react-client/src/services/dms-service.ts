@@ -1087,9 +1087,7 @@ export function isSupportedFile(path: string): boolean {
          isArchiveFile(path) || isCssFile(path) || is3DModelFile(path);
 }
 
-// ── LLM Model Downloader ─────────────────────────────────────────────────────
-// Mirrors saucer::model_downloader::ModelInfo (C++ struct).
-
+/** Mirrors saucer::model_downloader::ModelInfo (C++ struct). */
 export interface LlmModelInfo {
   id:          string;
   name:        string;

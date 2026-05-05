@@ -18,7 +18,7 @@ import React, { useState, useEffect } from "react";
 import { dms }  from "../../services/dms-service";
 import Icon     from "../Icon";
 
-// ── tiny shared primitives ────────────────────────────────────────────────────
+
 
 const ModalShell: React.FC<{
   title: string;
@@ -120,8 +120,6 @@ function FileList({ paths }: { paths: string[] }) {
     </ul>
   );
 }
-
-// ── CopyMoveDialog ────────────────────────────────────────────────────────────
 
 export interface CopyMoveDialogProps {
   op: "copy" | "move";
@@ -254,8 +252,6 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
   );
 };
 
-// ── DeleteDialog ──────────────────────────────────────────────────────────────
-
 export interface DeleteDialogProps {
   paths: string[];
   onClose: () => void;
@@ -324,8 +320,6 @@ export const DeleteDialog: React.FC<DeleteDialogProps> = ({ paths, onClose, onSu
     </ModalShell>
   );
 };
-
-// ── ShareDialog ───────────────────────────────────────────────────────────────
 
 export interface ShareDialogProps {
   path: string;
@@ -410,8 +404,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
     </ModalShell>
   );
 };
-
-// ── CompressDialog ────────────────────────────────────────────────────────────
 
 export interface CompressDialogProps {
   paths: string[];
@@ -530,8 +522,6 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
     </ModalShell>
   );
 };
-
-// ── ArchiveDialog ─────────────────────────────────────────────────────────────
 
 export interface ArchiveDialogProps {
   paths: string[];
@@ -670,4 +660,3 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
     </ModalShell>
   );
 };
-

@@ -95,11 +95,10 @@
     },
     {
       "name": "ci-windows",
-      "displayName": "Syngrafo — CI Windows (MSVC + Ninja + vcpkg, Release)",
-      "description": "Windows CI: MSVC cl.exe via Ninja. vcpkg toolchain applied when VCPKG_ROOT is set.",
+      "displayName": "Syngrafo — CI Windows (MSVC + Ninja, Release)",
+      "description": "Windows CI: MSVC cl.exe via Ninja. vcpkg packages found via CMAKE_PREFIX_PATH — no vcpkg toolchain (its add_library hook causes infinite recursion with saucer).",
       "inherits": "default",
       "generator": "Ninja",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "cl",

@@ -53,7 +53,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
   const vizRef = useRef(visualizationData);
   useEffect(() => { vizRef.current = visualizationData; }, [visualizationData]);
 
-  // ── Main draw loop — restarts when analyserNode or isPlaying changes ────────
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -93,7 +93,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
     const draw = (now: number) => {
       const elapsed = (now - startTime) / 1000; // seconds
 
-      // ── Transition bookkeeping ───────────────────────────────────────────
+
       if (isPlaying) {
         fadeState    = "active";
         fadeProgress = 1;

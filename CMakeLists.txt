@@ -131,6 +131,7 @@ target_link_libraries(syngrafo PRIVATE
     nlp_engine                # NLP core + ONNX
     saucer                    # webview + window + application
     saucer::desktop           # cross-platform file/folder picker
+    saucer::pdf               # WebView → PDF export
     saucer::systray           # system-tray icon
     saucer::model_downloader  # NLP model management (libcurl)
     saucer::updater           # auto-updater (libcurl, no process spawning)

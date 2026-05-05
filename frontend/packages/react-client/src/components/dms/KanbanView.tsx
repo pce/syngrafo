@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { dms } from "../../services/dms-service";
 import Icon from "../Icon";
 
-// ── Data model ────────────────────────────────────────────────────────────────
 
 interface KanbanComment {
   id: string;
@@ -33,7 +32,6 @@ export interface KanbanViewProps {
   kanbanDir: string;
 }
 
-// ── Lane accent palette ───────────────────────────────────────────────────────
 
 const LANE_COLORS = [
   { border: "#10b981", bg: "rgba(16,185,129,0.07)" },
@@ -45,11 +43,11 @@ const LANE_COLORS = [
 
 type LaneColor = (typeof LANE_COLORS)[number];
 
-// ── Parse helpers ─────────────────────────────────────────────────────────────
-// Cards now embed a stable id comment:  - [ ] Card title <!-- id:uuid -->
-// On first parse of old-style lines (no id), a fresh UUID is generated
-// and will be written back on the next save.
-
+/**
+ * Cards now embed a stable id comment:  - [ ] Card title <!-- id:uuid -->
+ * On first parse of old-style lines (no id), a fresh UUID is generated
+ * and will be written back on the next save.
+ */
 const TASK_RE = /^- \[([ x])\] (.+?)(?:\s+<!--\s*id:([a-f0-9-]+)\s*-->)?\s*$/i;
 
 function parseCards(content: string): { cards: KanbanCard[]; rawLines: string[] } {
@@ -75,10 +73,10 @@ function serialiseCards(lane: KanbanLane): string {
   }).join("\n");
 }
 
-// ── Sidecar helpers ───────────────────────────────────────────────────────────
-// Extended card metadata (description + comments) lives in a JSON sidecar
-// alongside the lane markdown file: "LaneName.json".
-
+/**
+ * Extended card metadata (description + comments) lives in a JSON sidecar
+ * alongside the lane markdown file: "LaneName.json".
+ */
 function sidecarPath(p: string): string { return p.replace(/\.md$/, ".json"); }
 
 async function loadSidecar(filePath: string): Promise<LaneSidecar> {
@@ -99,7 +97,6 @@ function buildSidecar(cards: KanbanCard[]): LaneSidecar {
   return sc;
 }
 
-// ── Default starter lanes ─────────────────────────────────────────────────────
 
 const STARTER_LANES = [
   { name: "Backlog",     content: "# Backlog\n\n" },
@@ -121,7 +118,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
   const [detailCard,  setDetailCard]  = useState<{ card: KanbanCard; laneIdx: number } | null>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  // ── loadBoard ────────────────────────────────────────────────────────────────
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -155,7 +151,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
-  // ── Mutations ─────────────────────────────────────────────────────────────────
 
   const writeLane = async (lane: KanbanLane) => { await dms.writeFile(lane.filePath, serialiseCards(lane)); };
 
@@ -221,7 +216,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     await loadBoard();
   };
 
-  // ── Card meta: description + comments (optimistic + sidecar) ─────────────────
 
   const updateCardDescription = useCallback(async (laneIdx: number, cardId: string, description: string) => {
     setLanes((prev) => {
@@ -253,7 +247,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     await saveSidecar(lane.filePath, buildSidecar(updatedCards));
   }, [lanes]);
 
-  // ── Drag & drop ───────────────────────────────────────────────────────────────
 
   const handleDragStart = (laneIdx: number, cardId: string) => { dragRef.current = { laneIdx, cardId }; };
 
@@ -277,7 +270,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
     await loadBoard();
   };
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
 
   const totalCards = useMemo(() => lanes.reduce((s, l) => s + l.cards.length, 0), [lanes]);
   const doneCards  = useMemo(() => lanes.reduce((s, l) => s + l.cards.filter((c) => c.done).length, 0), [lanes]);
@@ -293,7 +285,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lanes]);
 
-  // ── Render ────────────────────────────────────────────────────────────────────
 
   if (loading) return (
     <div className="flex items-center justify-center h-full gap-2 text-[var(--theme-text-muted)]">

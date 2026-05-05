@@ -179,6 +179,52 @@ inline void bootstrap_chunks_schema(pce::db::Database& db) {
             "ON dms_chunks (doc_id, position);");
 }
 
+/// Initialise SDM editor-authored documents table.  Safe to call on every startup.
+/// These are block-structured documents created inside the app, distinct from
+/// `dms_documents` which indexes files from the filesystem.
+inline void bootstrap_sdm_schema(pce::db::Database& db) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS sdm_documents (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid        TEXT    NOT NULL UNIQUE,
+            title       TEXT    NOT NULL DEFAULT '',
+            blocks_json TEXT    NOT NULL DEFAULT '[]',
+            styles_json TEXT    NOT NULL DEFAULT '{}',
+            page_json   TEXT    NOT NULL DEFAULT '{}',
+            zone_name   TEXT    NOT NULL DEFAULT '',
+            created_at  INTEGER NOT NULL DEFAULT 0,
+            updated_at  INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_sdm_documents_zone "
+            "ON sdm_documents (zone_name, updated_at DESC);");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_sdm_documents_uuid "
+            "ON sdm_documents (uuid);");
+}
+
+/// Initialise the global recent-exports audit log.  Safe to call on every startup.
+/// Records every PDF/HTML export so the frontend can show a "Recent Files" list.
+/// Uses `doc_uuid` (not `doc_id`) because the source document may live in a
+/// different (zone) database whose integer row-ids are not portable.
+inline void bootstrap_recent_exports_schema(pce::db::Database& db) {
+    db.exec(R"sql(
+        CREATE TABLE IF NOT EXISTS dms_recent_exports (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_uuid    TEXT    NOT NULL DEFAULT '',
+            title       TEXT    NOT NULL DEFAULT '',
+            path        TEXT    NOT NULL,
+            kind        TEXT    NOT NULL DEFAULT 'pdf',
+            zone_name   TEXT    NOT NULL DEFAULT '',
+            exported_at INTEGER NOT NULL DEFAULT 0,
+            file_size   INTEGER NOT NULL DEFAULT 0
+        );
+    )sql");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_dms_recent_exports_date "
+            "ON dms_recent_exports (exported_at DESC);");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_dms_recent_exports_zone "
+            "ON dms_recent_exports (zone_name, exported_at DESC);");
+}
+
 /// Initialise workspaces and workspace_items tables. Safe to call on every startup.
 inline void bootstrap_workspace_schema(pce::db::Database& db) {
     db.exec(R"sql(
@@ -214,7 +260,7 @@ inline void bootstrap_workspace_schema(pce::db::Database& db) {
 
 
 
-inline constexpr pce::db::migration::StaticSource<16> kDmsMigrations{{{
+inline constexpr pce::db::migration::StaticSource<18> kDmsMigrations{{{
     {1,  "baseline",                        ""},
     {2,  "dms_documents: content_blob",
          "ALTER TABLE dms_documents ADD COLUMN content_blob BLOB;"},
@@ -327,6 +373,41 @@ inline constexpr pce::db::migration::StaticSource<16> kDmsMigrations{{{
          );
          CREATE INDEX IF NOT EXISTS idx_workspace_items_ws
              ON workspace_items (workspace_id, position);
+         )sql"},
+    {17, "sdm_documents",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS sdm_documents (
+             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+             uuid        TEXT    NOT NULL UNIQUE,
+             title       TEXT    NOT NULL DEFAULT '',
+             blocks_json TEXT    NOT NULL DEFAULT '[]',
+             styles_json TEXT    NOT NULL DEFAULT '{}',
+             page_json   TEXT    NOT NULL DEFAULT '{}',
+             zone_name   TEXT    NOT NULL DEFAULT '',
+             created_at  INTEGER NOT NULL DEFAULT 0,
+             updated_at  INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE INDEX IF NOT EXISTS idx_sdm_documents_zone
+             ON sdm_documents (zone_name, updated_at DESC);
+         CREATE INDEX IF NOT EXISTS idx_sdm_documents_uuid
+             ON sdm_documents (uuid);
+         )sql"},
+    {18, "dms_recent_exports",
+         R"sql(
+         CREATE TABLE IF NOT EXISTS dms_recent_exports (
+             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+             doc_uuid    TEXT    NOT NULL DEFAULT '',
+             title       TEXT    NOT NULL DEFAULT '',
+             path        TEXT    NOT NULL,
+             kind        TEXT    NOT NULL DEFAULT 'pdf',
+             zone_name   TEXT    NOT NULL DEFAULT '',
+             exported_at INTEGER NOT NULL DEFAULT 0,
+             file_size   INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE INDEX IF NOT EXISTS idx_dms_recent_exports_date
+             ON dms_recent_exports (exported_at DESC);
+         CREATE INDEX IF NOT EXISTS idx_dms_recent_exports_zone
+             ON dms_recent_exports (zone_name, exported_at DESC);
          )sql"},
 }}};
 

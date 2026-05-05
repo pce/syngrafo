@@ -59,3 +59,12 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(saucer_desktop)
+
+# saucer::pdf — export current WebView page as PDF.
+# v3.1.0 is the version referenced by the saucer v8 example tree.
+FetchContent_Declare(
+    saucer_pdf
+    URL     https://github.com/saucer/pdf/archive/refs/tags/v3.1.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(saucer_pdf)

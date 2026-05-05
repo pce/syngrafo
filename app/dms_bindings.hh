@@ -171,6 +171,7 @@ inline Expected<pce::db::Database> DMSHandle::open_zone_db(
             bootstrap_palette_schema(zdb);
             bootstrap_fts_schema(zdb);
             bootstrap_chunks_schema(zdb);
+            bootstrap_sdm_schema(zdb);
             pce::db::migration::apply(zdb, kDmsMigrations);
             return std::move(zdb);
         }
@@ -207,6 +208,7 @@ inline Expected<pce::db::Database> DMSHandle::open_zone_db(
         bootstrap_palette_schema(zdb);
         bootstrap_fts_schema(zdb);
         bootstrap_chunks_schema(zdb);
+        bootstrap_sdm_schema(zdb);
         pce::db::migration::apply(zdb, kDmsMigrations);
         return std::move(zdb);
     } catch(const std::exception& e){

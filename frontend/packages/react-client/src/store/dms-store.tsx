@@ -1,7 +1,7 @@
 // store/dms-store.ts ──────────────────────────────────────────────────────────
 // Global state for the Papierkram DMS UI.
 // Uses React context + useReducer — no external dependencies.
-// ──────────────────────────────────────────────────────────────────────────────
+
 
 import React, {
   createContext,
@@ -18,7 +18,7 @@ import type {
   FileStats,
 } from "../services/dms-service";
 
-// ── State ─────────────────────────────────────────────────────────────────────
+
 
 export interface IndexStatus {
   total:   number;
@@ -100,7 +100,7 @@ const initialState: DmsState = {
   fileStats:       null,
 };
 
-// ── Actions ───────────────────────────────────────────────────────────────────
+
 
 export type DmsAction =
   | { type: "SET_ZONE";            zone:     Zone | null         }
@@ -123,7 +123,7 @@ export type DmsAction =
   | { type: "SET_GLOBAL_MODE";     isGlobal: boolean             }
   | { type: "SET_FILE_STATS";      stats: FileStats | null       };
 
-// ── Reducer ───────────────────────────────────────────────────────────────────
+
 
 function reducer(state: DmsState, action: DmsAction): DmsState {
   switch (action.type) {
@@ -228,7 +228,7 @@ function reducer(state: DmsState, action: DmsAction): DmsState {
   }
 }
 
-// ── Context ───────────────────────────────────────────────────────────────────
+
 
 interface DmsContextValue {
   state:    DmsState;
@@ -237,7 +237,7 @@ interface DmsContextValue {
 
 const DmsContext = createContext<DmsContextValue | null>(null);
 
-// ── Provider ──────────────────────────────────────────────────────────────────
+
 
 export function DmsProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -248,7 +248,7 @@ export function DmsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
+
 
 export function useDms(): DmsContextValue {
   const ctx = useContext(DmsContext);

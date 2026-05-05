@@ -160,8 +160,6 @@ const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => (
     </Widget>
 );
 
-// ── ColorPaletteWidget ────────────────────────────────────────────────────────
-
 /**
  * Zone color palette — stores brand / project styleguide colors per zone.
  * Persisted to localStorage keyed by zone name (future: zone DB).
@@ -430,8 +428,6 @@ const QuickActionsWidget: React.FC<{
   );
 };
 
-// ── Main ZoneDashboard ────────────────────────────────────────────────────────
-
 interface ZoneDashboardProps {
   onNavigate:        (absPath: string, isDir: boolean) => void;
   onManageBookmarks: () => void;
@@ -451,7 +447,6 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
   const zone = state.zone;
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
-  // ── query state owned here; widgets are pure renderers ────────────────────
   const [statsData, setStatsData]       = useState<StatsData | null>(null);
   const [diskData, setDiskData]         = useState<ZoneDiskUsage | null>(null);
   const [diskLoading, setDiskLoading]   = useState(true);

@@ -5,7 +5,6 @@ import type { ZoneHistoryItem } from "../../services/dms-service";
 
 interface Props { onClose: () => void; }
 
-// ── Zone domain categories ─────────────────────────────────────────────────────
 
 const TAXONOMY_DOMAINS = [
   { group: "General",    values: ["General", "Personal", "Work"] },
@@ -16,7 +15,6 @@ const TAXONOMY_DOMAINS = [
   { group: "Nature",     values: ["Botany", "Biology", "Geology"] },
 ];
 
-// ── Zone modes ────────────────────────────────────────────────────────────────
 
 const ZONE_MODES = [
   { value: "general",             label: "General"               },

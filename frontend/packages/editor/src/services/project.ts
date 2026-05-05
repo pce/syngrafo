@@ -1,1 +1,1 @@
-export { encodePdfProj, decodePdfProj } from "../models/project";
+export { encodeDocument, decodeDocument } from "../models/project";

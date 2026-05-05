@@ -27,14 +27,10 @@ import type { FsEntry } from "../../services/dms-service";
 import { useDms } from "../../store/dms-store";
 import Icon from "../Icon";
 
-/** @section Props */
-
 export interface NotesViewProps {
   /** Absolute path to the .notes folder, e.g. "/home/user/zone/.notes" */
   notesDir: string;
 }
-
-/** @section Internal types */
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -43,8 +39,6 @@ interface CollectionGroup {
   dirPath: string;
   notes: FsEntry[];
 }
-
-/** @section Markdown renderer */
 
 /** Escape HTML special chars. */
 function escapeHtml(s: string): string {
@@ -212,8 +206,6 @@ function renderMarkdown(md: string): string {
   return out.join("\n");
 }
 
-/** @section Helpers */
-
 /**
  * Convert a human title into a safe ASCII filename slug.
  * Transliterates common accented / umlauted characters before stripping
@@ -249,12 +241,9 @@ function fmtDate(ms: number | undefined): string {
   });
 }
 
-/** @section Component */
-
 const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const { state: storeState, dispatch: storeDispatch } = useDms();
 
-  /** @section State */
   const [rootNotes,    setRootNotes]    = useState<FsEntry[]>([]);
   const [collections,  setCollections]  = useState<CollectionGroup[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -277,7 +266,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const [confirmDeleteNote, setConfirmDeleteNote] = useState<string | null>(null);
   const [confirmDeleteCol,  setConfirmDeleteCol]  = useState<string | null>(null);
 
-  /** @section Refs */
   const contentRef      = useRef<string>("");
   const selectedPathRef = useRef<string | null>(null);
   // saveTargetRef tracks which path the *current content* belongs to.
@@ -289,8 +277,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 
   contentRef.current      = content;
   selectedPathRef.current = selectedPath;
-
-  /** @section Load notes */
 
   const loadNotes = useCallback(async () => {
     setListLoading(true);
@@ -325,7 +311,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 
   useEffect(() => { loadNotes(); }, [loadNotes]);
 
-  /** @section Auto-select from search navigation */
   useEffect(() => {
     const vp = storeState.viewerPath;
     if (vp && vp !== selectedPath && vp.startsWith(notesDir + "/")) {
@@ -347,8 +332,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     }
   }, [pendingAutoSelect, rootNotes, collections]);
 
-  /** @section Store sync */
-
   useEffect(() => {
     storeDispatch({ type: "SELECT_FILE", path: selectedPath });
   }, [selectedPath, storeDispatch]);
@@ -366,8 +349,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     return () => { storeDispatch({ type: "SELECT_FILE", path: null }); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  /** @section Load content on selection change */
 
   useEffect(() => {
     if (!selectedPath) {
@@ -401,8 +382,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     return () => { cancelled = true; };
   }, [selectedPath]);
 
-  /** @section Debounced auto-save */
-
+  // Auto-save: debounced 600 ms after last keystroke; refs keep the closure stable.
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setSaveStatus("saving");
@@ -419,8 +399,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     (e: React.ChangeEvent<HTMLTextAreaElement>) => { setContent(e.target.value); scheduleSave(); },
     [scheduleSave]
   );
-
-  /** @section Create note */
 
   const createNote = useCallback(
     async (title: string, collection: string) => {
@@ -454,8 +432,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     if (title) await createNote(title, newNoteCollection);
   }, [newNoteTitle, newNoteCollection, createNote]);
 
-  /** @section Create collection */
-
   const createCollection = useCallback(async () => {
     const name = newCollectionName.trim();
     setCreatingCollection(false);
@@ -464,8 +440,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     await dms.createDir(`${notesDir}/${name}`);
     await loadNotes();
   }, [newCollectionName, notesDir, loadNotes]);
-
-  /** @section Delete note */
 
   const deleteNote = useCallback(
     async (path: string) => {
@@ -480,8 +454,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     },
     [selectedPath, loadNotes]
   );
-
-  /** @section Delete collection */
 
   const deleteCollection = useCallback(
     async (group: CollectionGroup) => {
@@ -498,8 +470,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     [selectedPath, loadNotes]
   );
 
-  /** @section Toggle collection collapsed */
-
   const toggleCollapse = useCallback((name: string) => {
     setCollapsedCols((prev) => {
       const next = new Set(prev);
@@ -508,12 +478,8 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     });
   }, []);
 
-  /** @section Derived */
-
   const preview = useMemo(() => renderMarkdown(content), [content]);
   const allCollectionNames = collections.map((c) => c.name);
-
-  /** @section Render helper: note row */
 
   const renderNoteRow = (note: FsEntry, indent: boolean) => {
     const isSelected = note.path === selectedPath;
@@ -581,8 +547,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
       </div>
     );
   };
-
-  /** @section Render */
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--theme-bg)]">
@@ -757,9 +721,25 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
       {/* Right pane — editor + preview */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
         {selectedPath == null ? (
-          <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8">
-            <Icon name="edit" size="xl" className="opacity-20 text-[var(--theme-text)]" />
-            <p className="text-sm text-[var(--theme-text-muted)]">Select a note or create one</p>
+          <div
+            onClick={() => {
+              setConfirmDeleteNote(null);
+              setConfirmDeleteCol(null);
+              setCreatingNote(true);
+              setNewNoteTitle("");
+              setNewNoteCollection("");
+            }}
+            className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8 cursor-pointer select-none group hover:bg-[var(--theme-primary)]/[0.03] transition-colors"
+            title="Click to create a new note"
+          >
+            <Icon
+              name="edit"
+              size="xl"
+              className="opacity-20 group-hover:opacity-40 transition-opacity text-[var(--theme-text)]"
+            />
+            <p className="text-sm text-[var(--theme-text-muted)] group-hover:text-[var(--theme-primary)] transition-colors">
+              Click anywhere to create a new note
+            </p>
           </div>
         ) : (
           <>
@@ -824,4 +804,3 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 };
 
 export default NotesView;
-

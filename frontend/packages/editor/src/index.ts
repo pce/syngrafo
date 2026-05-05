@@ -1,54 +1,28 @@
-/**
- * @syngrafo/editor — public API
- *
- * Import pattern from react-client:
- *   import { EditorProvider, EditorShell, createEmptyDocument } from "@syngrafo/editor";
- */
+// SDM types and type guards
+export * from "./models/sdm";
 
-import { DocumentModel } from "./models/document";
+// Factory and immutable tree operations
+export * from "./models/sdm-factory";
 
-// ── Components ──────────────────────────────────────────────────────────────
+// Functional history
+export * from "./models/history";
+
+// Serialisation
+export { encodeDocument, decodeDocument } from "./models/project";
+
+// NLP types and helpers
+export * from "./models/nlp";
+
+// Editor context and workspace modes
+export * from "./models/editor-context";
+
+// Skill system types
+export * from "./models/skill";
+
+// React store
 export { EditorProvider, useEditor, useEditorDoc, useSelectedBlock } from "./store/editor-store";
 export type { EditorState, EditorAction } from "./store/editor-store";
+
+// Shell component
 export { EditorShell } from "./EditorShell";
 export type { EditorShellProps } from "./EditorShell";
-
-// ── Models ───────────────────────────────────────────────────────────────────
-export {
-  DocumentModel,
-  PAGE_SIZE_MM,
-  type PageSize,
-  type PageCount,
-  type PageScaleMode,
-  type DocumentMetadata,
-} from "./models/document";
-
-export {
-  Block,
-  type BlockType,
-  type BlockMetadata,
-} from "./models/block";
-
-export {
-  WORKSPACE_CONTEXTS,
-  WORKSPACE_CONTEXT_META,
-  DOCUMENT_INTENT_META,
-  DEFAULT_NLP_FLAGS,
-  type WorkspaceContext,
-  type DocumentIntent,
-  type NLPVisibilityFlags,
-} from "./models/editor-context";
-
-// ── Services / serialisation ─────────────────────────────────────────────────
-export { encodePdfProj, decodePdfProj } from "./models/project";
-
-// ── Factory helpers ───────────────────────────────────────────────────────────
-
-/**
- * Create a blank DocumentModel ready to be passed to <EditorShell>.
- * Every call returns a fresh instance — intentionally NOT memoised so
- * callers control the document lifetime (typically via useState).
- */
-export function createEmptyDocument(title = "Untitled Document"): DocumentModel {
-  return new DocumentModel(title);
-}

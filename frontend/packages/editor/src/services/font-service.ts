@@ -55,7 +55,6 @@ export interface FontGroup {
  * by the CMake build so saucer::embed serves them at /fonts/<file>.
  */
 export const BUNDLED_FONTS: BundledFont[] = [
-  // ── Sans-serif ────────────────────────────────────────────────────────────
   {
     family: "Inter",
     label: "Inter",
@@ -69,7 +68,6 @@ export const BUNDLED_FONTS: BundledFont[] = [
     ],
   },
 
-  // ── Serif ─────────────────────────────────────────────────────────────────
   {
     family: "Lora",
     label: "Lora",
@@ -92,7 +90,6 @@ export const BUNDLED_FONTS: BundledFont[] = [
     ],
   },
 
-  // ── Display ───────────────────────────────────────────────────────────────
   {
     family: "Playfair Display",
     label: "Playfair Display",
@@ -104,7 +101,6 @@ export const BUNDLED_FONTS: BundledFont[] = [
     ],
   },
 
-  // ── Monospace ─────────────────────────────────────────────────────────────
   {
     family: "JetBrains Mono",
     label: "JetBrains Mono",
@@ -145,8 +141,6 @@ const FONT_FACE_STYLE_ID = "app-font-faces";
 const FONTS_BASE_PATH = "/fonts/";
 
 export class FontService {
-  // ── @font-face CSS ──────────────────────────────────────────────────────
-
   /**
    * Generate a complete `@font-face` CSS block for all bundled fonts.
    * Each face gets its own rule so the browser (and the Chromium PDF
@@ -191,8 +185,6 @@ export class FontService {
     el.textContent = this.generateFontFaceCSS();
   }
 
-  // ── Font-ready gate ─────────────────────────────────────────────────────
-
   /**
    * Returns a promise that resolves when all `@font-face` fonts have
    * either loaded or permanently failed.
@@ -220,8 +212,6 @@ export class FontService {
       return false;
     }
   }
-
-  // ── Font family lists for the UI ─────────────────────────────────────────
 
   /**
    * Returns all font families as grouped options suitable for rendering

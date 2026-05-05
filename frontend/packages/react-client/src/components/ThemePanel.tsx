@@ -130,7 +130,7 @@ const SettingRow: React.FC<{
   </div>
 );
 
-// ── NLP feature → ONNX model mapping ────────────────────────────────────────
+
 const NLP_FEATURES: Array<{ label: string; key: string; model: string; size: string }> = [
   { label: "Embeddings / Semantic Search", key: "hasOnnx",      model: "embed.onnx",     size: "~23 MB"  },
   { label: "Sentiment Analysis",           key: "hasSentiment", model: "sentiment.onnx", size: "~67 MB"  },
@@ -148,7 +148,7 @@ function fmt_bytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-// ── ModelsTab ────────────────────────────────────────────────────────────────
+
 
 const ModelsTab: React.FC = () => {
   const [catalog, setCatalog] = useState<LlmModelInfo[]>([]);
@@ -383,7 +383,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
     setTheme({ colorPreset: presetId, customColors: {} });
   };
 
-  // ── Tab: Presets (now used only by AppearanceTab inline) ─────────────────
+
 
 
   const ColorsTab = () => (

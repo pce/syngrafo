@@ -42,7 +42,11 @@ export type IconName =
   | "check"
   | "file-text"
   | "print"
-  | "globe";
+  | "globe"
+  | "chevron-left"
+  | "chevron-right"
+  | "chevron-down"
+  | "chevron-up";
 
 type IconSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -332,6 +336,26 @@ const ICONS: Record<IconName, (p: React.SVGProps<SVGSVGElement>) => React.ReactE
       <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
     </svg>
   ),
+  "chevron-left": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  ),
+  "chevron-right": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  ),
+  "chevron-down": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  ),
+  "chevron-up": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  ),
 };
 
 export interface IconProps {
@@ -347,8 +371,9 @@ export interface IconProps {
  * API mirrors react-client's Icon component.
  */
 export function Icon({ name, size = "sm", className = "", style }: IconProps) {
-  const px = SIZE[size];
-  const Component = ICONS[name];
+  const px = SIZE[size] ?? SIZE.sm;
+  const Component = ICONS[name as IconName];
+  if (!Component) return null;
   return (
     <Component
       width={px}

@@ -127,6 +127,8 @@ struct DMSHandle {
         bootstrap_fts_schema(db);
         bootstrap_chunks_schema(db);
         bootstrap_workspace_schema(db);
+        bootstrap_sdm_schema(db);
+        bootstrap_recent_exports_schema(db);
         pce::db::migration::apply(db, kDmsMigrations);
         discard(scan_dir("data", false));
         std::print("[dms] global database ready: '{}' (schema v{})\n",

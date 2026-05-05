@@ -16,7 +16,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 
-// ─── Public types ─────────────────────────────────────────────────────────────
+
 
 /** Slow-path data (10 fps) — used for time labels & progress text only.
  *  Canvas visualizers read the AnalyserNode directly for 60 fps smoothness. */
@@ -42,7 +42,7 @@ export interface AudioPlaybackControls {
   isPlaying:          boolean;
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
+
 
 export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
   // Imperative audio objects — never stored in React state
@@ -60,7 +60,7 @@ export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
   const [isLoading,        setIsLoading]        = useState(false);
   const [visualizationData, setVizData]         = useState<PlaybackVisualizationData | null>(null);
 
-  // ── stop ───────────────────────────────────────────────────────────────────
+
   const stop = useCallback(() => {
     try { sourceRef.current?.stop(); } catch { /* already stopped */ }
     sourceRef.current = null;
@@ -75,7 +75,7 @@ export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
     setVizData(null);
   }, []);
 
-  // ── play ───────────────────────────────────────────────────────────────────
+
   const play = useCallback(async (source: Blob | string, id: string) => {
     // Guard: ignore if already loading or playing (prevents double-tap)
     // Tear down any in-progress playback first
@@ -176,7 +176,3 @@ export function useAudioPlaybackWithVisualization(): AudioPlaybackControls {
 
   return { play, stop, isLoading, analyserNode, visualizationData, currentPlayingId, isPlaying };
 }
-
-
-
-

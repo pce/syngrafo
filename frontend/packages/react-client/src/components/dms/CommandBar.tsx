@@ -23,7 +23,6 @@ import {
   ArchiveDialog,
 } from "./FileOpDialogs";
 
-// ── types ─────────────────────────────────────────────────────────────────────
 
 export interface PanelContext {
   path: string;
@@ -48,7 +47,6 @@ type ActiveOp =
   | "archive"
   | null;
 
-// ── command button ─────────────────────────────────────────────────────────────
 
 const CmdBtn: React.FC<{
   label: string;
@@ -77,7 +75,6 @@ const CmdBtn: React.FC<{
   </button>
 );
 
-// ── component ─────────────────────────────────────────────────────────────────
 
 const CommandBar: React.FC<CommandBarProps> = ({
   leftPanel,
@@ -93,8 +90,6 @@ const CommandBar: React.FC<CommandBarProps> = ({
 
   const hasSelection = active.selection.length > 0;
   const count        = active.selection.length;
-
-  // ── keyboard shortcuts ────────────────────────────────────────────────────
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -123,8 +118,6 @@ const CommandBar: React.FC<CommandBarProps> = ({
   };
 
   const close = () => setActiveOp(null);
-
-  // ── render ────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -259,4 +252,3 @@ const CommandBar: React.FC<CommandBarProps> = ({
 };
 
 export default CommandBar;
-

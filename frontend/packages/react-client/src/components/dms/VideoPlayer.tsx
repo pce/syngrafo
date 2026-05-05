@@ -15,7 +15,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Icon from "../Icon";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
 
 function fmtTime(s: number): string {
   if (!isFinite(s) || s < 0) return "0:00";
@@ -24,7 +23,6 @@ function fmtTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-// ── component ─────────────────────────────────────────────────────────────────
 
 interface Props {
   src: string;
@@ -50,7 +48,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // ── src change: reload without remounting ─────────────────────────────────
   // No cleanup return here — having BOTH effect cleanups call v.src=""  +
   // v.load() in rapid succession causes WebKit to mark its properties as
   // readonly on the second call (even if the first is inside try/catch).
@@ -73,7 +70,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     }
   }, [src]);
 
-  // ── Mount / unmount tracking ───────────────────────────────────────────────
   // This is the SINGLE place that tears down the media element.
   // Using removeAttribute("src") instead of v.src="" avoids WebKit's internal
   // re-validation path that can mark additional properties as readonly.
@@ -95,7 +91,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     };
   }, []);
 
-  // ── auto-hide controls after 3 s of inactivity ───────────────────────────
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     if (!mountedRef.current) return;
@@ -110,7 +105,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [scheduleHide]);
 
-  // ── playback helpers ──────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -167,7 +161,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // ── video event handlers ─────────────────────────────────────────────────
   const onTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     if (!mountedRef.current) return;
     const v = e.currentTarget;
@@ -196,7 +189,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     v.play().catch(() => {});
   }, []);
 
-  // ── keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!mountedRef.current) return;
@@ -399,4 +391,3 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
 };
 
 export default VideoPlayer;
-

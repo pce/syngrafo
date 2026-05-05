@@ -18,7 +18,7 @@ import React, {
 } from "react";
 import { dms } from "../services/dms-service";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+
 
 export interface ThemeTokens {
   /** CSS class name without the "theme-" prefix, e.g. "dark" | "light" | "nord" */
@@ -122,7 +122,7 @@ export const FONT_PAIRS: FontPair[] = [
 
 const PREF_KEY = "syngrafo_theme";
 
-// ── Context ───────────────────────────────────────────────────────────────────
+
 
 interface ThemeCtx {
   theme: ThemeTokens;
@@ -134,7 +134,7 @@ interface ThemeCtx {
 
 const ThemeContext = createContext<ThemeCtx | null>(null);
 
-// ── Provider ──────────────────────────────────────────────────────────────────
+
 
 function applyTheme(theme: ThemeTokens): void {
   const html = document.documentElement;
@@ -211,7 +211,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={ctx}>{children}</ThemeContext.Provider>;
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
+
 
 export function useTheme(): ThemeCtx {
   const ctx = useContext(ThemeContext);

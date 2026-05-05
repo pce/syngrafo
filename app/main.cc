@@ -22,6 +22,7 @@
 #include "nlp/nlp_engine.hh"
 
 #include "dms_bindings.hh"
+#include "bindings/pdf_bindings.hh"
 #include <saucer/modules/desktop.hpp>
 
 #include <filesystem>
@@ -611,6 +612,7 @@ if (typeof window.__dms_progress === 'undefined')
     // Wire all JS ↔ C++ bindings directly — no bridge class.
     register_bindings(*webview, nlp);
     saucer::modules::desktop desk{app};
+    saucer::modules::pdf pdf{*webview};
 
     // Model downloader — manages LLM/GGUF model files chosen by the user in-app.
     // The catalog is loaded from data/llm_catalog.json (bundled into .app/Contents/Resources/data/).
@@ -646,6 +648,7 @@ if (typeof window.__dms_progress === 'undefined')
     std::print("[models] catalog         : {}\n", catalog_path);
 
     pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);
+    pce::dms::register_pdf_bindings(*webview, dms, pdf, desk);
 
 #ifndef NDEBUG
     webview->set_dev_tools(true);

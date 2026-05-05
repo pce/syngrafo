@@ -50,7 +50,7 @@ function CollectionListView<T extends { id: number }>({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────────
+
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -67,13 +67,13 @@ function CollectionListView<T extends { id: number }>({
 
   useEffect(() => { void reload(); }, [reload]);
 
-  // ── Focus input when edit cell is set ────────────────────────────────────────
+
 
   useEffect(() => {
     if (editCell) inputRef.current?.focus();
   }, [editCell]);
 
-  // ── Commit edit ──────────────────────────────────────────────────────────────
+
 
   const commitEdit = useCallback(async () => {
     if (!editCell || saving) return;
@@ -96,7 +96,7 @@ function CollectionListView<T extends { id: number }>({
     }
   }, [editCell, saving, rows, config]);
 
-  // ── Delete ───────────────────────────────────────────────────────────────────
+
 
   const confirmDelete = useCallback(async () => {
     if (!deletePending) return;
@@ -110,7 +110,7 @@ function CollectionListView<T extends { id: number }>({
     }
   }, [deletePending, config]);
 
-  // ── Add row ──────────────────────────────────────────────────────────────────
+
 
   const addRow = useCallback(async () => {
     if (!config.create || !config.newRowFactory) return;
@@ -129,7 +129,7 @@ function CollectionListView<T extends { id: number }>({
     }
   }, [config]);
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+
 
   const colTemplate = [
     ...config.columns.map(c => c.width ?? "1fr"),

@@ -206,7 +206,14 @@ jobs:
         run: vcpkg install curl:x64-windows
 
       - name: Configure
-        run: cmake -B build --preset ci-windows -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+        # Pass vcpkg's installed-packages directory as CMAKE_PREFIX_PATH so that
+        # find_package(CURL REQUIRED) resolves correctly.  We deliberately do NOT
+        # use -DCMAKE_TOOLCHAIN_FILE: vcpkg's toolchain wraps add_library globally
+        # and its _add_library hook recurses infinitely when saucer calls add_library
+        # (vcpkg bug reproducible with CMake 3.28+ + vcpkg 2024+).
+        run: >
+          cmake -B build --preset ci-windows
+          "-DCMAKE_PREFIX_PATH=$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows"
 
       - name: Build
         run: cmake --build build --config Release --parallel

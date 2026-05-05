@@ -1,132 +1,51 @@
-import { signal, type Signal } from "@preact/signals-core";
+/**
+ * @file models/history.ts
+ * Pure functional undo/redo stack — no classes, no signals.
+ * Generic over any snapshot type T.
+ */
 
-export type DocumentSnapshot = Record<string, unknown>;
-
-export interface HistoryEntry {
-  snapshot: DocumentSnapshot;
-  label: string;
-  timestamp: number;
+export interface HistoryState<T> {
+  readonly past:    readonly T[];
+  readonly present: T;
+  readonly future:  readonly T[];
 }
 
-export interface HistoryState {
-  canUndo: boolean;
-  canRedo: boolean;
-  pointer: number;
-  size: number;
-  undoLabel: string | null;
-  redoLabel: string | null;
+export function createHistory<T>(initial: T): HistoryState<T> {
+  return { past: [], present: initial, future: [] };
 }
 
-export const DEFAULT_MAX_SNAPSHOTS = 20;
+/**
+ * Appends the current present to past, sets present = next, clears future.
+ * Trims the oldest past entries once past.length exceeds maxEntries (default 50).
+ */
+export function pushHistory<T>(h: HistoryState<T>, next: T, maxEntries = 50): HistoryState<T> {
+  const raw = [...h.past, h.present];
+  const past = raw.length > maxEntries ? raw.slice(raw.length - maxEntries) : raw;
+  return { past, present: next, future: [] };
+}
 
-export class History<T extends DocumentSnapshot = DocumentSnapshot> {
-  private stack: HistoryEntry[] = [];
-  private pointer = -1; // -1 = empty
-  private readonly maxSize: number;
+/** Returns h unchanged (same reference) if there is nothing to undo. */
+export function undoHistory<T>(h: HistoryState<T>): HistoryState<T> {
+  if (h.past.length === 0) return h;
+  const past    = h.past.slice(0, -1);
+  const present = h.past[h.past.length - 1] as T;
+  const future  = [h.present, ...h.future];
+  return { past, present, future };
+}
 
-  readonly stateSignal: Signal<HistoryState> = signal<HistoryState>(this.buildState());
+/** Returns h unchanged (same reference) if there is nothing to redo. */
+export function redoHistory<T>(h: HistoryState<T>): HistoryState<T> {
+  if (h.future.length === 0) return h;
+  const present = h.future[0] as T;
+  const past    = [...h.past, h.present];
+  const future  = h.future.slice(1);
+  return { past, present, future };
+}
 
-  constructor(maxSize: number = DEFAULT_MAX_SNAPSHOTS) {
-    if (maxSize < 1) {
-      throw new RangeError(`[History] maxSize must be ≥ 1, got ${maxSize}`);
-    }
-    this.maxSize = maxSize;
-  }
+export function canUndo<T>(h: HistoryState<T>): boolean {
+  return h.past.length > 0;
+}
 
-  push(snapshot: T, label: string = "Edit"): void {
-    // Discard the redo branch
-    if (this.pointer < this.stack.length - 1) {
-      this.stack.splice(this.pointer + 1);
-    }
-
-    this.stack.push({
-      snapshot: snapshot as DocumentSnapshot,
-      label,
-      timestamp: Date.now(),
-    });
-
-    // Trim the oldest entry if we exceed the cap
-    if (this.stack.length > this.maxSize) {
-      this.stack.shift();
-    }
-
-    this.pointer = this.stack.length - 1;
-    this.emitState();
-  }
-
-  undo(): T | null {
-    if (!this.canUndo()) return null;
-    this.pointer--;
-    this.emitState();
-    return (this.stack[this.pointer]?.snapshot ?? null) as T | null;
-  }
-
-  redo(): T | null {
-    if (!this.canRedo()) return null;
-    this.pointer++;
-    this.emitState();
-    return (this.stack[this.pointer]?.snapshot ?? null) as T | null;
-  }
-
-  current(): T | null {
-    if (this.pointer < 0) return null;
-    return (this.stack[this.pointer]?.snapshot ?? null) as T | null;
-  }
-
-  canUndo(): boolean {
-    return this.pointer > 0;
-  }
-
-  canRedo(): boolean {
-    return this.pointer < this.stack.length - 1;
-  }
-
-  clear(): void {
-    this.stack = [];
-    this.pointer = -1;
-    this.emitState();
-  }
-
-  amendCurrent(snapshot: T, label?: string): void {
-    if (this.pointer < 0) {
-      // Nothing pushed yet — treat as a fresh push
-      this.push(snapshot, label);
-      return;
-    }
-    const entry = this.stack[this.pointer];
-    if (!entry) return;
-    entry.snapshot = snapshot as DocumentSnapshot;
-    entry.timestamp = Date.now();
-    if (label !== undefined) entry.label = label;
-    this.emitState();
-  }
-
-  getEntries(): ReadonlyArray<HistoryEntry> {
-    return [...this.stack];
-  }
-
-  get size(): number {
-    return this.stack.length;
-  }
-
-  get capacity(): number {
-    return this.maxSize;
-  }
-
-  private buildState(): HistoryState {
-    const undoEntry = this.pointer > 0 ? (this.stack[this.pointer - 1] ?? null) : null;
-    const redoEntry = this.pointer < this.stack.length - 1 ? (this.stack[this.pointer + 1] ?? null) : null;
-    return {
-      canUndo: this.pointer > 0,
-      canRedo: this.pointer < this.stack.length - 1,
-      pointer: this.pointer,
-      size: this.stack.length,
-      undoLabel: undoEntry?.label ?? null,
-      redoLabel: redoEntry?.label ?? null,
-    };
-  }
-
-  private emitState(): void {
-    this.stateSignal.value = this.buildState();
-  }
+export function canRedo<T>(h: HistoryState<T>): boolean {
+  return h.future.length > 0;
 }

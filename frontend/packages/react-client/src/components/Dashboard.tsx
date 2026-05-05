@@ -249,7 +249,7 @@ const Dashboard: React.FC = () => {
   const [engineVersion, setEngineVersion] = useState("–");
   const [engineOk,      setEngineOk]      = useState<boolean | null>(null);
 
-  // ── Panel layout state ───────────────────────────────────────────────────
+
   const [leftWidth,       setLeftWidth]       = useState(256);
   const [rightPanelWidth, setRightPanelWidth] = useState(260);
   const [analysisWidth,   setAnalysisWidth]   = useState(288);
@@ -259,7 +259,7 @@ const Dashboard: React.FC = () => {
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [analysisOpen,   setAnalysisOpen]   = useState(true);
 
-  // ── CommandBar selection state ───────────────────────────────────────────
+
   const [leftSelection,       setLeftSelection]   = useState<string[]>([]);
   const [leftPath,            setLeftPath]        = useState("");
   const [rightSelection,      setRightSelection]  = useState<string[]>([]);
@@ -275,7 +275,7 @@ const Dashboard: React.FC = () => {
     else setCenterView("default");
   }, [state.zone?.name]);
 
-  // ── Drag-resize ──────────────────────────────────────────────────────────
+
   const resizeDragRef = useRef<{
     panel: "left" | "rightPanel" | "analysis";
     startX: number;
@@ -306,7 +306,7 @@ const Dashboard: React.FC = () => {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  // ── Refresh both panels after file operations ────────────────────────────
+
   const handleCommandBarRefresh = () => {
     if (leftPath)  dms.scanDir(leftPath).then(res => { if (res.ok && res.data) dispatch({ type: "SET_ENTRIES", entries: res.data.entries }); });
     // right panel auto-refreshes via its own navigate()
@@ -339,7 +339,7 @@ const Dashboard: React.FC = () => {
     (async () => {
       dispatch({ type: "SET_VIEWER", path, content: "" });
 
-      // ── FileStats: always-available, no NLP required ────────────────────
+
       const statsRes = await dms.fileStats(path);
       if (statsRes.ok && statsRes.data) {
         dispatch({ type: "SET_FILE_STATS", stats: statsRes.data });
@@ -348,13 +348,13 @@ const Dashboard: React.FC = () => {
       // in the DB by kind/size/ext even before explicit indexing.
       dms.registerFile(path).catch(() => { /* best-effort */ });
 
-      // ── Text content (may be empty for binary/archive files) ────────────
+
       const fileRes = await dms.readFile(path);
       if (fileRes.ok && fileRes.data && fileRes.data.content !== null) {
         dispatch({ type: "SET_VIEWER", path, content: fileRes.data.content });
       }
 
-      // ── NLP metadata (only available for indexed files) ─────────────────
+
       dispatch({ type: "SET_ANALYSIS_LOADING", loading: true });
       const metaRes = await dms.getMetadata(path);
       dispatch({ type: "SET_METADATA", metadata: metaRes.ok && metaRes.data ? metaRes.data : null });
@@ -384,7 +384,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // ── Stable callbacks for FileBrowser (avoids cascade re-navigation) ────────
+
   // Using useCallback with [] deps because the setters (setLeftSelection etc.)
   // are permanently stable references from useState.
   const handleLeftSelectionChange = useCallback((paths: string[]) => {
@@ -401,10 +401,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden">
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <header className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] shrink-0 shadow-sm relative z-50">
 
-        {/* ── Left: logo + active zone badge ──────────────────────────────── */}
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-black text-sm tracking-tight text-[var(--theme-text)]">Syngrafo</span>
           <span className="text-[9px] font-bold opacity-40 text-[var(--theme-text-muted)]">DMS</span>
@@ -422,7 +420,6 @@ const Dashboard: React.FC = () => {
             </>
           )}
 
-          {/* ── View switcher ───────────────────────────────────────────── */}
           <div className="h-4 w-px bg-[var(--theme-border)] mx-0.5" />
           <div className="flex items-center gap-0.5">
             {(["dms", "timeline"] as const).map((v) => (
@@ -445,13 +442,11 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Centre: search (always truly centred) ────────────────────────── */}
         <div className="flex items-center justify-center relative">
           <SearchBar />
           <SearchResults />
         </div>
 
-        {/* ── Right: theme + zone profile dropdown + engine status ────────── */}
         <div className="flex items-center gap-2 shrink-0">
           {/* New Document */}
           <button
@@ -483,10 +478,8 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* ── Theme panel ──────────────────────────────────────────────────────── */}
       {showTheme && <ThemePanel onClose={() => setShowTheme(false)} />}
 
-      {/* ── Zone editor modal ────────────────────────────────────────────────── */}
       {showZone && (
         <ZonePanel
           onClose={() => {
@@ -499,7 +492,6 @@ const Dashboard: React.FC = () => {
         />
       )}
 
-      {/* ── Missing workspace prompt ─────────────────────────────────────────── */}
       {missingDir && (
         <CreateDirModal
           path={missingDir}
@@ -508,7 +500,6 @@ const Dashboard: React.FC = () => {
         />
       )}
 
-      {/* ── Error bar ────────────────────────────────────────────────────────── */}
       {state.error && (
         <div className="flex items-center gap-3 px-4 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs shrink-0">
           <span className="flex-1 truncate">{state.error}</span>
@@ -521,20 +512,19 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ── Timeline view ─────────────────────────────────────────────────── */}
       {activeView === "timeline" && (
         <div className="flex-1 min-h-0 overflow-hidden">
           <TimelinePage />
         </div>
       )}
 
-      {/* ── DMS Workspace (mounted, hidden when not active) ─────────────────── */}
+      {/* DMS workspace — mounted but flex-hidden when timeline is active */}
       <div
         className="flex flex-1 min-h-0 overflow-hidden"
         style={{ display: activeView === "dms" ? "flex" : "none" }}
       >
 
-        {/* ── 1. Left file browser ──────────────────────────────────────────── */}
+        {/* 1. Left file browser */}
         {/* Collapsed stripe */}
         {!leftOpen && (
           <button
@@ -559,19 +549,20 @@ const Dashboard: React.FC = () => {
               className="shrink-0 border-r border-[var(--theme-border)] overflow-hidden flex flex-col bg-[var(--theme-surface)] transition-[width] duration-150"
               style={{ width: leftWidth }}
             >
-              {/* Panel header with close button — mirrors Analysis / Second Panel style */}
-              <div className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0">
+              <div
+                onClick={() => setLeftOpen(false)}
+                title="Click to collapse"
+                className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0 cursor-pointer hover:bg-[var(--theme-bg)]/70 transition-colors select-none group"
+              >
                 <Icon name="folder" size="xs" className="text-[var(--theme-text-muted)]" />
                 <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 flex-1">
                   Files
                 </span>
-                <button
-                  onClick={() => setLeftOpen(false)}
-                  title="Close file browser"
-                  className="p-0.5 rounded hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] transition-colors"
-                >
-                  <Icon name="close" size="xs" />
-                </button>
+                <Icon
+                  name="chevron-right"
+                  size="xs"
+                  className="text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-30 transition-opacity"
+                />
               </div>
               <FileBrowser
                 onSelectionChange={handleLeftSelectionChange}
@@ -591,7 +582,7 @@ const Dashboard: React.FC = () => {
           </>
         )}
 
-        {/* ── 2. Document viewer / Notes / Kanban / Bookmarks ──────────────── */}
+        {/* 2. Center: document viewer / notes / kanban / bookmarks */}
         <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[var(--theme-bg)]">
           {/* Path-specific views take priority over overlay centerView */}
           {state.zone && leftPath.startsWith(state.zone.out_path + "/.notes") ? (
@@ -636,7 +627,7 @@ const Dashboard: React.FC = () => {
           )}
         </main>
 
-        {/* ── 3. Right file panel (optional) ──────────────────────────────── */}
+        {/* 3. Right file panel (optional) */}
         {rightPanelOpen && (
           <>
             {/* Resize handle — right panel */}
@@ -652,18 +643,20 @@ const Dashboard: React.FC = () => {
               className="shrink-0 border-l border-[var(--theme-border)] overflow-hidden flex flex-col bg-[var(--theme-surface)]"
               style={{ width: rightPanelWidth }}
             >
-              <div className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0">
+              <div
+                onClick={() => setRightPanelOpen(false)}
+                title="Click to collapse"
+                className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0 cursor-pointer hover:bg-[var(--theme-bg)]/70 transition-colors select-none group"
+              >
                 <Icon name="columns" size="xs" className="text-[var(--theme-text-muted)]" />
                 <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 flex-1">
                   Second Panel
                 </span>
-                <button
-                  onClick={() => setRightPanelOpen(false)}
-                  title="Close panel"
-                  className="p-0.5 rounded hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] transition-colors"
-                >
-                  <Icon name="close" size="xs" />
-                </button>
+                <Icon
+                  name="chevron-right"
+                  size="xs"
+                  className="text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-30 transition-opacity"
+                />
               </div>
               <FilePanel
                 panelId="right"
@@ -695,7 +688,7 @@ const Dashboard: React.FC = () => {
           </button>
         )}
 
-        {/* ── 4. Analysis panel ────────────────────────────────────────────── */}
+        {/* 4. Analysis panel */}
         {analysisOpen ? (
           <>
             {/* Resize handle — analysis */}
@@ -711,18 +704,20 @@ const Dashboard: React.FC = () => {
               className="shrink-0 border-l border-[var(--theme-border)] overflow-hidden flex flex-col bg-[var(--theme-surface)]"
               style={{ width: analysisWidth }}
             >
-              <div className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0">
+              <div
+                onClick={() => setAnalysisOpen(false)}
+                title="Click to collapse"
+                className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0 cursor-pointer hover:bg-[var(--theme-bg)]/70 transition-colors select-none group"
+              >
                 <Icon name="brain" size="xs" className="text-[var(--theme-text-muted)]" />
                 <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 flex-1">
                   Analysis
                 </span>
-                <button
-                  onClick={() => setAnalysisOpen(false)}
-                  title="Close analysis panel"
-                  className="p-0.5 rounded hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] transition-colors"
-                >
-                  <Icon name="close" size="xs" />
-                </button>
+                <Icon
+                  name="chevron-right"
+                  size="xs"
+                  className="text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-30 transition-opacity"
+                />
               </div>
               <div className="flex-1 overflow-y-auto">
                 <AnalysisPanel />
@@ -747,7 +742,6 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* ── Command bar ─────────────────────────────────────────────────────── */}
       {activeView === "dms" && (
         <CommandBar
           leftPanel={{ path: leftPath, selection: leftSelection }}

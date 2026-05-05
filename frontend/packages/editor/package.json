@@ -16,9 +16,6 @@
     "react": ">=18",
     "react-dom": ">=18"
   },
-  "dependencies": {
-    "@preact/signals-core": "^1.5.0"
-  },
   "devDependencies": {
     "@saucer-dev/types": "^2.0.1",
     "@types/bun": "latest",

@@ -8,9 +8,6 @@
     "packages/editor": {
       "name": "@syngrafo/editor",
       "version": "0.1.0",
-      "dependencies": {
-        "@preact/signals-core": "^1.5.0",
-      },
       "devDependencies": {
         "@saucer-dev/types": "^2.0.1",
         "@types/bun": "latest",
@@ -198,8 +195,6 @@
     "@oven/bun-windows-x64": ["@oven/bun-windows-x64@1.3.11", "", { "os": "win32", "cpu": "x64" }, "sha512-E51tyWDP1l0CbjZYhiUxhDGPaY8Hf5YBREx0PHBff1LM1/q3qsJ6ZvRUa8YbbOO0Ax9QP6GHjD9vf3n6bXZ7QA=="],
 
     "@oven/bun-windows-x64-baseline": ["@oven/bun-windows-x64-baseline@1.3.11", "", { "os": "win32", "cpu": "x64" }, "sha512-cCsXK9AQ9Zf18QlVnbrFu2IKfr4sf2sfbErkF2jfCzyCO9Bnhl0KRx63zlN+Ni1xU7gcBLAssgcui5R400N2eA=="],
-
-    "@preact/signals-core": ["@preact/signals-core@1.14.1", "", {}, "sha512-vxPpfXqrwUe9lpjqfYNjAF/0RF/eFGeLgdJzdmIIZjpOnTmGmAB4BjWone562mJGMRP4frU6iZ6ei3PDsu52Ng=="],
 
     "@saucer-dev/types": ["@saucer-dev/types@2.0.1", "", {}, "sha512-BCBS/x6Ovl7u42AP9yJomTyl76joaUFC+55MdiKHPXoboguBhR2KGVSOH84A0klvvs3sHthgvTbNdy1WoH08Hw=="],
 

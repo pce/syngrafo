@@ -379,7 +379,6 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   const [sortDir,  setSortDir]  = useState<SortDir>("asc");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
-  // ── Stable refs for prop callbacks ────────────────────────────────────────
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onPathChangeRef      = useRef(onPathChange);
   const onFocusRef           = useRef(onFocus);
@@ -403,7 +402,6 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     }
   }, [dispatch]);
 
-  // ── Sort entries ──────────────────────────────────────────────────────────
   const sortedEntries = useMemo(() => {
     const kindOrder = (e: FsEntry) => {
       if (e.kind === "dir")      return 0;
@@ -558,7 +556,6 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     ? (state.currentPath === state.zone.out_path + "/.kanban" || state.currentPath.startsWith(state.zone.out_path + "/.kanban/"))
     : false;
 
-  // ── Shared row renderer helpers ────────────────────────────────────────────
   const fmtDate = (ms?: number) => {
     if (!ms) return "";
     const d = new Date(ms);
