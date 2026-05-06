@@ -48,9 +48,9 @@ export const WORKSPACE_CONTEXT_META: Record<WorkspaceContext, WorkspaceContextMe
   },
   export: {
     id: "export",
-    label: "Export",
+    label: "Files",
     icon: "download",
-    description: "Export to PDF, HTML, or plain text",
+    description: "Save, load and export files (HTML, .sdoc)",
     shortcut: "⌘6",
   },
 };
@@ -183,8 +183,8 @@ export interface NLPVisibilityFlags {
 }
 
 export const DEFAULT_NLP_FLAGS: NLPVisibilityFlags = {
-  showPOS: true,
-  showNER: true,
+  showPOS:         false,   // requires nlp_pos C++ binding — not yet registered
+  showNER:         true,
   showKeywords: true,
   showSpellErrors: true,
   showReadability: false,

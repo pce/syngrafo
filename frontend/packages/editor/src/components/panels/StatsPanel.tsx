@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React from "react";
 import { useEditor } from "../../store/editor-store";
-import { isTextBlock } from "../../models/sdm";
-import { flattenBlocks } from "../../models/sdm-factory";
 import { NER_COLORS } from "../../models/nlp";
 import type { DocumentNLPSummary } from "../../models/nlp";
-import { runAnalysis, isNLPConnected } from "../../services/nlp-analyzer";
+import { isNLPConnected } from "../../services/nlp-analyzer";
 import { Icon } from "../Icon";
+import { useNLPAnalyze } from "../../hooks/useNLPAnalyze";
+import { useDocumentStats } from "../../hooks/useDocumentStats";
 
 function StatCard({
   label,
@@ -103,51 +103,13 @@ function EntityList({ entities }: { entities: DocumentNLPSummary["entities"] }) 
 }
 
 export function StatsPanel() {
-  const { state, dispatch } = useEditor();
-  const { doc, nlpSummary, isAnalyzing } = state;
+  const { state } = useEditor();
+  const { doc, nlpSummary } = state;
 
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-
-  // All stats derived from the document — recomputed only when doc changes.
-  const stats = useMemo(() => {
-    if (!doc) return null;
-    const flat = flattenBlocks(doc.blocks);
-    const textBlocks = flat.filter(isTextBlock);
-    const text = textBlocks.flatMap((b) => b.spans).map((s) => s.text).join(" ");
-    const words = text.trim().split(/\s+/).filter(Boolean);
-    const headingCount = flat.filter((b) =>
-      b.type === "h1" || b.type === "h2" || b.type === "h3" || b.type === "h4"
-    ).length;
-    return {
-      blockCount: flat.length,
-      wordCount: words.length,
-      charCount: text.length,
-      headingCount,
-      readingTimeMins: Math.max(1, Math.round(words.length / 200)),
-    };
-  }, [doc]);
-
-  const handleAnalyze = async () => {
-    if (!doc || !stats || stats.wordCount === 0) return;
-    setAnalyzeError(null);
-    dispatch({ type: "SET_ANALYZING", value: true });
-    try {
-      const result = await runAnalysis(doc);
-      dispatch({ type: "SET_NLP_SUMMARY", summary: result.summary });
-      dispatch({ type: "SET_DOCUMENT", doc: result.doc });
-      if (result.count === 0) {
-        dispatch({ type: "SET_STATUS", text: "No text blocks to analyze", kind: "warning" });
-      } else {
-        dispatch({ type: "SET_STATUS", text: `Analyzed ${result.count} block${result.count === 1 ? "" : "s"}`, kind: "success" });
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setAnalyzeError(msg);
-      dispatch({ type: "SET_STATUS", text: msg, kind: "error" });
-    } finally {
-      dispatch({ type: "SET_ANALYZING", value: false });
-    }
-  };
+  const stats = useDocumentStats(doc);
+  const { analyze: handleAnalyze, isAnalyzing, error: analyzeError } = useNLPAnalyze(
+    !!doc && !!stats && stats.wordCount > 0,
+  );
 
   if (!doc || !stats) {
     return (

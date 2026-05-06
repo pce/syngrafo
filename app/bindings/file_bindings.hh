@@ -9,10 +9,23 @@
  * All exposed functions use the standard JSON envelope:
  *   success → { "ok": true,  "data": <payload> }
  *   failure → { "ok": false, "error": "<message>" }
+ *
+ * Exposed JS functions (subset):
+ *   dms_read_file             path                → { content }
+ *   dms_write_file            path, content       → { written }
+ *   dms_write_base64_file     path, base64_data   → { written, bytes }  (binary write)
+ *   dms_fetch_data_url        path                → { data_url }
+ *   dms_select_files          ()                  → { paths }
+ *   dms_select_directory      ()                  → { path }
+ *   dms_scan_dir              path, recursive     → { ... }
+ *   dms_copy_files / dms_move_files / dms_delete_files
+ *   dms_save_preference / dms_load_preference
+ *   dms_share_file            path
  */
 
 #pragma once
 #include "../dms_handle.hh"
+#include "../dms_monadic.hh"
 #include <saucer/modules/desktop.hpp>
 
 // Platform services: reveal_in_file_manager (NSWorkspace / SHOpenFolderAndSelectItems / D-Bus FileManager1).
@@ -121,6 +134,59 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         ofs.write(content.data(), (std::streamsize)content.size());
         if (!ofs) return DMSHandle::err_str(std::format("write error for '{}'", path));
         return DMSHandle::ok_str(json{{"written",true}});
+    });
+
+    // dms_write_base64_file(path, base64_data) → { written:true, bytes:N }
+    // Decodes a standard base64 string (JS btoa / bytesToBase64) and writes
+    // the raw bytes to path.  Used for writing binary files (.sdoc ZIP, images)
+    // from the frontend where JSON-string transport cannot carry raw binary.
+    wv.expose("dms_write_base64_file", [](string path, string b64) -> string {
+        const fs::path p{path};
+        std::error_code ec;
+        if (p.has_parent_path()) {
+            fs::create_directories(p.parent_path(), ec);
+            if (ec) return DMSHandle::err_str(
+                std::format("failed to create parent dir: {}", ec.message()));
+        }
+        // RFC-4648 base64 decode table
+        // Each entry maps ASCII byte → 6-bit value; -1 = not a valid base64 char.
+        static constexpr int8_t kDec[256] = {
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, //   0
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, //  16
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63, //  32  (+/)
+            52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1, //  48  (0-9)
+            -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14, //  64  (A-O)
+            15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1, //  80  (P-Z)
+            -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40, //  96  (a-o)
+            41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1, // 112  (p-z)
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 128
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 144
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 160
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 176
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 192
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 208
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 224
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 240
+        };
+        std::string out;
+        out.reserve(b64.size() * 3 / 4 + 3);
+        int buf = 0, bits = 0;
+        for (unsigned char c : b64) {
+            if (c == '=') break;        // padding — stop
+            const int v = kDec[c];
+            if (v < 0) continue;        // ignore whitespace / CR LF
+            buf = (buf << 6) | v;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                out.push_back(static_cast<char>((buf >> bits) & 0xFF));
+            }
+        }
+        std::ofstream ofs(p, std::ios::out|std::ios::trunc|std::ios::binary);
+        if (!ofs) return DMSHandle::err_str(std::format("cannot open '{}' for writing", path));
+        ofs.write(out.data(), static_cast<std::streamsize>(out.size()));
+        if (!ofs) return DMSHandle::err_str(std::format("write error for '{}'", path));
+        return DMSHandle::ok_str(json{{"written",true},{"bytes",(int64_t)out.size()}});
     });
 
     wv.expose("dms_fetch_data_url", [](string path) -> string {
@@ -261,6 +327,56 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
             for (const auto& p : *res)
                 paths.push_back(normalise_picker_path(p.string()));
         return DMSHandle::ok_str(json{{"paths",paths}});
+    });
+
+    /**
+     * @brief Show a native Save-As dialog and return the chosen path.
+     *
+     * @param suggested_name  Pre-filled filename shown in the dialog (e.g. "Report.sdoc").
+     *                        May include a leading directory to open the dialog there.
+     * @param filter_ext      Extension without dot (e.g. "sdoc", "pdf").
+     *                        If the user omits the extension, it is appended automatically.
+     *
+     * Returns { path: "/abs/path/file.sdoc" } on confirmation.
+     * Returns { path: "" }                   if the user cancelled (not an error).
+     */
+    wv.expose("dms_select_save_path",
+              [&desk, normalise_picker_path](string suggested_name, string filter_ext) mutable -> string {
+        using namespace pce::dms;
+        namespace picker = saucer::modules::picker;
+
+        // try_invoke wraps a plain-value lambda (returns json, not Expected<json>).
+        // Throwing from inside propagates as an err_str; cancellation is a
+        // successful response with an empty path, not an error.
+        return try_invoke([&]() -> json {
+            picker::options opts{};
+            // Pre-fill the filename; this opens the parent dir on all platforms.
+            if (!suggested_name.empty())
+                opts.initial = fs::path{suggested_name};
+            // Extension filter — format "*.ext" is understood on macOS/GTK/Win.
+            // If a platform ignores it the dialog still appears; the extension
+            // enforcement below guarantees the correct suffix regardless.
+            if (!filter_ext.empty())
+                opts.filters.insert("*." + filter_ext);
+
+            const auto res = desk.pick<picker::type::save>(opts);
+            if (!res.has_value())
+                return json{{"path", ""}};  // user dismissed — not an error
+
+            auto path = normalise_picker_path(res->string());
+
+            // Some platforms (GTK, older macOS) strip the extension from the
+            // suggestion; append it if missing.
+            if (!filter_ext.empty()) {
+                const std::string dot_ext = "." + filter_ext;
+                if (!path.ends_with(dot_ext))
+                    path += dot_ext;
+            }
+
+            return json{{"path", path}};
+        })
+        .transform([](const json& j) { return DMSHandle::ok_str(j); })
+        .value_or(DMSHandle::err_str("save dialog failed"));
     });
 
     wv.expose("dms_copy_files",

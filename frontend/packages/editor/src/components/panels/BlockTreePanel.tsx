@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
+import { useClickOutside } from "../../hooks/useClickOutside";
 import { useEditor } from "../../store/editor-store";
 import { isTextBlock, type SBlock, type SBlockType } from "../../models/sdm";
 import { createBlock } from "../../models/sdm-factory";
@@ -99,15 +100,7 @@ interface BlockPickerPopoverProps {
 function BlockPickerPopover({ onPick, onClose }: BlockPickerPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+  useClickOutside(ref, onClose, true);
 
   return (
     <div

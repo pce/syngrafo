@@ -35,6 +35,14 @@ export function clearAssetBlobs(): void {
   cache.clear();
 }
 
+/**
+ * Return a snapshot of the current asset-URI → blob-URL map.
+ * Used by saveSdocToPath when packing a new .sdoc bundle on Save.
+ */
+export function getAssetBlobEntries(): Map<string, string> {
+  return new Map(blobStore);
+}
+
 function resolveToPath(src: string, docPath: string | null): string | null {
   if (src.startsWith("local://")) {
     return src.slice("local://".length);

@@ -10,7 +10,9 @@
   },
   "scripts": {
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "bun test src/services/__tests__",
+    "test:watch": "bun test --watch src/services/__tests__"
   },
   "peerDependencies": {
     "react": ">=18",

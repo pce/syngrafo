@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useEditor } from "../../store/editor-store";
-import { isTextBlock, type SBlock, type Span } from "../../models/sdm";
+import { isTextBlock, PAGE_SIZE_MM, type SBlock, type SPageConfig, type SStyleClass, type Span } from "../../models/sdm";
 import { Icon } from "../../components/Icon";
 import { ipcRawCall, parseIpcResult } from "../../services/ipc";
 import { htmlToBlocks } from "../../services/html-parser";
 import { blocksFromJson, decodeDocument } from "../../models";
-import { loadSdocBundle } from "../../services/sdoc-bundle";
-import { setAssetBlob, clearAssetBlobs } from "../../hooks/useAssetSrc";
+import { loadSdocBundle, saveSdocToPath } from "../../services/sdoc-bundle";
+import { setAssetBlob, clearAssetBlobs, getAssetBlobEntries } from "../../hooks/useAssetSrc";
+
 
 /** Removes runtime `nlp` fields from blocks before IPC transmission.
  *  The backend schema does not include NLP annotations and they must be
@@ -28,6 +29,14 @@ interface RecentExport {
   /** Always 0 for PDF exports — the native renderer writes the file
    *  asynchronously and the size is not known at IPC response time. */
   file_size: number;
+}
+
+interface RecentDoc {
+  uuid:       string;
+  title:      string;
+  zone_name:  string;
+  created_at: number;
+  updated_at: number;
 }
 
 function spansToHtml(spans: Span[]): string {
@@ -162,14 +171,46 @@ function blocksToPlainText(blocks: SBlock[]): string {
 
 export interface ExportPanelProps {
   onClose?: () => void;
+  /**
+   * Called when the user clicks "Export PDF" inside the panel.
+   * Should be wired to EditorShell's handleExportPDF so the shell can
+   * switch to a canvas context before saucer captures the webview.
+   * When omitted the panel falls back to calling dms_save_pdf directly
+   * (works only if a canvas is already rendered — use onExportPDF in
+   * production to avoid capturing the Files panel UI instead of the doc).
+   */
+  onExportPDF?: () => void;
 }
 
-export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
+export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.ReactElement {
   const { state, dispatch } = useEditor();
-  const { doc, isExporting } = state;
+  const { doc, isExporting, documentPath } = state;
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
+  const [recentDocs,          setRecentDocs]          = useState<RecentDoc[]>([]);
+  const [isLoadingRecentDocs, setIsLoadingRecentDocs] = useState(false);
+
+  // File-based templates scanned from data/documents/
+  interface TemplateFile {
+    name:     string;   // display name (derived from filename)
+    path:     string;   // native FS path
+    category: string;   // parent directory name
+    ext:      "json" | "sdoc";
+  }
+  const [templateFiles,         setTemplateFiles]         = useState<TemplateFile[]>([]);
+  const [isLoadingTemplates,    setIsLoadingTemplates]    = useState(false);
+  const [expandedCategories,    setExpandedCategories]    = useState<Set<string>>(new Set());
+
+  const toggleCategory = useCallback((cat: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }, []);
+
   const [importHtml, setImportHtml] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importJson, setImportJson]       = React.useState("");
@@ -207,11 +248,10 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
         const bundle = loadSdocBundle(dataUrl);
         for (const [uri, blobUrl] of bundle.assets) setAssetBlob(uri, blobUrl);
 
-        dispatch({ type: "SET_DOCUMENT", doc: bundle.document });
-        dispatch({ type: "SET_DOCUMENT_PATH", path });
+        dispatch({ type: "LOAD_DOCUMENT", doc: bundle.document, path, context: "layout" });
         dispatch({
           type: "SET_STATUS",
-          text: `Loaded “${bundle.document.meta.title}” — ${bundle.assets.size} asset${bundle.assets.size === 1 ? "" : "s"} embedded`,
+          text: `Loaded "${bundle.document.meta.title}" — ${bundle.assets.size} asset${bundle.assets.size === 1 ? "" : "s"} embedded`,
           kind: "success",
         });
         return;
@@ -235,8 +275,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
       ) {
         // Full SDM document — replace the current document
         const sdoc = decodeDocument(text);
-        dispatch({ type: "SET_DOCUMENT", doc: sdoc });
-        dispatch({ type: "SET_DOCUMENT_PATH", path });
+        dispatch({ type: "LOAD_DOCUMENT", doc: sdoc, path, context: "layout" });
         dispatch({
           type: "SET_STATUS",
           text: `Loaded "${sdoc.meta.title}" (${sdoc.blocks.length} blocks)`,
@@ -278,26 +317,186 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
     }
   }, []);
 
+  /** Load the 20 most-recently-saved documents from the workspace DB. */
+  const loadRecentDocs = useCallback(async () => {
+    setIsLoadingRecentDocs(true);
+    try {
+      const raw = await ipcRawCall("dms_document_list", "", 20);
+      const res = parseIpcResult<RecentDoc[]>(raw);
+      setRecentDocs(res.data ?? []);
+    } catch { /* silently ignore — no DB connection in some contexts */ }
+    finally { setIsLoadingRecentDocs(false); }
+  }, []);
+
+  /**
+   * Scan data/documents/ for .json and .sdoc template files.
+   * Each subfolder becomes a category (freeform, letter, invoice, …).
+   * Uses a relative path that works when the binary is run from the
+   * webviewapp/ root (development); for distribution set the
+   * syngrafo_templates_dir preference to the absolute bundle path.
+   */
+  const scanTemplates = useCallback(async () => {
+    setIsLoadingTemplates(true);
+    try {
+      // Load preference for custom templates dir, fall back to dev default.
+      const prefRaw = await ipcRawCall("dms_load_preference", "syngrafo_templates_dir");
+      const prefRes = parseIpcResult<{ value: string }>(prefRaw);
+      const templatesDir = prefRes.data?.value || "data/documents";
+
+      const raw = await ipcRawCall("dms_scan_dir", templatesDir, true);
+      const res = parseIpcResult<{
+        items: Array<{ name: string; path: string; is_dir: boolean }>
+      }>(raw);
+
+      const items = res.data?.items ?? [];
+      const entries: TemplateFile[] = items
+        .filter(i => !i.is_dir && (i.name.endsWith(".json") || i.name.endsWith(".sdoc")))
+        .map(i => {
+          // Derive category from the path: …/documents/CATEGORY/file.ext
+          const norm    = i.path.replace(/\\/g, "/");
+          const parts   = norm.split("/");
+          const docIdx  = parts.lastIndexOf("documents");
+          const category = docIdx >= 0 && parts[docIdx + 1]
+            ? parts[docIdx + 1]!
+            : "other";
+          const ext     = i.name.endsWith(".sdoc") ? "sdoc" as const : "json" as const;
+          const rawName = i.name.replace(/\.(json|sdoc)$/, "");
+          const displayName = rawName.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+          return { name: displayName, path: i.path, category, ext };
+        });
+
+      setTemplateFiles(entries);
+      // Auto-expand first category if nothing is expanded yet
+      const firstCat = entries[0]?.category;
+      if (firstCat) {
+        setExpandedCategories(prev => prev.size === 0 ? new Set([firstCat]) : prev);
+      }
+    } catch { /* offline or path not found — silently skip */ }
+    finally { setIsLoadingTemplates(false); }
+  }, []);
+
+  /**
+   * Open a template file by path.
+   * Assigns a fresh document UUID so the template itself is never overwritten.
+   */
+  const handleOpenTemplate = useCallback(async (tpl: { path: string; ext: "json" | "sdoc"; name: string }) => {
+    try {
+      let loadedDoc;
+      if (tpl.ext === "sdoc") {
+        const duRaw = await ipcRawCall("dms_fetch_data_url", tpl.path);
+        const duRes = parseIpcResult<{ data_url: string }>(duRaw);
+        const dataUrl = duRes.data?.data_url;
+        if (!dataUrl) throw new Error("Could not read bundle file");
+        clearAssetBlobs();
+        const bundle = loadSdocBundle(dataUrl);
+        for (const [uri, blobUrl] of bundle.assets) setAssetBlob(uri, blobUrl);
+        loadedDoc = bundle.document;
+      } else {
+        const readRaw = await ipcRawCall("dms_read_file", tpl.path);
+        const readRes = parseIpcResult<{ content: string | null }>(readRaw);
+        const text = readRes.data?.content;
+        if (!text) throw new Error("Empty template file");
+        loadedDoc = decodeDocument(text);
+      }
+      // Fresh document identity — never overwrites the template in the DB
+      const freshDoc = {
+        ...loadedDoc,
+        id:   crypto.randomUUID(),
+        meta: {
+          ...loadedDoc.meta,
+          created_at: Math.floor(Date.now() / 1000),
+          updated_at: Math.floor(Date.now() / 1000),
+        },
+      };
+      dispatch({ type: "LOAD_DOCUMENT", doc: freshDoc, path: null, context: "layout" });
+      dispatch({ type: "SET_STATUS", text: `New document from "${tpl.name}" — save to keep`, kind: "success" });
+    } catch (e) {
+      dispatch({ type: "SET_STATUS", text: e instanceof Error ? e.message : "Failed to load template", kind: "error" });
+    }
+  }, [dispatch]);
+
+  /** Open a previously-saved document by uuid. */
+  const handleOpenRecentDoc = useCallback(async (uuid: string) => {
+    try {
+      const raw = await ipcRawCall("dms_document_load", uuid);
+      const res = parseIpcResult<{
+        uuid: string; title: string;
+        blocks_json: string; styles_json: string;
+        page_json: string; zone_name: string;
+        created_at: number; updated_at: number;
+      }>(raw);
+      if (!res.data) throw new Error("Document not found in database");
+      const d = res.data;
+      // Reassemble into a full SDM JSON string so decodeDocument can
+      // validate the schema and fill any missing block ids.
+      const fullJson = JSON.stringify({
+        $schema: "syngrafo/1",
+        id:      d.uuid,
+        meta: {
+          title:      d.title,
+          zone:       d.zone_name || undefined,
+          created_at: d.created_at,
+          updated_at: d.updated_at,
+        },
+        page:   JSON.parse(d.page_json)   as SPageConfig,
+        styles: JSON.parse(d.styles_json) as Record<string, SStyleClass>,
+        blocks: JSON.parse(d.blocks_json),
+      });
+      const loadedDoc = decodeDocument(fullJson);
+      dispatch({ type: "LOAD_DOCUMENT", doc: loadedDoc, path: null, context: "layout" });
+      dispatch({ type: "SET_STATUS", text: `Opened "${loadedDoc.meta.title}"`, kind: "success" });
+    } catch (e) {
+      dispatch({ type: "SET_STATUS", text: e instanceof Error ? e.message : "Failed to open document", kind: "error" });
+    }
+  }, [dispatch]);
+
   useEffect(() => {
     void loadRecentExports();
-  }, [loadRecentExports]);
+    void loadRecentDocs();
+    void scanTemplates();
+  }, [loadRecentExports, loadRecentDocs, scanTemplates]);
 
   const handleSave = useCallback(async () => {
     if (!doc) return;
     try {
-      const raw = await ipcRawCall(
-        "dms_document_save",
-        doc.id,
-        doc.meta.title,
-        JSON.stringify(stripNlp(doc.blocks)),
-        JSON.stringify(doc.styles),
-        JSON.stringify(doc.page),
-        doc.meta.zone ?? "",
-      );
-      parseIpcResult(raw);
-      dispatch({ type: "SET_DIRTY", value: false });
-      dispatch({ type: "SET_STATUS", text: "Document saved", kind: "success" });
-      flash("Saved ✓");
+      if (documentPath?.toLowerCase().endsWith(".sdoc")) {
+        // ── Save back to the original .sdoc bundle on disk ──────────────────
+        // Pack the current document + assets into a new ZIP and overwrite the
+        // source file.  Assets are fetched from the in-memory blob store that
+        // was populated when the bundle was loaded.
+        const { missingAssets } = await saveSdocToPath(
+          documentPath,
+          doc,
+          getAssetBlobEntries(),
+        );
+        dispatch({ type: "SET_DIRTY", value: false });
+        if (missingAssets.length > 0) {
+          dispatch({
+            type: "SET_STATUS",
+            text: `Saved .sdoc (${missingAssets.length} asset${missingAssets.length === 1 ? "" : "s"} not embedded: ${missingAssets.join(", ")})`,
+            kind: "warning",
+          });
+          flash("Saved ⚠");
+        } else {
+          dispatch({ type: "SET_STATUS", text: "Saved to .sdoc file", kind: "success" });
+          flash("Saved ✓");
+        }
+      } else {
+        // ── Save to DMS database (original behaviour for .json / in-memory docs)
+        const raw = await ipcRawCall(
+          "dms_document_save",
+          doc.id,
+          doc.meta.title,
+          JSON.stringify(stripNlp(doc.blocks)),
+          JSON.stringify(doc.styles),
+          JSON.stringify(doc.page),
+          doc.meta.zone ?? "",
+        );
+        parseIpcResult(raw);
+        dispatch({ type: "SET_DIRTY", value: false });
+        dispatch({ type: "SET_STATUS", text: "Document saved", kind: "success" });
+        flash("Saved ✓");
+      }
     } catch (e) {
       dispatch({
         type: "SET_STATUS",
@@ -305,18 +504,67 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
         kind: "error",
       });
     }
-  }, [doc, dispatch]);
+  }, [doc, documentPath, dispatch]);
+
+  const handleSaveAsSdoc = useCallback(async () => {
+    if (!doc) return;
+    try {
+      // 1. Show the native Save-As dialog with a suggested filename.
+      const safeName = (doc.meta.title || "document").replace(/[\/\\:*?"<>|]/g, "_");
+      const pickRaw  = await ipcRawCall("dms_select_save_path", safeName + ".sdoc", "sdoc");
+      const pickRes  = parseIpcResult<{ path: string }>(pickRaw);
+      const savePath = pickRes.data?.path ?? "";
+      if (!savePath) return; // user cancelled
+
+      dispatch({ type: "SET_STATUS", text: "Packing .sdoc bundle\u2026", kind: "info" });
+
+      // 2. Pack and write the bundle (reuses existing saveSdocToPath helper).
+      const { missingAssets } = await saveSdocToPath(savePath, doc, getAssetBlobEntries());
+
+      // 3. Record in the recent-exports audit log.
+      await ipcRawCall(
+        "dms_record_export",
+        savePath, doc.id, doc.meta.title, doc.meta.zone ?? "", "sdoc",
+      );
+
+      // 4. Update the editor's document path so subsequent "Save" writes back to this file.
+      dispatch({ type: "SET_DOCUMENT_PATH", path: savePath });
+      dispatch({ type: "SET_DIRTY", value: false });
+
+      if (missingAssets.length > 0) {
+        dispatch({
+          type: "SET_STATUS",
+          text: `Saved .sdoc (${missingAssets.length} asset${missingAssets.length === 1 ? "" : "s"} missing: ${missingAssets.join(", ")})`,
+          kind: "warning",
+        });
+        flash("Saved \u26a0");
+      } else {
+        dispatch({ type: "SET_STATUS", text: `Saved as .sdoc: ${savePath.split("/").pop()}`, kind: "success" });
+        flash("Saved \u2713");
+      }
+      await loadRecentExports();
+    } catch (e) {
+      dispatch({
+        type: "SET_STATUS",
+        text: e instanceof Error ? e.message : String(e),
+        kind: "error",
+      });
+    }
+  }, [doc, dispatch, loadRecentExports]);
 
   const handleExportPDF = useCallback(async () => {
     if (!doc) return;
     dispatch({ type: "SET_EXPORTING", value: true });
     try {
+      // Resolve page dimensions in mm (landscape swaps w/h).
+      const baseSize = PAGE_SIZE_MM[doc.page.size];
+      const { w: wMm, h: hMm } = doc.page.orientation === "landscape"
+        ? { w: baseSize.h, h: baseSize.w }
+        : baseSize;
       const raw = await ipcRawCall(
         "dms_save_pdf",
-        doc.id,
-        doc.meta.title,
-        doc.meta.zone ?? "",
-        "",
+        doc.id, doc.meta.title, doc.meta.zone ?? "", "",
+        wMm, hMm, doc.page.orientation,
       );
       parseIpcResult(raw);
       dispatch({ type: "SET_STATUS", text: "PDF exported", kind: "success" });
@@ -469,6 +717,124 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
         )}
       </div>
 
+      {/* ── Templates (from data/documents/) ─────────────────────────── */}
+      <div className={sectionCls}>
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
+            <Icon name="layout" size="xs" />
+            Templates
+          </h3>
+          <button
+            onClick={() => void scanTemplates()}
+            disabled={isLoadingTemplates}
+            title="Rescan templates directory"
+            className="text-[9px] text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors disabled:opacity-40"
+          >
+            <Icon name="refresh" size="xs" className={isLoadingTemplates ? "animate-spin" : ""} />
+          </button>
+        </div>
+
+        {templateFiles.length === 0 ? (
+          <p className="text-[9px] text-[var(--theme-text-muted)] opacity-50 italic">
+            {isLoadingTemplates ? "Scanning\u2026" : "No templates found in data/documents/"}
+          </p>
+        ) : (
+          // Accordion — one collapsible section per category
+          (() => {
+            const byCategory = templateFiles.reduce<Record<string, typeof templateFiles>>((acc, t) => {
+              (acc[t.category] ??= []).push(t);
+              return acc;
+            }, {});
+            return Object.entries(byCategory).map(([cat, files]) => {
+              const isOpen = expandedCategories.has(cat);
+              return (
+                <div key={cat} className="border-b border-[var(--theme-border)] last:border-b-0">
+                  {/* Category toggle header */}
+                  <button
+                    onClick={() => toggleCategory(cat)}
+                    className="w-full flex items-center gap-2 py-2 text-left group hover:text-[var(--theme-primary)] transition-colors"
+                  >
+                    <Icon
+                      name={isOpen ? "chevron-down" : "chevron-right"}
+                      size="xs"
+                      className="text-[var(--theme-text-muted)] opacity-60 shrink-0 transition-transform"
+                    />
+                    <span className="flex-1 text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-80 group-hover:opacity-100 capitalize">
+                      {cat}
+                    </span>
+                    <span className="text-[8px] text-[var(--theme-text-muted)] opacity-40 font-normal">
+                      {files.length}
+                    </span>
+                  </button>
+                  {/* Template cards — shown only when expanded */}
+                  {isOpen && (
+                    <div className="grid grid-cols-2 gap-1.5 pb-2">
+                      {files.map(tpl => (
+                        <button
+                          key={tpl.path}
+                          onClick={() => void handleOpenTemplate(tpl)}
+                          className="flex flex-col items-start gap-0.5 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-2 text-left transition-colors hover:border-[var(--theme-primary)]/60 hover:bg-[var(--theme-primary)]/5 active:scale-[0.98]"
+                        >
+                          <span className="text-[10px] font-bold text-[var(--theme-text)] truncate w-full">{tpl.name}</span>
+                          <span className="text-[8px] text-[var(--theme-text-muted)] opacity-50 font-mono uppercase">{tpl.ext}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()
+        )}
+      </div>
+
+      {/* ── Recent Documents ─────────────────────────────────────────────── */}
+      <div className={sectionCls}>
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
+            <Icon name="file-text" size="xs" />
+            Recent Documents
+          </h3>
+          <button
+            onClick={() => void loadRecentDocs()}
+            disabled={isLoadingRecentDocs}
+            className="text-[9px] text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors disabled:opacity-40"
+            title="Refresh list"
+          >
+            <Icon name="refresh" size="xs" className={isLoadingRecentDocs ? "animate-spin" : ""} />
+          </button>
+        </div>
+        {recentDocs.length === 0 ? (
+          <p className="text-[9px] text-[var(--theme-text-muted)] opacity-50 italic">
+            {isLoadingRecentDocs ? "Loading…" : "No documents saved to database yet."}
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-[var(--theme-border)]">
+            {recentDocs.map((d) => (
+              <li key={d.uuid}>
+                <button
+                  onClick={() => void handleOpenRecentDoc(d.uuid)}
+                  className="w-full flex items-center gap-2 py-2 text-left group hover:bg-[var(--theme-primary)]/5 rounded transition-colors px-1"
+                >
+                  <Icon name="file-text" size="xs" className="shrink-0 text-[var(--theme-text-muted)] opacity-40 group-hover:opacity-70" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[11px] font-medium text-[var(--theme-text)] truncate group-hover:text-[var(--theme-primary)] transition-colors">
+                      {d.title || "Untitled"}
+                    </span>
+                    <span className="block text-[9px] text-[var(--theme-text-muted)] opacity-50">
+                      {new Date(d.updated_at * 1000).toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" })}
+                      {d.zone_name && d.zone_name !== "global" ? ` · ${d.zone_name}` : ""}
+                    </span>
+                  </span>
+                  <Icon name="chevron-right" size="xs" className="shrink-0 text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-40 transition-opacity" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ── Import HTML ──────────────────────────────────────────────────── */}
       <div className={sectionCls}>
         <div>
           <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
@@ -585,6 +951,12 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
         <button onClick={handleSave} className={btnPrimary}>
           Save Document
         </button>
+        <button onClick={() => void handleSaveAsSdoc()} className={btnOutline}>
+          <span className="flex items-center justify-center gap-1.5">
+            <Icon name="download" size="xs" />
+            Export as .sdoc bundle…
+          </span>
+        </button>
       </div>
 
       <div className={sectionCls}>
@@ -599,7 +971,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
             <strong>{doc.page.orientation}</strong>.
           </p>
         </div>
-        <button onClick={handleExportPDF} disabled={isExporting} className={btnPrimary}>
+        <button onClick={onExportPDF ?? handleExportPDF} disabled={isExporting} className={btnPrimary}>
           {isExporting ? (
             <span className="flex items-center justify-center gap-1.5">
               <Icon name="refresh" size="xs" /> Exporting…

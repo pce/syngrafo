@@ -261,3 +261,98 @@
     }
     .scrollbar-thin::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
 }
+
+/* ── PDF / Print isolation ──────────────────────────────────────────────────
+ *
+ * The editor portal (EditorPortal.tsx) renders as direct children of <body>:
+ *
+ *   <body>
+ *     <div ...>                       ← DMS Dashboard shell
+ *     <div id="sgf-editor-root">      ← EditorPortal (createPortal → body)
+ *       <header class="sgf-portal-header">Untitled · Esc to close</header>
+ *       <EditorShell>                 ← .sgf-ui chrome + .sgf-canvas-page
+ *
+ * Goal: only the .sgf-canvas-page content appears in the exported PDF.
+ *
+ * Two complementary mechanisms:
+ *   @media print        – applied by WKWebView.printOperationWithPrintInfo
+ *   body.sgf-exporting  – class toggled by handleExportPDF before IPC call
+ * Both fire together; each is a standalone fallback for the other.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@media print {
+    /* 1. Suppress entire DMS shell — show only the editor portal root */
+    body > *:not(#sgf-editor-root) { display: none !important; }
+
+    /* 2. The portal is position:fixed on screen (full-viewport overlay).
+     *    In print layout, fixed elements don't clip the rest of the document,
+     *    so we switch to static to participate in the normal page flow.      */
+    #sgf-editor-root {
+        position: static !important;
+        height:   auto   !important;
+        overflow: visible !important;
+    }
+
+    /* 3. Hide the portal's own chrome ("Untitled · Esc to close" bar)        */
+    .sgf-portal-header { display: none !important; }
+
+    /* 4. Hide all editor-internal chrome (toolbar, panels, status bar …)
+     *    .sgf-ui is the shared marker class used throughout EditorShell.tsx  */
+    .sgf-ui { display: none !important; }
+
+    /* 5. Let the canvas scroll container expand to its natural height         */
+    .sgf-canvas-outer {
+        overflow:   visible !important;
+        height:     auto    !important;
+        background: white   !important;
+    }
+
+    /* 6. Remove the decorative shadow/margin so the page bleeds to the edge  */
+    .sgf-canvas-page {
+        box-shadow:    none !important;
+        margin:        0    !important;
+        border-radius: 0    !important;
+        width:         100% !important;
+    }
+
+    /* 7. index.css sets body { min-h-screen; overflow-hidden } — undo that   */
+    html, body {
+        overflow:   visible !important;
+        height:     auto    !important;
+        min-height: auto    !important;
+    }
+}
+
+/* ── Same isolation via body class (programmatic toggle) ─────────────────── */
+/* Added/removed by handleExportPDF in EditorShell.tsx around dms_save_pdf.   */
+/* Matches the @media print rules above so both mechanisms are in sync.        */
+body.sgf-exporting > *:not(#sgf-editor-root) { display: none !important; }
+
+body.sgf-exporting #sgf-editor-root {
+    position: static !important;
+    height:   auto   !important;
+    overflow: visible !important;
+}
+
+body.sgf-exporting .sgf-portal-header { display: none !important; }
+body.sgf-exporting .sgf-ui            { display: none !important; }
+
+body.sgf-exporting .sgf-canvas-outer {
+    overflow:   visible !important;
+    height:     auto    !important;
+    background: white   !important;
+}
+
+body.sgf-exporting .sgf-canvas-page {
+    box-shadow:    none !important;
+    margin:        0    !important;
+    border-radius: 0    !important;
+    width:         100% !important;
+}
+
+body.sgf-exporting,
+body.sgf-exporting html {
+    overflow:   visible !important;
+    height:     auto    !important;
+    min-height: auto    !important;
+}

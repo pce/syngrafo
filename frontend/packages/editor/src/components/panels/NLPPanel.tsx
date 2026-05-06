@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React from "react";
 import { useEditor } from "../../store/editor-store";
-import { runAnalysis, isNLPConnected } from "../../services/nlp-analyzer";
+import { isNLPConnected } from "../../services/nlp-analyzer";
 import type { NLPVisibilityFlags } from "../../models/editor-context";
 import { POS_COLORS, NER_COLORS, posLabel } from "../../models/nlp";
 import type { DocumentNLPSummary } from "../../models/nlp";
 import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
+import { useNLPAnalyze } from "../../hooks/useNLPAnalyze";
 
 interface FlagMeta {
   key: keyof NLPVisibilityFlags;
@@ -171,34 +172,12 @@ function SummarySection({ summary }: { summary: DocumentNLPSummary }) {
 
 export function NLPPanel() {
   const { state, dispatch } = useEditor();
-  const { nlpFlags, nlpSummary, isAnalyzing, doc } = state;
+  const { nlpFlags, nlpSummary, doc } = state;
 
-  const [error, setError] = useState<string | null>(null);
+  const { analyze: handleAnalyze, isAnalyzing, error } = useNLPAnalyze(!!doc);
 
   const setFlag = (key: keyof NLPVisibilityFlags, value: boolean) => {
     dispatch({ type: "SET_NLP_FLAGS", flags: { [key]: value } });
-  };
-
-  const handleAnalyze = async () => {
-    if (!doc) return;
-    setError(null);
-    dispatch({ type: "SET_ANALYZING", value: true });
-    try {
-      const result = await runAnalysis(doc);
-      dispatch({ type: "SET_NLP_SUMMARY", summary: result.summary });
-      dispatch({ type: "SET_DOCUMENT", doc: result.doc });
-      if (result.count === 0) {
-        dispatch({ type: "SET_STATUS", text: "No text blocks to analyze", kind: "warning" });
-      } else {
-        dispatch({ type: "SET_STATUS", text: `Analyzed ${result.count} block${result.count === 1 ? "" : "s"}`, kind: "success" });
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      dispatch({ type: "SET_STATUS", text: msg, kind: "error" });
-    } finally {
-      dispatch({ type: "SET_ANALYZING", value: false });
-    }
   };
 
   return (

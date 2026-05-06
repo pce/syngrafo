@@ -23,9 +23,44 @@ export * from "./models/editor-context";
 export * from "./models/skill";
 
 // React store
-export { EditorProvider, useEditor, useEditorDoc, useSelectedBlock } from "./store/editor-store";
+export { EditorProvider, useEditor, useEditorDoc, useSelectedBlock, useCanUndo, useCanRedo } from "./store/editor-store";
 export type { EditorState, EditorAction } from "./store/editor-store";
 
 // Shell component
 export { EditorShell } from "./EditorShell";
 export type { EditorShellProps } from "./EditorShell";
+
+// LM service (local GGUF + remote OpenAI/Ollama)
+export {
+  isLMAvailable,
+  lmStatus,
+  lmLoad,
+  lmUnload,
+  lmChat,
+  lmCancel,
+  lmCancelAll,
+  setLMProviderConfig,
+  getLMProviderConfig,
+} from "./services/lm-service";
+export type {
+  LMRole,
+  LMMessage,
+  LMRequest,
+  LMResponse,
+  LMUsage,
+  LMStatus,
+  LMProvider,
+  LMProviderConfig,
+} from "./services/lm-service";
+
+// LM prompt builder (SDM + HTML paths) + SDM block parser
+export {
+  LMPromptBuilder,
+  lmPromptBuilder,
+  parseSdmBlocks,
+  buildSdmDocumentContext,
+} from "./services/lm-prompt-builder";
+export type { ILMPromptBuilder, StyleEntry } from "./services/lm-prompt-builder";
+
+// HTML parser utilities
+export { htmlToBlocks, blocksToHtml, htmlToSpans, spansToHtml } from "./services/html-parser";

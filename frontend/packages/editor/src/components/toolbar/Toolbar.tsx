@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
-import { useEditor, useSelectedBlock } from "../../store/editor-store";
+import React, { useState, useRef } from "react";
+import { useEditor, useSelectedBlock, useCanUndo, useCanRedo } from "../../store/editor-store";
+import { useClickOutside } from "../../hooks/useClickOutside";
 import { isTextBlock, type TextBlockType, type SBlock } from "../../models/sdm";
 import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
@@ -51,14 +52,7 @@ function BlockTypeSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useClickOutside(ref, () => setOpen(false), open);
 
   if (!block || !isTextBlock(block) || !SWITCHABLE_TEXT_TYPES.includes(block.type as TextBlockType)) {
     return (
@@ -114,14 +108,7 @@ function StyleClassPicker() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useClickOutside(ref, () => setOpen(false), open);
 
   if (!block) return null;
 
@@ -193,6 +180,8 @@ function StyleClassPicker() {
 export function Toolbar(): React.ReactElement {
   const { dispatch } = useEditor();
   const block = useSelectedBlock();
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
 
   const currentAlign = block?.styleOverrides?.align ?? null;
 
@@ -212,6 +201,22 @@ export function Toolbar(): React.ReactElement {
 
   return (
     <div className="sgf-ui shrink-0 flex items-center gap-1 px-2 py-1 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] overflow-x-auto">
+      {/* Undo / Redo */}
+      <ToolBtn
+        icon="undo"
+        label="Undo (⌘Z)"
+        onClick={() => dispatch({ type: "UNDO" })}
+        disabled={!canUndo}
+      />
+      <ToolBtn
+        icon="redo"
+        label="Redo (⌘⇧Z)"
+        onClick={() => dispatch({ type: "REDO" })}
+        disabled={!canRedo}
+      />
+
+      <Divider />
+
       {/* Block type */}
       <BlockTypeSwitcher />
 

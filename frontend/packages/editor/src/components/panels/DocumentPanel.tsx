@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useEditor } from "../../store/editor-store";
-import { isTextBlock, type PageSize, type PageOrientation, type SpacingToken } from "../../models/sdm";
+import { type PageSize, type PageOrientation, type SpacingToken, type SPageBackground } from "../../models/sdm";
 import { type DocumentIntent, DOCUMENT_INTENT_META } from "../../models/editor-context";
-import { flattenBlocks } from "../../models/sdm-factory";
+import { useDocumentStats } from "../../hooks/useDocumentStats";
 
 const PAGE_SIZES: PageSize[] = ["a4", "a5", "a3", "a6", "a0", "a1", "a2", "letter", "legal"];
 const SPACING_TOKENS: SpacingToken[] = ["none", "xs", "sm", "md", "lg", "xl", "2xl"];
@@ -36,22 +36,9 @@ export function DocumentPanel() {
     setLocalFilename(doc?.meta.filename ?? "");
   }, [doc?.id]);
 
-  const stats = useMemo(() => {
-    if (!doc) return { blockCount: 0, wordCount: 0, charCount: 0 };
-    const flat = flattenBlocks(doc.blocks);
-    const text = flat
-      .filter(isTextBlock)
-      .flatMap((b) => b.spans)
-      .map((s) => s.text)
-      .join(" ");
-    return {
-      blockCount: flat.length,
-      wordCount: text.trim().split(/\s+/).filter(Boolean).length,
-      charCount: text.length,
-    };
-  }, [doc]);
+  const stats = useDocumentStats(doc);
 
-  if (!doc) {
+  if (!doc || !stats) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-muted)] opacity-50 p-4">
         <span className="text-[9px] font-medium uppercase tracking-wide">No document loaded</span>
@@ -184,6 +171,119 @@ export function DocumentPanel() {
                 </option>
               ))}
             </select>
+          </Row>
+
+          <Row label="Page Numbers">
+            <button
+              onClick={() =>
+                dispatch({
+                  type: "UPDATE_PAGE",
+                  page: { showPageNumbers: !doc.page.showPageNumbers },
+                })
+              }
+              title="Print a page counter in the PDF footer (requires WebKit ≥ 2022 or Chromium ≥ 119)"
+              className={[
+                "w-full py-1 rounded border text-[9px] font-bold transition-colors",
+                doc.page.showPageNumbers
+                  ? "bg-[var(--theme-primary)] border-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
+                  : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50",
+              ].join(" ")}
+            >
+              {doc.page.showPageNumbers ? "On" : "Off"}
+            </button>
+          </Row>
+        </div>
+
+        {/* Background */}
+        <div className="px-2 py-2 space-y-2">
+          <div className="text-[8px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 mb-1.5">
+            Background
+          </div>
+
+          {/* Color swatch presets */}
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              { label: "White",       value: "#ffffff" },
+              { label: "Warm Paper",  value: "#faf7f2" },
+              { label: "Cream",       value: "#fffef0" },
+              { label: "Slate",       value: "#f0f4f8" },
+              { label: "Night",       value: "#1a1a2e" },
+              { label: "Ink",         value: "#0f172a" },
+              { label: "Transparent", value: "transparent" },
+            ] as const).map(({ label, value }) => (
+              <button
+                key={value}
+                title={label}
+                onClick={() =>
+                  dispatch({
+                    type: "UPDATE_PAGE",
+                    page: {
+                      background: value === "transparent"
+                        ? { color: "transparent" }
+                        : { color: value },
+                    } as Partial<import("../../models/sdm").SPageConfig>,
+                  })
+                }
+                className={[
+                  "w-6 h-6 rounded border transition-transform hover:scale-110",
+                  (doc.page.background?.color ?? "#ffffff") === value
+                    ? "border-[var(--theme-primary)] ring-1 ring-[var(--theme-primary)]"
+                    : "border-[var(--theme-border)]",
+                  value === "transparent"
+                    ? "bg-[repeating-conic-gradient(#ccc_0%_25%,white_0%_50%)] bg-[length:8px_8px]"
+                    : "",
+                ].join(" ")}
+                style={value !== "transparent" ? { backgroundColor: value } : {}}
+              />
+            ))}
+          </div>
+
+          {/* Custom color hex input */}
+          <Row label="Custom Color">
+            <div className="flex gap-1.5 items-center">
+              <input
+                type="color"
+                value={
+                  doc.page.background?.color?.startsWith("#")
+                    ? doc.page.background.color
+                    : "#ffffff"
+                }
+                onChange={(e) =>
+                  dispatch({
+                    type: "UPDATE_PAGE",
+                    page: { background: { color: e.target.value } } as Partial<import("../../models/sdm").SPageConfig>,
+                  })
+                }
+                className="w-7 h-7 rounded border border-[var(--theme-border)] cursor-pointer p-0.5 bg-transparent"
+                title="Pick background color"
+              />
+              <input
+                type="text"
+                value={doc.page.background?.color ?? ""}
+                onChange={(e) =>
+                  dispatch({
+                    type: "UPDATE_PAGE",
+                    page: { background: { color: e.target.value } } as Partial<import("../../models/sdm").SPageConfig>,
+                  })
+                }
+                placeholder="#ffffff or rgba(…)"
+                className={INPUT_CLASS}
+              />
+              {doc.page.background?.color && (
+                <button
+                  onClick={() =>
+                    dispatch({
+                      type: "UPDATE_PAGE",
+                      page: { background: undefined } as unknown as Partial<import("../../models/sdm").SPageConfig>,
+                    })
+                  }
+                  title="Reset to white"
+                  className="shrink-0 text-[9px] text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </Row>
         </div>
 

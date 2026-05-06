@@ -82,7 +82,17 @@ function StylePanelContent() {
 
   const currentStyleId = block.style ?? null;
 
+  // editMode: "class" = editing the style class definition itself;
+  //           "override" = editing per-block styleOverrides.
+  // Defaults to "class" when a class is selected, "override" otherwise.
+  const [editMode, setEditMode] = React.useState<"class" | "override">(() =>
+    currentStyleId ? "class" : "override"
+  );
 
+  // Reset editMode whenever the selected block or its class changes.
+  React.useEffect(() => {
+    setEditMode(currentStyleId ? "class" : "override");
+  }, [block.id, currentStyleId]);
 
   const isText = isTextBlock(block);
   const textValue = isText ? block.spans.map((s) => s.text).join("") : "";
@@ -112,15 +122,72 @@ function StylePanelContent() {
     });
   };
 
+  // Dispatches to either UPDATE_STYLE_CLASS (class mode) or patchOverrides (override mode).
+  const patchStyle = (patch: Record<string, unknown>) => {
+    if (editMode === "class" && currentStyleId) {
+      dispatch({
+        type: "UPDATE_STYLE_CLASS",
+        id: currentStyleId,
+        patch: patch as Partial<SStyleProps>,
+      });
+    } else {
+      patchOverrides(patch);
+    }
+  };
+
+  // Clears all props for the current edit target (class or block overrides).
+  const clearCurrentProps = () => {
+    if (editMode === "class" && currentStyleId) {
+      dispatch({ type: "ADD_STYLE_CLASS", id: currentStyleId, cls: { props: {} } });
+    } else {
+      dispatch({
+        type: "UPDATE_BLOCK",
+        id: block.id,
+        patch: { styleOverrides: undefined } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+      });
+    }
+  };
+
   const overrides = block.styleOverrides ?? {};
+
+  // What the Typography section reads and writes — depends on editMode.
+  const currentProps: Partial<SStyleProps> =
+    editMode === "class" && currentStyleId
+      ? (styles[currentStyleId]?.props ?? {})
+      : overrides;
+
+  // Mode toggle bar — only visible when a class is selected.
+  const modeToggle = currentStyleId && (
+    <div className="flex border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/20">
+      {(["class", "override"] as const).map((m) => (
+        <button
+          key={m}
+          onClick={() => setEditMode(m)}
+          className={[
+            "flex-1 py-1 text-[9px] font-bold uppercase tracking-wider transition-colors",
+            editMode === m
+              ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
+              : "text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)]",
+          ].join(" ")}
+          title={
+            m === "class"
+              ? `Edit style class "${currentStyleId}" (changes apply to all blocks using this class)`
+              : "Edit per-block style overrides"
+          }
+        >
+          {m === "class" ? `Class: ${currentStyleId}` : "Block overrides"}
+        </button>
+      ))}
+    </div>
+  );
 
   const typographySection = (
     <Section title="Typography">
       {/* Font */}
       <FieldLabel>Font</FieldLabel>
       <select
-        value={overrides.font ?? ""}
-        onChange={(e) => patchOverrides({ font: (e.target.value as FontToken) || undefined })}
+        value={currentProps.font ?? ""}
+        onChange={(e) => patchStyle({ font: (e.target.value as FontToken) || undefined })}
         className={SELECT_CLASS}
       >
         <option value="">— inherit —</option>
@@ -132,8 +199,8 @@ function StylePanelContent() {
       {/* Size */}
       <FieldLabel>Size</FieldLabel>
       <select
-        value={overrides.size ?? ""}
-        onChange={(e) => patchOverrides({ size: (e.target.value as SizeToken) || undefined })}
+        value={currentProps.size ?? ""}
+        onChange={(e) => patchStyle({ size: (e.target.value as SizeToken) || undefined })}
         className={SELECT_CLASS}
       >
         <option value="">— inherit —</option>
@@ -145,8 +212,8 @@ function StylePanelContent() {
       {/* Weight */}
       <FieldLabel>Weight</FieldLabel>
       <select
-        value={overrides.weight ?? ""}
-        onChange={(e) => patchOverrides({ weight: (e.target.value as WeightToken) || undefined })}
+        value={currentProps.weight ?? ""}
+        onChange={(e) => patchStyle({ weight: (e.target.value as WeightToken) || undefined })}
         className={SELECT_CLASS}
       >
         <option value="">— inherit —</option>
@@ -162,10 +229,10 @@ function StylePanelContent() {
         {(["normal", "italic"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => patchOverrides({ style: overrides.style === s ? undefined : s })}
+            onClick={() => patchStyle({ style: currentProps.style === s ? undefined : s })}
             className={[
               "flex-1 py-0.5 capitalize transition-colors",
-              overrides.style === s
+              currentProps.style === s
                 ? "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] font-bold"
                 : "hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)]",
             ].join(" ")}
@@ -178,8 +245,8 @@ function StylePanelContent() {
       {/* Leading */}
       <FieldLabel>Line height</FieldLabel>
       <select
-        value={overrides.leading ?? ""}
-        onChange={(e) => patchOverrides({ leading: (e.target.value as LeadingToken) || undefined })}
+        value={currentProps.leading ?? ""}
+        onChange={(e) => patchStyle({ leading: (e.target.value as LeadingToken) || undefined })}
         className={SELECT_CLASS}
       >
         <option value="">— inherit —</option>
@@ -194,10 +261,10 @@ function StylePanelContent() {
         {(["left","center","right","justify"] as const).map((a) => (
           <button
             key={a}
-            onClick={() => patchOverrides({ align: overrides.align === a ? undefined : a })}
+            onClick={() => patchStyle({ align: currentProps.align === a ? undefined : a })}
             className={[
               "flex-1 py-0.5 rounded border text-[9px] font-mono transition-all capitalize",
-              overrides.align === a
+              currentProps.align === a
                 ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 text-[var(--theme-primary)] font-bold"
                 : "border-[var(--theme-border)] hover:border-[var(--theme-primary)]/50 text-[var(--theme-text-muted)]",
             ].join(" ")}
@@ -213,21 +280,21 @@ function StylePanelContent() {
       <div className="flex gap-1.5 items-center">
         <input
           type="color"
-          value={overrides.color ?? "#000000"}
-          onChange={(e) => patchOverrides({ color: e.target.value })}
+          value={currentProps.color ?? "#000000"}
+          onChange={(e) => patchStyle({ color: e.target.value })}
           className="w-7 h-7 rounded border border-[var(--theme-border)] cursor-pointer p-0.5 bg-transparent"
           title="Text color"
         />
         <input
           type="text"
-          value={overrides.color ?? ""}
-          onChange={(e) => patchOverrides({ color: e.target.value || undefined })}
+          value={currentProps.color ?? ""}
+          onChange={(e) => patchStyle({ color: e.target.value || undefined })}
           placeholder="inherit"
           className="flex-1 rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[9px] px-1.5 py-1 font-mono focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
         />
-        {overrides.color && (
+        {currentProps.color && (
           <button
-            onClick={() => patchOverrides({ color: undefined })}
+            onClick={() => patchStyle({ color: undefined })}
             className="text-[9px] text-[var(--theme-text-muted)] hover:text-rose-500 transition-colors"
             title="Clear"
           >
@@ -241,21 +308,21 @@ function StylePanelContent() {
       <div className="flex gap-1.5 items-center">
         <input
           type="color"
-          value={overrides.background ?? "#ffffff"}
-          onChange={(e) => patchOverrides({ background: e.target.value })}
+          value={currentProps.background ?? "#ffffff"}
+          onChange={(e) => patchStyle({ background: e.target.value })}
           className="w-7 h-7 rounded border border-[var(--theme-border)] cursor-pointer p-0.5 bg-transparent"
           title="Background color"
         />
         <input
           type="text"
-          value={overrides.background ?? ""}
-          onChange={(e) => patchOverrides({ background: e.target.value || undefined })}
+          value={currentProps.background ?? ""}
+          onChange={(e) => patchStyle({ background: e.target.value || undefined })}
           placeholder="none"
           className="flex-1 rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[9px] px-1.5 py-1 font-mono focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
         />
-        {overrides.background && (
+        {currentProps.background && (
           <button
-            onClick={() => patchOverrides({ background: undefined })}
+            onClick={() => patchStyle({ background: undefined })}
             className="text-[9px] text-[var(--theme-text-muted)] hover:text-rose-500 transition-colors"
             title="Clear"
           >
@@ -264,19 +331,45 @@ function StylePanelContent() {
         )}
       </div>
 
-      {/* Clear all overrides */}
-      {Object.keys(overrides).length > 0 && (
+      {/* Border radius */}
+      <FieldLabel>Rounding</FieldLabel>
+      <select
+        value={currentProps.border?.radius ?? ""}
+        onChange={(e) => {
+          const radius = e.target.value || undefined;
+          const existingBorder = currentProps.border ?? {};
+          const newBorder = radius
+            ? { ...existingBorder, radius }
+            : Object.keys(existingBorder).filter((k) => k !== "radius").length > 0
+              ? (({ radius: _r, ...rest }) => rest)(existingBorder)
+              : undefined;
+          patchStyle({ border: newBorder });
+        }}
+        className={SELECT_CLASS}
+      >
+        <option value="">— none —</option>
+        <option value="none">none</option>
+        <option value="sm">sm</option>
+        <option value="md">md</option>
+        <option value="lg">lg</option>
+        <option value="full">full (pill)</option>
+      </select>
+
+      {/* Clear / Reset button */}
+      {editMode === "override" && Object.keys(overrides).length > 0 && (
         <button
-          onClick={() =>
-            dispatch({
-              type: "UPDATE_BLOCK",
-              id: block.id,
-              patch: { styleOverrides: undefined } as unknown as Partial<Omit<SBlock, "type" | "id">>,
-            })
-          }
+          onClick={clearCurrentProps}
           className="text-[9px] text-rose-500 hover:underline mt-0.5"
         >
           Clear all overrides
+        </button>
+      )}
+      {editMode === "class" && currentStyleId && Object.keys(currentProps).length > 0 && (
+        <button
+          onClick={clearCurrentProps}
+          className="text-[9px] text-rose-500 hover:underline mt-0.5"
+        >
+          Reset class props
         </button>
       )}
     </Section>
@@ -284,7 +377,7 @@ function StylePanelContent() {
 
   const [newClassName, setNewClassName] = useState("");
 
-  const saveAsClassSection = Object.keys(overrides).length > 0 && (
+  const saveAsClassSection = editMode === "override" && Object.keys(overrides).length > 0 && (
     <Section title="Save as Style Class">
       <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-snug">
         Save the current overrides as a reusable named class.
@@ -579,6 +672,7 @@ function StylePanelContent() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {modeToggle}
         {typographySection}
         {saveAsClassSection}
         {contentSection}

@@ -1,54 +1,31 @@
-== Concept
-
-
+= Syngrafo Editor Package
 :toc: left
+:toclevels: 2
 
+== Overview
 
+`@syngrafo/editor` is a self-contained React component library that provides a
+block-based document editor built on the Syngrafo Document Model (SDM).  It has
+no framework dependency beyond React 19 and communicates with the native host
+via a thin IPC service (`services/ipc.ts`).
 
-// Proposed SDM redesign
+== Architecture
 
-Pure interfaces, no class instances:
+----
+EditorShell          top-level component — context tabs, panels, header, PDF export
+  EditorProvider     zustand-free useReducer store (editor-store.tsx)
+  EditorCanvas       document canvas — renders blocks, page rulers, @page CSS
+  Toolbar            block type / align / style controls + undo / redo
+  BlockView          per-block renderer (text, img, layout, table, callout …)
+  DocumentPanel      page size / margin / background / page-numbers settings
+  StylePanel         named style classes + per-block overrides
+  BlockTreePanel     document outline with drag-to-reorder
+  StatsPanel         word / char / readability stats
+  NLPPanel           NLP annotation overlay controls
+  ExportPanel        Files tab — templates, recent docs, save/export, import
+----
 
-`SBlock`, `SDocument`, `SStyleClass` are plain data. The store owns them. No signals in the model layer.
-
-// Discriminated union instead of `BlockMetadata` catch-all
-
-
-
-
-
-== Naming
-
-[cols="1,3"]
-|===
-| Term | Meaning
-
-| *SDM*
-| Syngrafo Document Model — the canonical in-memory and on-disk representation.
-  File extension: `.sdoc`.
-
-| *Block*
-| A single node in the document tree.
-  Every block has an `id`, a `type`, optional `style` class, and type-specific fields.
-
-| *Span*
-| An inline text run inside a text block.  Carries marks (`bold`, `italic`, …)
-  and an optional `style` class for colour/font overrides.
-
-| *Style class*
-| A named, reusable set of typed properties defined in `doc.styles`.
-  Applied via `"style": "class-name"` on any block or span.
-  The author never writes raw CSS; the renderer resolves classes at export time.
-
-| *Import*
-| `HTML → SDM`  Parses an HTML document into a block tree.
-
-| *Render*
-| `SDM → HTML`  or  `SDM → PDF`  — the output pipeline.
-|===
-
-
-== Scheme Draft
+== Syngrafo Document Model (SDM)
 
 === Document envelope
 
@@ -57,36 +34,40 @@ Pure interfaces, no class instances:
 {
   "$schema": "syngrafo/1",
   "id":      "<uuid-v4>",
-
   "meta": {
-    "title":      "",
-    "created_at": 0,
-    "updated_at": 0,
+    "title":      "My Document",
+    "created_at": 1700000000,
+    "updated_at": 1700000000,
     "zone":       null,
     "author":     null,
     "tags":       []
   },
-
   "page": {
-    "size":        "a4",
-    "orientation": "portrait",
-    "margin":      "md"
+    "size":            "a4",
+    "orientation":     "portrait",
+    "margin":          "md",
+    "background":      { "color": "#faf7f2" },
+    "showPageNumbers": false
   },
-
   "styles": {
-    "display-title": { "font": "serif", "size": "3xl", "weight": "bold", "color": "#1a1a1a" },
-    "subtitle":      { "font": "sans",  "size": "lg",  "weight": "normal", "color": "#555" },
-    "accent-rule":   { "color": "#c00", "width": "2px" }
+    "display-title": { "props": { "font": "serif", "size": "3xl", "weight": "bold" } }
   },
-
   "blocks": []
 }
 ----
 
+`background.color` accepts any CSS color string.  Defaults to white when absent.
+Set `"transparent"` for overlay / screencast use.
+Printed faithfully via `-webkit-print-color-adjust: exact`.
+
 NOTE: Images are *never* stored as base64 inside the document.
-They are referenced by `src` (asset UUID, relative path, or `local://` URL).
+They are referenced by `src` (`asset://filename`, `local://abs-path`, or `https://…`).
 Base64 is only produced at PDF/HTML export time.
 
+=== Page sizes
+
+`a0`–`a6`, `letter`, `legal` — all stored as labels and resolved to mm at render time
+via `PAGE_SIZE_MM` in `models/sdm.ts`.
 
 === Block catalog
 
@@ -94,273 +75,171 @@ Base64 is only produced at PDF/HTML export time.
 |===
 | Type | Category | Notes
 
-| `p` | Text | Paragraph.  Contains `spans[]`.
-| `h1` `h2` `h3` `h4` | Text | Headings.  Contains `spans[]`.
-| `quote` | Text | Block quote.  Contains `spans[]`.
-| `li` | Text | List item.  Contains `spans[]`.
-| `ul` `ol` | List | Contains `li` children.
-| `code` | Verbatim | `text` string + `language` hint.  Monospace, no spans.
-| `img` | Media | `src`, `alt`, `fit` (`contain`/`cover`/`fill`).
-| `hr` | Structural | Thematic divider.  Style class controls colour + thickness.
-| `pagebreak` | Structural | Forces a new PDF page.
-| `hbox` | Layout | Horizontal flex container.  Children are `col` blocks.
-| `vbox` | Layout | Vertical flex container.  Children are any block.
-| `col` | Layout | Column inside `hbox` or `grid`.  Has `width` and `span`.
-| `grid` | Layout | CSS-grid container.  `columns` defines track sizes.
-| `table` | Data | Rows → `tr`, cells → `td`/`th`.  Future: `data_source`.
-| `tr` | Data | Table row.  Children are `td`/`th`.
-| `td` `th` | Data | Table cell.  Contains `spans[]`.
+| `p` | Text | Paragraph
+| `h1` `h2` `h3` `h4` | Text | Headings
+| `quote` | Text | Block quotation
+| `li` | Text | List item (child of `ul`/`ol`)
+| `td` `th` | Data | Table cell / header cell
+| `figcaption` | Text | Image caption
+| `ul` `ol` | List | Contains `li` children
+| `code` | Verbatim | `text` string + `language` hint
+| `img` | Media | `src`, `alt`, `fit` (contain/cover/fill), `caption`
+| `hr` | Structural | Thematic divider
+| `pagebreak` | Structural | Forces a new PDF page
+| `callout` | Semantic | `variant` (info/tip/warning/danger/success/note), `title`, `children`
+| `hbox` | Layout | Horizontal flex container — direct children must be `col`
+| `vbox` | Layout | Vertical flex container — children can be any block
+| `col` | Layout | Column inside `hbox`/`grid`.  Has `width` and `span`
+| `grid` | Layout | CSS-grid container.  `columns` defines track sizes
+| `table` | Data | Rows (`tr`) → cells (`td`/`th`).  Optional `data_source`
+| `tr` | Data | Table row
 |===
 
+=== Style properties (`SStyleProps`)
 
-=== Block node — shared fields
+Token-based — no raw CSS ever written by the author.
 
-[source,json]
-----
-{
-  "id":   "<uuid>",
-  "type": "<see catalog>",
+`font` (serif/sans/mono) · `size` (xs–4xl) · `weight` (normal/medium/semibold/bold) ·
+`style` (normal/italic) · `color` (hex/rgba) · `background` (hex/rgba) ·
+`leading` (tight–loose) · `tracking` (tight/normal/wide/wider) ·
+`align` (left/center/right/justify) · `decoration` (none/underline/line-through) ·
+`border` { color, width, side, radius } · `spacing` { inner, outer }
 
-  "style":   "class-name-or-null",
-
-  "spacing": {
-    "inner": "none | xs | sm | md | lg | xl | 2xl",
-    "outer": "none | xs | sm | md | lg | xl | 2xl"
-  },
-
-  "align": {
-    "h": "start | center | end | fill",
-    "v": "top   | middle | bottom | fill"
-  },
-
-  "children": []
-}
-----
-
-`spacing.inner` maps to CSS `padding` at render time. +
-`spacing.outer` maps to CSS `margin`.  +
-Authors never see pixels — only the scale token.
-
-
-=== Spacing and alignment as UI abstractions
-
-[cols="1,3"]
-|===
-| UI control | Maps to
-
-| `[ ← ]  [ ↔ ]  [ → ]  [ ↕ ]`
-| `align.h`: `start`, `center`, `end`, `fill`
-
-| `[ ↑ ]  [ ↕ ]  [ ↓ ]  [ ↕ ]`
-| `align.v`: `top`, `middle`, `bottom`, `fill`
-
-| Spacing slider / token picker `xs … 2xl`
-| `spacing.inner` or `spacing.outer` depending on selection context
-|===
-
-The Property Panel shows these controls for the *selected block*.
-Alignment set on a *container* (`hbox`/`vbox`/`grid`) applies to all its children. +
-Alignment set on a *leaf block* positions content inside itself (e.g. centred image).
-
-Margin/padding are never exposed directly.
-
-
-=== Text block — inline spans
-
-[source,json]
-----
-{
-  "id":    "p-1",
-  "type":  "p",
-  "style": "body",
-  "spans": [
-    { "text": "Hello " },
-    { "text": "world",   "marks": ["bold"] },
-    { "text": "!",       "marks": ["bold", "italic"] },
-    { "text": "link",    "marks": ["link"], "href": "https://example.com" },
-    { "text": "accented", "style": "accent" }
-  ]
-}
-----
-
-Marks: `bold`, `italic`, `underline`, `strike`, `code`, `link`, `sup`, `sub`.
-A span `style` class overrides colour/font for that run only.
-
-
-=== Layout containers — hbox / vbox / grid / col
-
-[source,json]
-----
-{
-  "id":    "header-layout",
-  "type":  "hbox",
-  "gap":   "lg",
-  "align": { "v": "middle" },
-  "children": [
-    {
-      "id":    "logo-col",
-      "type":  "col",
-      "width": "33%",
-      "children": [
-        {
-          "id":  "logo",
-          "type": "img",
-          "src":  "asset://logo-uuid",
-          "fit":  "contain",
-          "align": { "h": "center", "v": "middle" }
-        }
-      ]
-    },
-    {
-      "id":    "text-col",
-      "type":  "col",
-      "width": "67%",
-      "align": { "v": "middle" },
-      "children": [
-        { "id": "title",   "type": "h1", "style": "display-title",
-          "spans": [{ "text": "VHC Einladung" }] },
-        { "id": "rule",    "type": "hr", "style": "accent-rule" },
-        { "id": "subtitle","type": "p",  "style": "subtitle",
-          "spans": [{ "text": "Herzlich willkommen" }] }
-      ]
-    }
-  ]
-}
-----
-
-`grid` is the same shape but uses `columns` instead of per-`col` widths:
-
-[source,json]
-----
-{
-  "type":    "grid",
-  "columns": ["1fr", "2fr", "1fr"],
-  "gap":     "md",
-  "children": [
-    { "type": "col", "span": 1, "children": [] },
-    { "type": "col", "span": 2, "children": [] }
-  ]
-}
-----
-
-Use `hbox` for simple two- or three-column layouts (header, sidebar). +
-Use `grid` when you want a Layout Builder with explicit tracks.
-
-
-=== Data table — separated from layout
-
-[source,json]
-----
-{
-  "id":          "t-1",
-  "type":        "table",
-  "style":       "data-table",
-  "data_source": null,
-  "children": [
-    {
-      "type": "tr",
-      "children": [
-        { "type": "th", "spans": [{ "text": "Name" }] },
-        { "type": "th", "spans": [{ "text": "Date" }] }
-      ]
-    },
-    {
-      "type": "tr",
-      "children": [
-        { "type": "td", "spans": [{ "text": "Alice" }] },
-        { "type": "td", "spans": [{ "text": "2025-07-14" }] }
-      ]
-    }
-  ]
-}
-----
-
-`data_source` (future):
+=== Data sources (table `data_source`)
 
 [source,json]
 ----
 { "type": "csv",   "path": "asset://data.csv" }
 { "type": "xml",   "path": "asset://data.xml", "xpath": "//row" }
-{ "type": "query", "zone": "invoices", "sql": "SELECT name, date FROM items" }
+{ "type": "query", "zone": "invoices",          "sql": "SELECT name, date FROM items" }
 ----
 
+== Features
 
-=== Style class definition
+=== Undo / Redo
 
-[source,json]
+Full undo/redo history via `models/history.ts` — functional pure stack, 50-entry cap.
+Wired to `editor-store.tsx` actions: `UNDO`, `REDO`.
+Keyboard: `⌘Z` / `⌘⇧Z`.  Toolbar buttons with disabled state at boundaries.
+
+=== PDF Export
+
+`handleExportPDF` in `EditorShell.tsx`:
+
+1. If no canvas context is active, switches to `review` temporarily.
+2. Adds `body.sgf-exporting` class (hides all `.sgf-ui` chrome).
+3. Waits two animation frames for React to commit the DOM.
+4. Calls `dms_save_pdf(uuid, title, zone, path, width_mm, height_mm, orientation)`.
+5. Restores previous context.
+
+Page dimensions are passed from `doc.page` (mm), converted to inches in C++.
+`@page { size: …mm }` CSS is injected by `EditorCanvas` and respected on all backends:
+macOS (WKWebView NSPrintOperation), Windows (WebView2 PrintToPdf),
+Linux (WebKitGTK webkit_print_operation_print), Qt (QWebEnginePage::printToPdf).
+
+`showPageNumbers` injects `@bottom-right { content: counter(page) }` — requires
+WebKit ≥ 2022 or Chromium ≥ 119; silently omitted on older engines.
+
+=== Page Background
+
+`page.background.color` — any CSS color string.  Renders as `backgroundColor` on the
+canvas page div with `print-color-adjust: exact` so it appears in PDFs.
+Presets: White / Warm Paper / Cream / Slate / Night / Ink / Transparent.
+Custom hex/rgba supported via DocumentPanel color picker.
+
+=== .sdoc Bundle Format
+
+A `.sdoc` file is a plain ZIP archive:
+
 ----
-"styles": {
-  "display-title": {
-    "font":    "serif",
-    "size":    "3xl",
-    "weight":  "bold",
-    "color":   "#1a1a1a",
-    "leading": "tight"
-  },
-  "accent-rule": {
-    "color": "#c00",
-    "width": "2px"
-  },
-  "callout": {
-    "background": "#fff8e1",
-    "radius":     "sm",
-    "spacing":    { "inner": "md" }
-  }
-}
-----
-
-Typed properties only — no raw CSS values exposed to the author.
-The renderer resolves these to CSS/PDF primitives at export time.
-
-
-=== C++ BlockType additions needed
-
-The existing `document.hh` enum must gain:
-
-[source,cpp]
-----
-// Layout
-Col,    // column inside hbox / grid
-Grid,   // explicit-track grid container
-Quote,  // block quotation
-
-// Data
-TR,     // table row
-TD,     // table data cell
-TH,     // table header cell
+document.json          SDM document (syngrafo/1)
+assets/<filename>      embedded images and media
 ----
 
-== Persistance
+Load: `dms_fetch_data_url` → `loadSdocBundle()` (fflate unzip in JS) → blob store → render.
+Save: `saveSdocToPath()` (fflate zip in JS) → `dms_write_base64_file` → disk.
+Save-as: `dms_select_save_path()` native Save dialog → write → `dms_record_export` audit.
 
-- Content (blocks JSON) → Database
-- Export (PDF, HTML)   → Filesystem
+=== Built-in Templates
 
-== Binding surface
+Stored as SDM JSON files in `data/documents/<category>/`:
 
-The complete picture
+[cols="1,1,2"]
+|===
+| Folder | File | Description
 
-[source,c++]
+| `freeform/` | `blank.json` | Empty A4 document
+| `letter/` | `personal-letter.json` | Personal correspondence layout
+| `invitation/` | `event-invitation.json` | Event card (A5, centered)
+| `invoice/` | `invoice.json` | Line-item invoice with totals table
+| `report/` | `quarterly-report.json` | KPI strip + findings + appendix table
+| `cv/` | `resume.json` | Two-column CV (sidebar + main content)
+| `notes/` | `notes.json` | Bullet notes + action items + callout
+| `book/` | `chapter.json` | A5 book chapters with page-break
+|===
+
+Displayed in the Files panel (ExportPanel) via `dms_scan_dir`.
+Opening a template assigns a fresh document UUID so it never overwrites the template.
+
+== IPC Binding Surface
+
+[source]
 ----
-dms_document_save(id?, title, blocks_json, zone_name?)
-  → { ok, data: { id, updated_at } }
-  Writes to active DB (global or zone). Upsert by id.
+dms_document_save    uuid, title, blocks_json, styles_json, page_json, zone_name
+  → { ok, data: { uuid, updated_at } }
 
-dms_document_load(id)
-  → { ok, data: { id, title, blocks_json, zone_name, updated_at } }
+dms_document_load    uuid
+  → { ok, data: { uuid, title, blocks_json, styles_json, page_json, zone_name, … } }
 
-dms_document_list(zone_name?)
-  → { ok, data: Document[] }   -- for a "recent documents" picker
+dms_document_list    zone_name, limit
+  → { ok, data: [{ uuid, title, zone_name, created_at, updated_at }] }
 
-dms_save_pdf(title, zone_name?, export_path?)
-  → { ok, data: { path, filename, file_size, exported_at } }
-  Follows the 4-step priority. Records to dms_recent_exports.
+dms_save_pdf         uuid, title, zone_name, export_path, width_mm, height_mm, orientation
+  → { ok, data: { path, exported_at } }
 
-dms_save_html(title, html_content, zone_name?, export_path?)
-  → { ok, data: { path, filename, file_size, exported_at } }
+dms_save_html        uuid, title, html_content, zone_name, export_path
+  → { ok, data: { path, file_size, exported_at } }
 
-dms_get_recent_exports(limit?)
-  → { ok, data: Export[] }    -- ordered by exported_at DESC
+dms_select_save_path suggested_name, filter_ext
+  → { ok, data: { path } }   (path="" if user cancelled)
 
-dms_open_path(path)           -- open in native viewer (new, Option B)
-  → { ok }
+dms_record_export    path, doc_uuid, title, zone_name, kind
+  → { ok, data: { path, exported_at, file_size } }
+
+dms_get_recent_exports limit
+  → { ok, data: [{ id, doc_uuid, title, path, kind, zone_name, exported_at, file_size }] }
+
+dms_write_base64_file  path, base64_data
+  → { ok, data: { written, bytes } }
+
+dms_fetch_data_url     path
+  → { ok, data: { data_url } }
+
+dms_scan_dir           path, recursive
+  → { ok, data: { path, items: [{ name, path, is_dir, size, mtime }] } }
+
+dms_open_path          path_or_uri
+  → { ok, data: { opened } }
+----
+
+== Hooks
+
+[cols="1,3"]
+|===
+| Hook | Purpose
+
+| `useAssetSrc(src)` | Resolves `asset://` / `local://` → data URL via IPC or blob store
+| `useClickOutside(ref, cb, enabled)` | Click-outside dismissal
+| `useDocumentStats(doc)` | Block / word / char counts
+| `useNLPAnalyze(canRun)` | NLP analysis pipeline with debounce
+| `useIsNarrow(breakpoint)` | Reactive screen-width check
+| `useSwipeToPan(ref, onLeft, onRight)` | Touch swipe gesture for panel drawers
+|===
+
+== Development
+
+[source,sh]
+----
+cd frontend/packages/editor
+bun tsc --noEmit      # type-check
 ----

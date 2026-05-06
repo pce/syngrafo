@@ -171,5 +171,50 @@ endif()
 # ─── CPack installer configuration ────────────────────────────────────────────
 include(cmake/cpack_config.cmake)
 
+# ─── Optional: llama.cpp LM inference (SGF_WITH_LM) ────────────────────────
+#
+# Adds local GGUF inference via llama.cpp to the build.
+# When OFF (default) the LMEngine compiles as a no-op stub; the JS bindings
+# still register but always return { ok:false, error:"LM support not compiled in" }.
+#
+# Toggle:  cmake -DSGF_WITH_LM=ON ...
+#
+# llama.cpp is fetched as a URL tarball (no GIT_REPOSITORY — consistent with
+# the fetch_deps.cmake policy that prevents vcpkg recursion on Windows CI).
+# Pin to a specific release tag and update when bumping.
+#
+# Only the llama library target is needed; all examples, tests, and
+# server subprojects are disabled to keep configure + compile times short.
+option(SGF_WITH_LM
+    "Build with llama.cpp GGUF inference support (adds ~300 MB to build, ~30s configure)"
+    OFF)
+
+if(SGF_WITH_LM)
+    # ── Disable everything we don't need ────────────────────────────────────
+    set(LLAMA_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+    set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(LLAMA_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
+    set(GGML_METAL           OFF CACHE BOOL "" FORCE)  # CPU-only; safe on CI
+    set(GGML_BLAS            OFF CACHE BOOL "" FORCE)  # avoid BLAS dep scan
+    set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)  # static link, no rpath
+
+    # llama.cpp b4901 — March 2025.  Update by changing the tag and the SHA256.
+    # URL tarball avoids the Git + vcpkg recursion issue documented in
+    # fetch_deps.cmake.
+    FetchContent_Declare(
+        llama_cpp
+        URL      https://github.com/ggerganov/llama.cpp/archive/refs/tags/b4901.tar.gz
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(llama_cpp)
+
+    target_compile_definitions(syngrafo PRIVATE SGF_WITH_LM)
+    target_link_libraries(syngrafo PRIVATE llama)
+
+    message(STATUS "[syngrafo] SGF_WITH_LM=ON — llama.cpp b4901 enabled")
+else()
+    message(STATUS "[syngrafo] SGF_WITH_LM=OFF — LMEngine is a no-op stub")
+endif()
+
 # ─── Build summary ────────────────────────────────────────────────────────────
 include(cmake/summary.cmake)

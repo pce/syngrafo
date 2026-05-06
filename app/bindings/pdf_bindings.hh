@@ -19,6 +19,7 @@
  */
 
 #include "../dms_handle.hh"
+#include "../dms_monadic.hh"
 #include <saucer/modules/desktop.hpp>
 #include <saucer/modules/pdf.hpp>
 
@@ -229,9 +230,17 @@ inline void register_pdf_bindings(
      *          inserted with file_size = 0 as a sentinel; the frontend can poll the
      *          actual size via dms_open_path or a follow-up stat call once the file
      *          appears.
+     *
+     * @param width_mm   Physical page width  in millimetres (passed from JS doc.page).
+     * @param height_mm  Physical page height in millimetres.
+     * @param orientation_str  "portrait" or "landscape" (anything else → portrait).
+     *
+     * All three have sane defaults so existing callers that omit them continue
+     * to work (A4 portrait fallback).
      */
     wv.expose("dms_save_pdf",
-        [&dms, &pdf](string doc_uuid, string title, string zone_name, string export_path) -> string
+        [&dms, &pdf](string doc_uuid, string title, string zone_name, string export_path,
+                     double width_mm, double height_mm, string orientation_str) -> string
     {
         try {
             const auto out_dir = [&] {
@@ -243,10 +252,18 @@ inline void register_pdf_bindings(
                 std::error_code ec;
                 fs::create_directories(out.parent_path(), ec);
             }
+            // Convert mm → inches (saucer_pdf uses inches on all backends).
+            // Fall back to A4 portrait when the caller supplies zero/negative values.
+            constexpr double kMmPerInch = 25.4;
+            const double w_in = (width_mm  > 0) ? width_mm  / kMmPerInch : 210.0 / kMmPerInch;
+            const double h_in = (height_mm > 0) ? height_mm / kMmPerInch : 297.0 / kMmPerInch;
+            const auto layout = (orientation_str == "landscape")
+                                    ? saucer::modules::pdf::layout::landscape
+                                    : saucer::modules::pdf::layout::portrait;
             pdf.save({
                 .file        = out,
-                .size        = {.w = 8.27f, .h = 11.69f},  // A4, inches — WebKit requires inches
-                .orientation = saucer::modules::pdf::layout::portrait,
+                .size        = {.w = w_in, .h = h_in},
+                .orientation = layout,
             });
             const auto now = pce::db::now_unix();
             {
@@ -336,6 +353,64 @@ inline void register_pdf_bindings(
         } catch (const std::exception& e) {
             return DMSHandle::err_str(e.what());
         }
+    });
+
+    /**
+     * @brief Record a file-based export in the dms_recent_exports audit log.
+     *
+     * Call this after writing a .sdoc (or any other) export to disk so it
+     * appears in the "Recent Exports" list in the UI.
+     *
+     * @param path       Absolute path to the written file.
+     * @param doc_uuid   Document UUID.
+     * @param title      Human-readable document title.
+     * @param zone_name  Zone name ("global" when not zone-specific).
+     * @param kind       Export kind tag, e.g. "sdoc", "html", "pdf".
+     *
+     * Returns { path, exported_at, file_size } on success.
+     */
+    wv.expose("dms_record_export",
+        [&dms](string path, string doc_uuid, string title,
+               string zone_name, string kind) -> string
+    {
+        using namespace pce::dms;
+
+        // try_invoke wraps a plain-value lambda (returns json, throws on error)
+        // so the outer Expected<json> is produced by try_invoke itself — never
+        // nest Expected<Expected<T>> by returning Expected from inside.
+        return try_invoke([&]() -> json {
+            std::error_code ec;
+            // file_size returns uintmax_t(-1) on error; clamp to 0 so the
+            // audit row is still written even if the stat fails (e.g. network FS).
+            const auto raw_size = fs::file_size(fs::path{path}, ec);
+            const auto file_size = ec ? int64_t{0}
+                                       : static_cast<int64_t>(raw_size);
+            const auto now = pce::db::now_unix();
+
+            std::lock_guard lk{dms.db_mutex};
+
+            const int rows = dms.db.insert_into("dms_recent_exports")
+                .value("doc_uuid",    doc_uuid)
+                .value("title",       title)
+                .value("path",        path)
+                .value("kind",        kind)
+                .value("zone_name",   zone_name)
+                .value("exported_at", now)
+                .value("file_size",   file_size)
+                .execute();
+
+            if (rows <= 0)
+                throw std::runtime_error(
+                    std::format("failed to record export: {}", path));
+
+            return json{
+                {"path",        path},
+                {"exported_at", now},
+                {"file_size",   file_size},
+            };
+        })
+        .transform([](const json& j) { return DMSHandle::ok_str(j); })
+        .value_or(DMSHandle::err_str("record export failed"));
     });
 
     wv.expose("dms_open_path", [&desk](string path) -> string {

@@ -154,9 +154,56 @@ export interface STableBlock extends SBlockBase {
   children:      STrBlock[];
 }
 
+/**
+ * Aggregate function applied to a table cell in a footer row when a
+ * data_source is active.  Computed in JS — no formula engine required.
+ */
+export type AggFunction = "sum" | "count" | "avg" | "min" | "max";
+
+/**
+ * A table cell (td or th) that may carry optional aggregate metadata
+ * when used inside a footer row of a data-source-backed table.
+ */
+export type STableCell = STextBlock & {
+  type:      "td" | "th";
+  /**
+   * Aggregate function — evaluated against the column values from the
+   * loaded data_source.  Only meaningful in footer rows (tr.footer: true).
+   */
+  agg?:      AggFunction;
+  /**
+   * The data_source column key to aggregate (matches the CSV header after
+   * lowercasing and replacing spaces with underscores).
+   * Falls back to column position when omitted.
+   */
+  col_key?:  string;
+  /** HTML colspan — merges this cell across multiple columns. */
+  colspan?:  number;
+  /**
+   * Currency / unit prefix prepended before the formatted aggregate value.
+   * E.g. "€ " → "€ 1,234.00".
+   */
+  prefix?:   string;
+  /**
+   * Decimal places for the formatted aggregate value.  Defaults to 2.
+   */
+  decimals?: number;
+};
+
 export interface STrBlock extends SBlockBase {
   type:     "tr";
-  children: (STextBlock & { type: "td" | "th" })[];
+  /**
+   * Marks this row as a header row.  When the table has a data_source,
+   * header rows are rendered into <thead> and are not replaced by data rows.
+   */
+  header?:  boolean;
+  /**
+   * Marks this row as a footer / aggregate row.  Placed in <tfoot> after
+   * all data rows.  Cells may carry `agg` + `col_key` to auto-compute a
+   * column aggregate from the loaded data_source.
+   */
+  footer?:  boolean;
+  children: STableCell[];
 }
 
 export type CalloutVariant = "info" | "tip" | "warning" | "danger" | "success" | "note";
@@ -207,11 +254,32 @@ export const PAGE_SIZE_MM: Record<PageSize, { w: number; h: number }> = {
   legal:  { w: 216,  h: 356  },
 };
 
+export interface SPageBackground {
+  /**
+   * CSS color string (hex, rgba, hsl, named).  Defaults to white when absent.
+   * Set to "transparent" for screencast / overlay use.
+   * Printed via `-webkit-print-color-adjust: exact` so it appears in PDFs.
+   */
+  color?: string;
+}
+
 export interface SPageConfig {
   size:        PageSize;
   orientation: PageOrientation;
   /** Page margin — resolved from the shared spacing scale. */
   margin:      SpacingToken;
+  /**
+   * Page canvas background. When absent the canvas renders white.
+   * Future: gradient, image watermark (DRAFT stamp), mesh-gradient.
+   */
+  background?: SPageBackground;
+  /**
+   * Inject a printed page counter into the bottom-right margin box of each
+   * PDF page.  Off by default — useful only for books / long documents.
+   * Relies on CSS Generated Content for Paged Media (`@page` margin boxes),
+   * which requires WebKit ≥ 2022 or Chromium ≥ 119.
+   */
+  showPageNumbers?: boolean;
 }
 
 export interface SDocMeta {

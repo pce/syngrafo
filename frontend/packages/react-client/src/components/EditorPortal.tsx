@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { EditorProvider, EditorShell, type SDocument, createDocument } from "@syngrafo/editor";
+import { EditorShell, type SDocument, createDocument } from "@syngrafo/editor";
 import Icon from "./Icon";
 
 export interface EditorPortalProps {
@@ -56,12 +56,13 @@ function EditorPortalContent({ doc: docProp, onClose, onSave }: ContentProps) {
 
   return createPortal(
     <div
+      id="sgf-editor-root"
       className="fixed inset-0 z-[200] flex flex-col bg-[var(--theme-bg)] text-[var(--theme-text)]"
       role="dialog"
       aria-modal="true"
       aria-label={`Editor: ${displayTitle}`}
     >
-      <header className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] shrink-0 shadow-sm z-10">
+      <header className="sgf-portal-header flex items-center gap-2 px-4 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] shrink-0 shadow-sm z-10">
         <Icon name="edit" size="xs" className="text-[var(--theme-primary)] shrink-0" />
         <span
           className="text-sm font-semibold text-[var(--theme-text)] flex-1 truncate"
@@ -81,9 +82,7 @@ function EditorPortalContent({ doc: docProp, onClose, onSave }: ContentProps) {
         </button>
       </header>
 
-      <EditorProvider initialDoc={doc}>
         <EditorShell doc={doc} onSave={onSave} className="flex-1 min-h-0" />
-      </EditorProvider>
     </div>,
     window.document.body,
   );

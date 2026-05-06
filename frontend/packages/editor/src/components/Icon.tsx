@@ -53,7 +53,9 @@ export type IconName =
   | "align-justify"
   | "bold"
   | "italic"
+  | "redo"
   | "underline-icon"
+  | "undo"
   | "type"
   | "palette"
   | "strike";
@@ -415,6 +417,18 @@ const ICONS: Record<IconName, (p: React.SVGProps<SVGSVGElement>) => React.ReactE
     <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
       <path d="M6 3v7a6 6 0 006 6 6 6 0 006-6V3" />
       <line x1="4" y1="21" x2="20" y2="21" />
+    </svg>
+  ),
+  undo: (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M3 7v6h6" />
+      <path d="M3 13C5.4 7.4 12.2 4.2 18 7a9 9 0 1 1-9 9" />
+    </svg>
+  ),
+  redo: (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M21 7v6h-6" />
+      <path d="M21 13C18.6 7.4 11.8 4.2 6 7a9 9 0 1 0 9 9" />
     </svg>
   ),
   "type": (p) => (

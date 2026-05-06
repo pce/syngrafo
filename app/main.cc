@@ -23,6 +23,7 @@
 
 #include "dms_bindings.hh"
 #include "bindings/pdf_bindings.hh"
+#include "bindings/lm_bindings.hh"   // LM inference — no-op when SGF_WITH_LM=OFF
 #include <saucer/modules/desktop.hpp>
 
 #include <filesystem>
@@ -548,9 +549,18 @@ window.__nlp = {{
 window.__dms = {{
     hasSemanticSearch: {},
 }};
-// Default no-op progress sink — replaced by the React store at runtime.
+window.__lm = {{
+    hasLM:        {},
+    loadedModel:  null,
+    isBusy:       false,
+}};
+// Default no-op callbacks — replaced by the React store at runtime.
 if (typeof window.__dms_progress === 'undefined')
     window.__dms_progress = function(ev) {{ console.debug('[dms]', ev); }};
+if (typeof window.__lm_result === 'undefined')
+    window.__lm_result = function(id, text, pt, ct) {{ console.debug('[lm] result', id, pt+ct, 'tokens'); }};
+if (typeof window.__lm_error === 'undefined')
+    window.__lm_error = function(id, err) {{ console.warn('[lm] error', id, err); }};
 )js",
             nlp.engine->has_onnx() ? "true" : "false",
             nlp.engine->has_sentiment_model() ? "true" : "false",
@@ -563,16 +573,28 @@ if (typeof window.__dms_progress === 'undefined')
             "tesseract",
 #endif
             NLP_ENGINE_VERSION,
-            nlp.engine->has_onnx() ? "true" : "false"),
+            nlp.engine->has_onnx() ? "true" : "false",
+#ifdef SGF_WITH_LM
+            "true"
+#else
+            "false"
+#endif
+        ),
         .run_at = saucer::script::time::creation,
     });
 
+    // LM inference engine — lives as a coroutine-local so it is destroyed
+    // (queue drained + model freed) when start() returns on window close.
+    // Without SGF_WITH_LM this is a zero-cost no-op stub.
+    pce::lm::LMEngine lm_engine;
+
     webview->embed(saucer::embedded::all());
 
-    // Construct the DMS handle — opens / bootstraps the SQLite database.
-    // DMSHandle is a coroutine-local kept alive by co_await app->finish().
-    // Its jthread is cooperatively stopped and joined when it goes out of
-    // scope.
+    /// Construct the DMS handle
+    /// opens / bootstraps the SQLite database.
+    /// DMSHandle is a coroutine-local kept alive by co_await app->finish().
+    /// Its jthread is cooperatively stopped and joined when it goes out of
+    /// scope.
 #ifdef NLP_WITH_ONNX
     auto embed_svc = std::make_shared<pce::nlp::onnx::ONNXAddon>();
     auto rectifier = std::make_shared<pce::nlp::RectifierAddon>();
@@ -601,32 +623,32 @@ if (typeof window.__dms_progress === 'undefined')
       std::print("[main] rectifier addon ready\n");
     }
 #else
-    // No ONNX: create the rectifier anyway so macOS platform-native rectification
-    // (Apple Vision corner detection + CoreImage warp) still works.
-    // On Linux/Windows the platform stubs return no corners, so rectify() will
-    // fail gracefully when called — no crash, no undefined behaviour.
+    /// No ONNX: create the rectifier anyway so macOS platform-native rectification
+    /// (Apple Vision corner detection + CoreImage warp) still works.
+    /// On Linux/Windows the platform stubs return no corners, so rectify() will
+    /// fail gracefully when called — no crash, no undefined behaviour.
     auto rectifier = std::make_shared<pce::nlp::RectifierAddon>();
     pce::dms::DMSHandle dms{*nlp.engine, nullptr, rectifier};
 #endif
 
-    // Wire all JS ↔ C++ bindings directly — no bridge class.
+    /// Wire all JS ↔ C++ bindings directly — no bridge class.
     register_bindings(*webview, nlp);
     saucer::modules::desktop desk{app};
     saucer::modules::pdf pdf{*webview};
 
-    // Model downloader — manages LLM/GGUF model files chosen by the user in-app.
-    // The catalog is loaded from data/llm_catalog.json (bundled into .app/Contents/Resources/data/).
-    // To add or remove models: edit data/llm_catalog.json — no recompile required.
-    //
-    // LLM model files (GGUF, 1–3 GB each) live in a platform-specific user
-    // directory — separate from the NLP/ONNX models bundled in data/models/:
-    //   macOS   → ~/Library/Application Support/Syngrafo/models/
-    //   Linux   → ~/.local/share/syngrafo/models/
-    //   Windows → %APPDATA%\Syngrafo\models\
-    // The user can override this path in Settings (persisted to the DB under
-    // pref key "llm_models_dir").  We read that preference synchronously here
-    // before constructing the downloader so the worker threads always see the
-    // correct directory.
+    /// Model downloader — manages LLM/GGUF model files chosen by the user in-app.
+    /// The catalog is loaded from data/llm_catalog.json (bundled into .app/Contents/Resources/data/).
+    /// To add or remove models: edit data/llm_catalog.json — no recompile required.
+    ///
+    /// LLM model files (GGUF, 1–3 GB each) live in a platform-specific user
+    /// directory — separate from the NLP/ONNX models bundled in data/models/:
+    ///   macOS   → ~/Library/Application Support/Syngrafo/models/
+    ///   Linux   → ~/.local/share/syngrafo/models/
+    ///   Windows → %APPDATA%\Syngrafo\models\
+    /// The user can override this path in Settings (persisted to the DB under
+    /// pref key "llm_models_dir").  We read that preference synchronously here
+    /// before constructing the downloader so the worker threads always see the
+    /// correct directory.
     std::string llm_models_dir_pref;
     {
         // Best-effort synchronous read — DB is already open at this point.
@@ -649,24 +671,18 @@ if (typeof window.__dms_progress === 'undefined')
 
     pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);
     pce::dms::register_pdf_bindings(*webview, dms, pdf, desk);
+    pce::dms::register_lm_bindings(*webview, lm_engine, model_dl);
 
 #ifndef NDEBUG
     webview->set_dev_tools(true);
 #endif
 
-    // Simple asset server to bypass "Not allowed to load local resource"
-    // (file:// restrictions). Frontend can load any local file via
-    // local://local/path/to/file.
+    /// Simple asset server to bypass "Not allowed to load local resource"
+    /// (file:// restrictions). Frontend can load any local file via
+    /// local://local/path/to/file.
     webview->handle_scheme("local", [](saucer::scheme::request request,
                                        saucer::scheme::executor exec) {
       auto url = request.url();
-
-      // Reconstruct the full path from the URL.
-      // Saucer's url.path() only gives the part after the authority.
-      // If the URL is local://local/data/inp, authority is "local" and path is
-      // "/data/inp". If the URL is local://localdata/inp, authority is
-      // "localdata" and path is "/inp". We want to treat everything after
-      // "local://" as the path.
 
       std::string full_url = url.string();
       std::string prefix = "local://";
@@ -852,11 +868,11 @@ if (typeof window.__dms_progress === 'undefined')
 
     webview->set_url("saucer://embedded/index.html");
 
-    // ── System-tray setup ────────────────────────────────────────────────────
+    /// System-tray setup
     //
     // The tray icon appears when the window is hidden (minimise-to-tray).
-    // • Clicking "Show Syngrafo" (or activating the icon) restores the window.
-    // • Clicking "Quit" allows the window-close event to propagate so that
+    // - Clicking "Show Syngrafo" (or activating the icon) restores the window.
+    // - Clicking "Quit" allows the window-close event to propagate so that
     //   co_await app->finish() returns and the process exits cleanly.
     //
     // win_raw is valid for the entire lifetime of start() (coroutine frame).
