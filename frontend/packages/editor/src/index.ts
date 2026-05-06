@@ -4,6 +4,9 @@ export * from "./models/sdm";
 // Factory and immutable tree operations
 export * from "./models/sdm-factory";
 
+// Default style classes and document factory
+export * from "./models/default-styles";
+
 // Functional history
 export * from "./models/history";
 

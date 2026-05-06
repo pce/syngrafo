@@ -68,6 +68,11 @@ export interface SBlockBase {
   id:       string;
   /** Style class id from SDocument.styles. */
   style?:   string;
+  /**
+   * Per-block style property overrides — merged on top of the named style
+   * class at render time.  Highest specificity; stored in the document.
+   */
+  styleOverrides?: Partial<SStyleProps>;
   spacing?: { inner?: SpacingToken; outer?: SpacingToken };
   align?:   { h?: AlignH; v?: AlignV };
 }

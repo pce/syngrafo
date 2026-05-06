@@ -46,7 +46,17 @@ export type IconName =
   | "chevron-left"
   | "chevron-right"
   | "chevron-down"
-  | "chevron-up";
+  | "chevron-up"
+  | "align-left"
+  | "align-center"
+  | "align-right"
+  | "align-justify"
+  | "bold"
+  | "italic"
+  | "underline-icon"
+  | "type"
+  | "palette"
+  | "strike";
 
 type IconSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -354,6 +364,80 @@ const ICONS: Record<IconName, (p: React.SVGProps<SVGSVGElement>) => React.ReactE
   "chevron-up": (p) => (
     <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
       <polyline points="18 15 12 9 6 15" />
+    </svg>
+  ),
+  "align-left": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <line x1="17" y1="10" x2="3" y2="10" />
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="21" y1="14" x2="3" y2="14" />
+      <line x1="17" y1="18" x2="3" y2="18" />
+    </svg>
+  ),
+  "align-center": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <line x1="18" y1="10" x2="6" y2="10" />
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="21" y1="14" x2="3" y2="14" />
+      <line x1="18" y1="18" x2="6" y2="18" />
+    </svg>
+  ),
+  "align-right": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <line x1="21" y1="10" x2="7" y2="10" />
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="21" y1="14" x2="3" y2="14" />
+      <line x1="21" y1="18" x2="7" y2="18" />
+    </svg>
+  ),
+  "align-justify": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <line x1="21" y1="10" x2="3" y2="10" />
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="21" y1="14" x2="3" y2="14" />
+      <line x1="21" y1="18" x2="3" y2="18" />
+    </svg>
+  ),
+  "bold": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z" />
+      <path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z" />
+    </svg>
+  ),
+  "italic": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <line x1="19" y1="4" x2="10" y2="4" />
+      <line x1="14" y1="20" x2="5" y2="20" />
+      <line x1="15" y1="4" x2="9" y2="20" />
+    </svg>
+  ),
+  "underline-icon": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M6 3v7a6 6 0 006 6 6 6 0 006-6V3" />
+      <line x1="4" y1="21" x2="20" y2="21" />
+    </svg>
+  ),
+  "type": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <polyline points="4 7 4 4 20 4 20 7" />
+      <line x1="9" y1="20" x2="15" y2="20" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  ),
+  "palette": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+      <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+      <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+      <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+    </svg>
+  ),
+  "strike": (p) => (
+    <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <path d="M16 6C16 6 14.5 4 12 4s-4 1.5-4 4c0 3 4 4 4 4" />
+      <path d="M8 18c0 0 1.5 2 4 2s4-1.5 4-4" />
     </svg>
   ),
 };

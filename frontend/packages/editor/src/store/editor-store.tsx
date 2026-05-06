@@ -5,7 +5,7 @@ import React, {
   useReducer,
   type ReactNode,
 } from "react";
-import type { SBlock, SDocument, SDocMeta, SPageConfig, Span } from "../models/sdm";
+import type { SBlock, SDocument, SDocMeta, SPageConfig, SStyleClass, Span, TextBlockType } from "../models/sdm";
 import { isTextBlock } from "../models/sdm";
 import type { DocumentIntent, NLPVisibilityFlags, WorkspaceContext } from "../models/editor-context";
 import { DEFAULT_NLP_FLAGS } from "../models/editor-context";
@@ -34,6 +34,7 @@ export interface EditorState {
   isDirty: boolean;
   isExporting: boolean;
   statusMessage: { text: string; kind: "info" | "success" | "warning" | "error" } | null;
+  documentPath: string | null;
 }
 
 
@@ -59,14 +60,19 @@ export type EditorAction =
   | { type: "SET_STATUS"; text: string; kind: "info" | "success" | "warning" | "error" }
   | { type: "CLEAR_STATUS" }
   | { type: "UPDATE_META"; meta: Partial<SDocMeta> }
-  | { type: "UPDATE_PAGE"; page: Partial<SPageConfig> };
+  | { type: "UPDATE_PAGE"; page: Partial<SPageConfig> }
+  | { type: "CHANGE_BLOCK_TYPE"; id: string; newType: TextBlockType }
+  | { type: "ADD_STYLE_CLASS"; id: string; cls: SStyleClass }
+  | { type: "REMOVE_STYLE_CLASS"; id: string }
+  | { type: "IMPORT_BLOCKS"; blocks: SBlock[]; afterId?: string }
+  | { type: "SET_DOCUMENT_PATH"; path: string | null };
 
 
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case "SET_DOCUMENT":
-      return { ...state, doc: action.doc, isDirty: false, selectedBlockId: null };
+      return { ...state, doc: action.doc, isDirty: false, selectedBlockId: null, documentPath: null };
 
     case "UPDATE_BLOCK": {
       if (!state.doc) return state;
@@ -178,6 +184,86 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     }
 
+    case "CHANGE_BLOCK_TYPE": {
+      if (!state.doc) return state;
+      const newBlocks = updateBlock(
+        state.doc.blocks,
+        action.id,
+        (b) => {
+          // Only switch among text block types — structural types are not changeable here.
+          if (!("spans" in b)) return b;
+          return { ...b, type: action.newType } as SBlock;
+        },
+      );
+      return { ...state, doc: applyDocMutations(state.doc, () => newBlocks), isDirty: true };
+    }
+
+    case "ADD_STYLE_CLASS": {
+      if (!state.doc) return state;
+      return {
+        ...state,
+        doc: { ...state.doc, styles: { ...state.doc.styles, [action.id]: action.cls } },
+        isDirty: true,
+      };
+    }
+
+    case "REMOVE_STYLE_CLASS": {
+      if (!state.doc) return state;
+      const styles = { ...state.doc.styles };
+      // Capture before closure — TypeScript cannot narrow `action` inside a nested function.
+      const removedId = action.id;
+      delete styles[removedId];
+      // Recursively strip the class reference from every block that held it.
+      function stripStyle(blocks: SBlock[]): SBlock[] {
+        return blocks.map((b) => {
+          // Remove the style reference by omitting the key (not setting to undefined)
+          // because exactOptionalPropertyTypes forbids `style: undefined`.
+          let next: SBlock;
+          if (b.style === removedId) {
+            const { style: _removed, ...rest } = b;
+            next = rest as SBlock;
+          } else {
+            next = b;
+          }
+          if ("children" in next && Array.isArray((next as { children?: unknown }).children)) {
+            const ch = stripStyle((next as { children: SBlock[] }).children);
+            return { ...next, children: ch } as SBlock;
+          }
+          return next;
+        });
+      }
+      return {
+        ...state,
+        doc: { ...state.doc, styles, blocks: stripStyle(state.doc.blocks) },
+        isDirty: true,
+      };
+    }
+
+    case "SET_DOCUMENT_PATH":
+      return { ...state, documentPath: action.path };
+
+    case "IMPORT_BLOCKS": {
+      if (!state.doc) return state;
+      let newBlocks: SBlock[];
+      if (action.afterId != null) {
+        const idx = state.doc.blocks.findIndex((b) => b.id === action.afterId);
+        newBlocks = idx === -1
+          ? [...state.doc.blocks, ...action.blocks]
+          : [
+              ...state.doc.blocks.slice(0, idx + 1),
+              ...action.blocks,
+              ...state.doc.blocks.slice(idx + 1),
+            ];
+      } else {
+        newBlocks = [...state.doc.blocks, ...action.blocks];
+      }
+      return {
+        ...state,
+        doc: applyDocMutations(state.doc, () => newBlocks),
+        isDirty: true,
+      };
+    }
+
     default:
       return state;
   }
@@ -218,6 +304,7 @@ export function EditorProvider({
     isDirty: false,
     isExporting: false,
     statusMessage: null,
+    documentPath: null,
   } satisfies EditorState);
 
   const value = useMemo<EditorContextValue>(() => ({ state, dispatch }), [state]);

@@ -81,7 +81,11 @@ function tryDeleteBlock(
   return { blocks: result, found };
 }
 
-function insertBlock(
+/**
+ * Insert a block into the flat block list after `after_id`.
+ * Different semantics from sdm-factory: supports null (prepend) and cross-level placement.
+ */
+function patchInsertBlock(
   blocks: SBlock[],
   after_id: string | null,
   block: SBlock,
@@ -94,7 +98,11 @@ function insertBlock(
   return [...blocks, block];
 }
 
-function moveBlock(
+/**
+ * Move a block to a new position.
+ * Different semantics from sdm-factory: supports cross-level moves and null-prepend.
+ */
+function patchMoveBlock(
   blocks: SBlock[],
   id: string,
   after_id: string | null,
@@ -102,7 +110,7 @@ function moveBlock(
   const target = flattenBlocks(blocks).find((b) => b.id === id);
   if (!target) return blocks;
   const { blocks: without } = tryDeleteBlock(blocks, id);
-  return insertBlock(without, after_id, target);
+  return patchInsertBlock(without, after_id, target);
 }
 
 /** Apply an array of ops to a block list. Returns new blocks (immutable). */
@@ -132,7 +140,7 @@ export function applyBlockPatch(
           break;
 
         case "insert":
-          current = insertBlock(current, op.after_id, op.block);
+          current = patchInsertBlock(current, op.after_id, op.block);
           applied++;
           break;
 
@@ -148,7 +156,7 @@ export function applyBlockPatch(
         }
 
         case "move":
-          current = moveBlock(current, op.id, op.after_id);
+          current = patchMoveBlock(current, op.id, op.after_id);
           applied++;
           break;
 

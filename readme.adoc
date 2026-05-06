@@ -8,12 +8,12 @@
 
 
 
-[.lead]
-A lifecycle-based document state machine.
-
-> Apparent structural similarity does not entail conceptual equivalence.
-
-
+// [.lead]
+[sidebar]
+.about
+--
+A local-first system for transforming files into structured, searchable, and interactive data.
+--
 
 
 
@@ -71,7 +71,8 @@ Syngrafo treats every file as an asset that can be transformed and viewed in mul
 | Viewer · Kanban · Notes
 |===
 
-A local-first system for transforming files into structured, searchable, and interactive data.
+
+// A lifecycle-based document state machine.
 
 // Local-first file browser integrating document management, NLP, notes, task boards, and 3D preview.
 // File browser + NLP + media + knowledge system

@@ -5,12 +5,14 @@ import type {
   SHBoxBlock,
   SVBoxBlock,
   SColBlock,
+  SGridBlock,
   STableBlock,
   SCalloutBlock,
   Span,
   SpanMark,
 } from "../models/sdm";
 import { createBlock } from "../models/sdm-factory";
+import { domToIR, type IRNode } from "./html-ir";
 
 function escapeHtml(s: string): string {
   return s
@@ -105,6 +107,133 @@ export function spansToHtml(spans: Span[]): string {
     .join("");
 }
 
+/**
+ * Phase 2: Convert an IRNode tree into SBlock[].
+ * Layout hints set in Phase 1 (html-ir.ts) drive the block type chosen here.
+ */
+function irToBlocks(nodes: IRNode[]): SBlock[] {
+  const blocks: SBlock[] = [];
+
+  for (const node of nodes) {
+    if (node.kind === "text") {
+      if (node.text) blocks.push(createBlock("p", { spans: [{ text: node.text }] }));
+      continue;
+    }
+
+    switch (node.layout) {
+      case "hbox": {
+        const cols: SBlock[] = [];
+        for (const child of node.children) {
+          if (child.layout === "col") {
+            // roundtrip: child is already a col — preserve its width/span
+            const inner = irToBlocks(child.children);
+            cols.push(createBlock("col", {
+              children: inner,
+              ...(child.width ? { width: child.width } : {}),
+              ...(child.span  ? { span:  child.span  } : {}),
+            }));
+          } else {
+            const inner = irToBlocks([child]);
+            cols.push(createBlock("col", {
+              children: inner,
+              ...(child.width ? { width: child.width } : {}),
+            }));
+          }
+        }
+        if (cols.length > 0) {
+          blocks.push(createBlock("hbox", {
+            children: cols as unknown as SColBlock[],
+            gap: node.gap ?? "md",
+            ...(node.align ? { align: node.align } : {}),
+            ...(node.styleOverrides ? { styleOverrides: node.styleOverrides } : {}),
+          }));
+        } else {
+          blocks.push(...irToBlocks(node.children));
+        }
+        break;
+      }
+
+      case "vbox": {
+        const inner = irToBlocks(node.children);
+        if (inner.length > 0) {
+          blocks.push(createBlock("vbox", {
+            children: inner,
+            gap: node.gap ?? "sm",
+            ...(node.align ? { align: node.align } : {}),
+            ...(node.styleOverrides ? { styleOverrides: node.styleOverrides } : {}),
+          }));
+        }
+        break;
+      }
+
+      case "grid": {
+        const cols: SBlock[] = [];
+        for (const child of node.children) {
+          if (child.layout === "col") {
+            const inner = irToBlocks(child.children);
+            cols.push(createBlock("col", {
+              children: inner,
+              ...(child.width ? { width: child.width } : {}),
+              ...(child.span  ? { span:  child.span  } : {}),
+            }));
+          } else {
+            const inner = irToBlocks([child]);
+            cols.push(createBlock("col", { children: inner }));
+          }
+        }
+        blocks.push(createBlock("grid", {
+          columns: node.gridColumns ?? ["1fr"],
+          gap: node.gap ?? "md",
+          children: cols as unknown as SColBlock[],
+        }));
+        break;
+      }
+
+      case "col":
+        blocks.push(...irToBlocks(node.children));
+        break;
+
+      case "callout": {
+        const inner = irToBlocks(node.children);
+        blocks.push(createBlock("callout", {
+          variant: node.calloutVariant ?? "info",
+          children: inner,
+          ...(node.styleOverrides ? { styleOverrides: node.styleOverrides } : {}),
+        }));
+        break;
+      }
+
+      case "flow":
+        blocks.push(...irToBlocks(node.children));
+        break;
+
+      case "leaf":
+      default: {
+        // Delegate to the tag-specific element builder
+        const el = node.raw;
+        if (el) {
+          let block = elementToBlock(el);
+          if (block && node.styleOverrides) {
+            block = { ...block, styleOverrides: node.styleOverrides } as SBlock;
+          }
+          if (block) blocks.push(block);
+        }
+        break;
+      }
+    }
+  }
+
+  return blocks;
+}
+
+/**
+ * @deprecated Use the IR-based pipeline (irToBlocks via htmlToBlocks) instead.
+ * Kept for callers that pass a NodeList directly without going through DOMParser.
+ */
+function collectBlocks(nodes: NodeList): SBlock[] {
+  return irToBlocks(domToIR(nodes));
+}
+
 function elementToBlock(el: Element): SBlock | null {
   const tag = el.tagName.toLowerCase();
 
@@ -180,19 +309,12 @@ function elementToBlock(el: Element): SBlock | null {
     return createBlock("table", { children: rows });
   }
 
-  // Containers: recurse would lose structural context — flatten to p
-  const CONTAINERS = new Set(["div", "section", "article", "main", "header", "footer", "aside"]);
-  if (CONTAINERS.has(tag)) {
-    const text = el.textContent?.trim();
-    return text ? createBlock("p", { spans: [{ text }] }) : null;
-  }
-
   // Unknown → p with text content
   const fallback = el.textContent?.trim();
   return fallback ? createBlock("p", { spans: [{ text: fallback }] }) : null;
 }
 
-/** Parse an HTML string into an SBlock array. */
+/** Parse an HTML string into an SBlock array using the two-phase IR pipeline. */
 export function htmlToBlocks(html: string): SBlock[] {
   const cleaned = html
     .replace(/^```(?:html)?\s*/i, "")
@@ -202,22 +324,9 @@ export function htmlToBlocks(html: string): SBlock[] {
   if (!cleaned || /^\s*[\[{]/.test(cleaned)) return [];
   if (typeof DOMParser === "undefined")          return [];
 
-  const doc    = new DOMParser().parseFromString(cleaned, "text/html");
-  const blocks: SBlock[] = [];
-
-  for (const node of Array.from(doc.body.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = (node.textContent ?? "").trim();
-      if (text) blocks.push(createBlock("p", { spans: [{ text }] }));
-      continue;
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) continue;
-
-    const block = elementToBlock(node as Element);
-    if (block) blocks.push(block);
-  }
-
-  return blocks;
+  const parsedDoc = new DOMParser().parseFromString(cleaned, "text/html");
+  const ir = domToIR(parsedDoc.body.childNodes);
+  return irToBlocks(ir);
 }
 
 function blockToHtml(b: SBlock): string {
@@ -266,21 +375,38 @@ function blockToHtml(b: SBlock): string {
     case "pagebreak":
       return `<hr class="pagebreak">`;
 
-    case "hbox":
-      return `<div data-block-type="hbox">${blocksToHtml((b as SHBoxBlock).children)}</div>`;
-
-    case "vbox":
-      return `<div data-block-type="vbox">${blocksToHtml((b as SVBoxBlock).children)}</div>`;
-
-    case "col": {
-      const width = (b as SColBlock).width
-        ? ` data-width="${escapeHtml((b as SColBlock).width!)}"`
-        : "";
-      return `<div data-block-type="col"${width}>${blocksToHtml((b as SColBlock).children)}</div>`;
+    case "hbox": {
+      const hb = b as SHBoxBlock;
+      let attr = ` data-block-type="hbox"`;
+      if (hb.gap)      attr += ` data-gap="${hb.gap}"`;
+      if (hb.align?.h) attr += ` data-align-h="${hb.align.h}"`;
+      if (hb.align?.v) attr += ` data-align-v="${hb.align.v}"`;
+      return `<div${attr}>${blocksToHtml(hb.children)}</div>`;
     }
 
-    case "grid":
-      return `<div data-block-type="grid">${blocksToHtml(b.children)}</div>`;
+    case "vbox": {
+      const vb = b as SVBoxBlock;
+      let attr = ` data-block-type="vbox"`;
+      if (vb.gap)      attr += ` data-gap="${vb.gap}"`;
+      if (vb.align?.v) attr += ` data-align-v="${vb.align.v}"`;
+      return `<div${attr}>${blocksToHtml(vb.children)}</div>`;
+    }
+
+    case "col": {
+      const cb = b as SColBlock;
+      let attr = ` data-block-type="col"`;
+      if (cb.width) attr += ` data-width="${escapeHtml(cb.width)}"`;
+      if (cb.span)  attr += ` data-span="${cb.span}"`;
+      return `<div${attr}>${blocksToHtml(cb.children)}</div>`;
+    }
+
+    case "grid": {
+      const gb = b as SGridBlock;
+      let attr = ` data-block-type="grid"`;
+      if (gb.columns.length) attr += ` data-columns="${escapeHtml(gb.columns.join(","))}"`;
+      if (gb.gap)            attr += ` data-gap="${gb.gap}"`;
+      return `<div${attr}>${blocksToHtml(gb.children)}</div>`;
+    }
 
     case "table":
       return `<table>${(b as STableBlock).children.map(blockToHtml).join("")}</table>`;
@@ -295,6 +421,8 @@ function blockToHtml(b: SBlock): string {
         `${blocksToHtml(cb.children)}</div>`
       );
     }
+
+    // SGridBlock is handled by the "grid" case above (type guard via cast)
 
     case "figcaption":
       return `<figcaption>${spansToHtml(b.spans)}</figcaption>`;

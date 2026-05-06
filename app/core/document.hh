@@ -304,7 +304,6 @@ struct Document {
         return out;
     }
 
-    // ── Factory helpers ───────────────────────────────────────────────────────
 
     /// Create a minimal Document from a plain-text string (no blocks, no NLP).
     [[nodiscard]] static Document from_text(std::string path_,

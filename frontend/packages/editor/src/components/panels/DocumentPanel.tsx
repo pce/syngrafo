@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useEditor } from "../../store/editor-store";
-import { isTextBlock, type SDocMeta, type PageSize, type PageOrientation, type SpacingToken } from "../../models/sdm";
+import { isTextBlock, type PageSize, type PageOrientation, type SpacingToken } from "../../models/sdm";
 import { type DocumentIntent, DOCUMENT_INTENT_META } from "../../models/editor-context";
 import { flattenBlocks } from "../../models/sdm-factory";
-
-// SDocMeta will gain `filename` when the schema agent updates sdm.ts;
-// we extend it locally in the interim.
-type DocMetaExt = { filename?: string };
 
 const PAGE_SIZES: PageSize[] = ["a4", "a5", "a3", "a6", "a0", "a1", "a2", "letter", "legal"];
 const SPACING_TOKENS: SpacingToken[] = ["none", "xs", "sm", "md", "lg", "xl", "2xl"];
@@ -31,15 +27,13 @@ export function DocumentPanel() {
   const { state, dispatch } = useEditor();
   const { doc, intent } = state;
 
-  const metaExt = doc?.meta as (SDocMeta & DocMetaExt) | undefined;
-
   const [localTitle, setLocalTitle] = useState(doc?.meta.title ?? "");
-  const [localFilename, setLocalFilename] = useState(metaExt?.filename ?? "");
+  const [localFilename, setLocalFilename] = useState(doc?.meta.filename ?? "");
 
   // Sync inputs when document identity changes (e.g. new doc loaded).
   useEffect(() => {
     setLocalTitle(doc?.meta.title ?? "");
-    setLocalFilename((doc?.meta as DocMetaExt | undefined)?.filename ?? "");
+    setLocalFilename(doc?.meta.filename ?? "");
   }, [doc?.id]);
 
   const stats = useMemo(() => {
@@ -97,8 +91,7 @@ export function DocumentPanel() {
               value={localFilename}
               onChange={(e) => setLocalFilename(e.target.value)}
               onBlur={(e) =>
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                dispatch({ type: "UPDATE_META", meta: { filename: e.target.value } as any })
+                dispatch({ type: "UPDATE_META", meta: { filename: e.target.value } })
               }
               className={INPUT_CLASS}
               placeholder="document.pdf"

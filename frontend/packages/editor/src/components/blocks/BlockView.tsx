@@ -1,13 +1,16 @@
 import React from "react";
 import type {
   SBlock,
+  SImgBlock,
   SStyleClass,
   SStyleProps,
   SpacingToken,
   Span,
 } from "../../models/sdm";
+import { useAssetSrc } from "../../hooks/useAssetSrc";
 import { useEditor } from "../../store/editor-store";
 import type { EditorAction } from "../../store/editor-store";
+import { createBlock } from "../../models/sdm-factory";
 
 export interface BlockViewProps {
   block: SBlock;
@@ -38,51 +41,76 @@ function resolveStyleProps(props: SStyleProps): React.CSSProperties {
   if (props.font) {
     const fontMap: Record<string, string> = {
       serif: "Georgia, serif",
-      sans: "Inter, sans-serif",
-      mono: "JetBrains Mono, monospace",
+      sans:  "Inter, sans-serif",
+      mono:  "JetBrains Mono, monospace",
     };
     css.fontFamily = fontMap[props.font];
   }
 
   if (props.size) {
     const sizeMap: Record<string, string> = {
-      xs: "0.75rem",
-      sm: "0.875rem",
-      md: "1rem",
-      lg: "1.125rem",
-      xl: "1.25rem",
-      "2xl": "1.5rem",
-      "3xl": "1.875rem",
-      "4xl": "2.25rem",
+      xs: "0.75rem", sm: "0.875rem", md: "1rem", lg: "1.125rem",
+      xl: "1.25rem", "2xl": "1.5rem", "3xl": "1.875rem", "4xl": "2.25rem",
     };
     css.fontSize = sizeMap[props.size];
   }
 
   if (props.weight) {
     const weightMap: Record<string, number> = {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
+      normal: 400, medium: 500, semibold: 600, bold: 700,
     };
     css.fontWeight = weightMap[props.weight];
   }
 
   if (props.leading) {
     const leadingMap: Record<string, number> = {
-      tight: 1.1,
-      snug: 1.25,
-      normal: 1.5,
-      relaxed: 1.625,
-      loose: 2,
+      tight: 1.1, snug: 1.25, normal: 1.5, relaxed: 1.625, loose: 2,
     };
     css.lineHeight = leadingMap[props.leading];
   }
 
-  if (props.style) css.fontStyle = props.style;
-  if (props.color) css.color = props.color;
-  if (props.background) css.background = props.background;
-  if (props.align) css.textAlign = props.align as React.CSSProperties["textAlign"];
+  if (props.tracking) {
+    const trackingMap: Record<string, string> = {
+      tight: "-0.05em", normal: "0em", wide: "0.05em", wider: "0.1em",
+    };
+    css.letterSpacing = trackingMap[props.tracking];
+  }
+
+  if (props.style)      css.fontStyle    = props.style;
+  if (props.color)      css.color        = props.color;
+  if (props.background) css.background   = props.background;
+  if (props.align)      css.textAlign    = props.align as React.CSSProperties["textAlign"];
+
+  if (props.decoration) {
+    css.textDecoration = props.decoration === "none" ? "none" : props.decoration;
+  }
+
+  if (props.border) {
+    const { color, width, side, radius } = props.border;
+    const radiusMap: Record<string, string> = {
+      none: "0", sm: "0.25rem", md: "0.375rem", lg: "0.5rem", full: "9999px",
+    };
+    if (radius) css.borderRadius = radiusMap[radius] ?? "0";
+    if (width && color) {
+      const styleVal = `${width} solid ${color}`;
+      switch (side ?? "all") {
+        case "all":    css.border = styleVal;          break;
+        case "top":    css.borderTop = styleVal;       break;
+        case "bottom": css.borderBottom = styleVal;    break;
+        case "left":   css.borderLeft = styleVal;      break;
+        case "right":  css.borderRight = styleVal;     break;
+      }
+    }
+  }
+
+  if (props.spacing) {
+    const spacingMap: Record<string, string> = {
+      none: "0", xs: "0.25rem", sm: "0.5rem", md: "1rem",
+      lg: "1.5rem", xl: "2rem", "2xl": "3rem",
+    };
+    if (props.spacing.inner) css.padding = spacingMap[props.spacing.inner] ?? "0";
+    if (props.spacing.outer) css.margin  = spacingMap[props.spacing.outer] ?? "0";
+  }
 
   return css;
 }
@@ -129,6 +157,70 @@ function renderSpan(span: Span, i: number): React.ReactNode {
 
 
 
+interface ImgBlockViewProps {
+  block:       SImgBlock;
+  selClass:    string;
+  inlineStyle: React.CSSProperties;
+  onSelect:    (e: React.MouseEvent) => void;
+}
+
+function ImgBlockView({ block, selClass, inlineStyle, onSelect }: ImgBlockViewProps): React.ReactElement {
+  const resolved  = useAssetSrc(block.src);
+  const hasImage  = resolved.startsWith("data:") ||
+                    resolved.startsWith("http://") ||
+                    resolved.startsWith("https://");
+  const isLoading = !hasImage &&
+                    (block.src.startsWith("asset://") || block.src.startsWith("local://"));
+
+  return (
+    <figure
+      data-block-id={block.id}
+      onClick={onSelect}
+      className={selClass}
+      style={{ margin: 0 }}
+    >
+      {hasImage ? (
+        <img
+          src={resolved}
+          alt={block.alt ?? ""}
+          style={{
+            maxWidth: "100%",
+            height: "auto",
+            display: "block",
+            objectFit: block.fit ?? "contain",
+            ...inlineStyle,
+          }}
+        />
+      ) : (
+        <div style={{
+          padding: "0.5rem",
+          opacity: 0.5,
+          border: "1px dashed currentColor",
+          borderRadius: "4px",
+          fontSize: "0.75rem",
+          fontFamily: "monospace",
+          minHeight: "3rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.4rem",
+        }}>
+          {isLoading
+            ? <><span style={{ opacity: 0.4 }}>⏳</span> {block.src}</>
+            : <><span style={{ opacity: 0.4 }}>🖼</span> {block.src}</>
+          }
+        </div>
+      )}
+      {block.caption && (
+        <figcaption style={{ fontSize: "0.8em", opacity: 0.7, marginTop: "0.25rem" }}>
+          {block.caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+
+
 export function BlockView({ block, selected, styles, dispatch }: BlockViewProps): React.ReactElement {
   // Use the store only to resolve selection state for recursively rendered children.
   const { state } = useEditor();
@@ -140,10 +232,30 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
   const selClass = selected ? "block-selected" : "";
 
-  const inlineStyle: React.CSSProperties =
+  const baseStyle: React.CSSProperties =
     block.style && styles[block.style]
       ? resolveStyleProps(styles[block.style]!.props)
       : {};
+  const overrideStyle: React.CSSProperties =
+    block.styleOverrides ? resolveStyleProps(block.styleOverrides) : {};
+  const inlineStyle: React.CSSProperties = { ...baseStyle, ...overrideStyle };
+
+  // Block-level spacing tokens → padding / margin on the selection wrapper.
+  const spacingStyle: React.CSSProperties = {};
+  if (block.spacing?.inner) {
+    const sm: Record<string, string> = {
+      none: "0", xs: "0.25rem", sm: "0.5rem", md: "1rem",
+      lg: "1.5rem", xl: "2rem", "2xl": "3rem",
+    };
+    spacingStyle.padding = sm[block.spacing.inner] ?? "0";
+  }
+  if (block.spacing?.outer) {
+    const sm: Record<string, string> = {
+      none: "0", xs: "0.25rem", sm: "0.5rem", md: "1rem",
+      lg: "1.5rem", xl: "2rem", "2xl": "3rem",
+    };
+    spacingStyle.margin = sm[block.spacing.outer] ?? "0";
+  }
 
   /** Renders a child block with selection resolved from the store. */
   const renderChild = (child: SBlock) => (
@@ -158,13 +270,42 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
   /** Wraps element in selection div for top-level / container blocks. */
   const wrap = (el: React.ReactElement): React.ReactElement => (
-    <div data-block-id={block.id} onClick={handleClick} className={selClass}>
+    <div data-block-id={block.id} onClick={handleClick} className={selClass} style={spacingStyle}>
       {el}
     </div>
   );
 
   const makeSpanBlur = (id: string) => (e: React.FocusEvent<HTMLElement>) => {
     dispatch({ type: "SET_BLOCK_SPANS", id, spans: [{ text: e.currentTarget.innerText }] });
+  };
+
+  /**
+   * Keyboard handler for contentEditable text blocks.
+   * Enter (without modifier) → insert new paragraph after this block.
+   * Backspace on an empty block → delete it.
+   */
+  const makeKeyDown = (blockId: string) => (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      const newBlock = createBlock("p");
+      dispatch({ type: "ADD_BLOCK", block: newBlock, afterId: blockId });
+      dispatch({ type: "SELECT_BLOCK", id: newBlock.id });
+      // Focus the new block's contentEditable after React re-renders.
+      requestAnimationFrame(() => {
+        const el = document.querySelector(
+          `[data-block-id="${newBlock.id}"] [contenteditable]`,
+        ) as HTMLElement | null;
+        el?.focus();
+      });
+    }
+    if (e.key === "Backspace") {
+      const text = e.currentTarget.textContent ?? "";
+      if (!text.trim()) {
+        e.preventDefault();
+        dispatch({ type: "DELETE_BLOCK", id: blockId });
+        dispatch({ type: "SELECT_BLOCK", id: null });
+      }
+    }
   };
 
 
@@ -176,12 +317,18 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
     case "h3":
     case "h4": {
       const Tag = block.type as "p" | "h1" | "h2" | "h3" | "h4";
+      const headingPlaceholders: Record<string, string> = {
+        p: "Paragraph", h1: "Heading 1", h2: "Heading 2", h3: "Heading 3", h4: "Heading 4",
+      };
       return wrap(
         <Tag
           style={inlineStyle}
           contentEditable
           suppressContentEditableWarning
           onBlur={makeSpanBlur(block.id)}
+          onKeyDown={makeKeyDown(block.id)}
+          data-placeholder={headingPlaceholders[block.type]}
+          className="sgf-editable focus:outline-none"
         >
           {block.spans.map(renderSpan)}
         </Tag>,
@@ -195,9 +342,27 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
           contentEditable
           suppressContentEditableWarning
           onBlur={makeSpanBlur(block.id)}
+          onKeyDown={makeKeyDown(block.id)}
+          data-placeholder="Quote"
+          className="sgf-editable focus:outline-none"
         >
           {block.spans.map(renderSpan)}
         </blockquote>,
+      );
+
+    case "figcaption":
+      return wrap(
+        <figcaption
+          style={inlineStyle}
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={makeSpanBlur(block.id)}
+          onKeyDown={makeKeyDown(block.id)}
+          data-placeholder="Caption"
+          className="sgf-editable focus:outline-none"
+        >
+          {block.spans.map(renderSpan)}
+        </figcaption>,
       );
 
     // li is always a child of ul/ol — skip the outer div to keep valid HTML.
@@ -206,11 +371,13 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
         <li
           data-block-id={block.id}
           style={inlineStyle}
-          className={selClass}
+          className={`${selClass} sgf-editable focus:outline-none`}
           onClick={handleClick}
           contentEditable
           suppressContentEditableWarning
           onBlur={makeSpanBlur(block.id)}
+          onKeyDown={makeKeyDown(block.id)}
+          data-placeholder="List item"
         >
           {block.spans.map(renderSpan)}
         </li>
@@ -224,11 +391,12 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
         <CellTag
           data-block-id={block.id}
           style={inlineStyle}
-          className={selClass}
+          className={`${selClass} focus:outline-none`}
           onClick={handleClick}
           contentEditable
           suppressContentEditableWarning
           onBlur={makeSpanBlur(block.id)}
+          onKeyDown={makeKeyDown(block.id)}
         >
           {block.spans.map(renderSpan)}
         </CellTag>
@@ -271,26 +439,17 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
 
 
-    case "img": {
-      const isLocal =
-        block.src.startsWith("local://") || block.src.startsWith("asset://");
-      return wrap(
-        <figure style={inlineStyle}>
-          {isLocal ? (
-            <div className="img-placeholder" style={{ padding: "0.5rem", opacity: 0.6, border: "1px dashed currentColor", borderRadius: "4px", fontSize: "0.75rem" }}>
-              {block.src}
-            </div>
-          ) : (
-            <img src={block.src} alt={block.alt ?? ""} style={{ maxWidth: "100%", height: "auto" }} />
-          )}
-          {block.caption && (
-            <figcaption style={{ fontSize: "0.8em", opacity: 0.7, marginTop: "0.25rem" }}>
-              {block.caption}
-            </figcaption>
-          )}
-        </figure>,
+    case "img":
+      return (
+        <div data-block-id={block.id} onClick={handleClick} className={selClass}>
+          <ImgBlockView
+            block={block as SImgBlock}
+            selClass=""
+            inlineStyle={inlineStyle}
+            onSelect={handleClick}
+          />
+        </div>
       );
-    }
 
 
 
@@ -400,13 +559,17 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
 
 
-    default:
+    default: {
+      // All known SBlock variants are handled above. This branch only fires
+      // for unknown future types — keep it for forward-compatibility.
+      const unknown = block as unknown as { id: string; type: string };
       return (
-        <div data-block-id={block.id} onClick={handleClick} className={selClass}>
-          <div data-block-type={(block as SBlock).type}>
-            [{(block as SBlock).type}]
+        <div data-block-id={unknown.id} onClick={handleClick} className={selClass}>
+          <div data-block-type={unknown.type}>
+            [{unknown.type}]
           </div>
         </div>
       );
+    }
   }
 }

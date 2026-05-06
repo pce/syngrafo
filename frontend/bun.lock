@@ -8,6 +8,9 @@
     "packages/editor": {
       "name": "@syngrafo/editor",
       "version": "0.1.0",
+      "dependencies": {
+        "fflate": "^0.8.2",
+      },
       "devDependencies": {
         "@saucer-dev/types": "^2.0.1",
         "@types/bun": "latest",

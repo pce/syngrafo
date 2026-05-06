@@ -7,6 +7,7 @@ import { StatsPanel } from "./components/panels/StatsPanel";
 import { NLPPanel } from "./components/panels/NLPPanel";
 import { DocumentPanel } from "./components/panels/DocumentPanel";
 import { ExportPanel } from "./components/export/ExportPanel";
+import { Toolbar } from "./components/toolbar/Toolbar";
 import type { SDocument } from "./models/sdm";
 import type { WorkspaceContext, DocumentIntent } from "./models/editor-context";
 import { WORKSPACE_CONTEXT_META } from "./models/editor-context";
@@ -70,6 +71,46 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
     return () => clearTimeout(t);
   }, [statusMessage, dispatch]);
 
+  // Inject editor-scoped CSS once: print namespacing + editable placeholders + selection ring.
+  useEffect(() => {
+    const STYLE_ID = "sgf-editor-css";
+    if (document.getElementById(STYLE_ID)) return;
+    const el = document.createElement("style");
+    el.id = STYLE_ID;
+    el.textContent = [
+      /* Placeholder on empty contentEditable blocks */
+      ".sgf-editable:empty::before {",
+      "  content: attr(data-placeholder);",
+      "  color: #9ca3af;",
+      "  pointer-events: none;",
+      "  font-style: italic;",
+      "}",
+      /* Selection ring */
+      ".block-selected {",
+      "  outline: 2px solid rgba(59,130,246,0.5);",
+      "  outline-offset: 2px;",
+      "  border-radius: 2px;",
+      "}",
+      /* Print: hide all editor chrome, show only the canvas page */
+      "@media print {",
+      "  .sgf-ui { display: none !important; }",
+      "  .sgf-canvas-outer {",
+      "    overflow: visible !important;",
+      "    height: auto !important;",
+      "    background: white !important;",
+      "  }",
+      "  .sgf-canvas-page {",
+      "    box-shadow: none !important;",
+      "    margin: 0 !important;",
+      "    border-radius: 0 !important;",
+      "    width: 100% !important;",
+      "  }",
+      "  html, body { overflow: visible !important; height: auto !important; }",
+      "}",
+    ].join("\n");
+    document.head.appendChild(el);
+  }, []);
+
   // Visibility rules.
   const showLeft = context === "layout" || context === "nlp";
   const showCanvas =
@@ -99,7 +140,7 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
     <div
       className={`flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden ${className}`}
     >
-      <header className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0 z-20 shadow-sm">
+      <header className="sgf-ui flex items-center gap-1 px-2 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0 z-20 shadow-sm">
         <div className="flex items-center gap-0.5 flex-1">
           {Object.values(WORKSPACE_CONTEXT_META).map((meta) => {
             const isActive = context === meta.id;
@@ -160,7 +201,7 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
 
         {showLeft && !isFullContentContext && leftOpen && (
           <>
-            <aside className="shrink-0 w-56 border-r border-[var(--theme-border)] bg-[var(--theme-surface)] flex flex-col overflow-hidden">
+            <aside className="sgf-ui shrink-0 w-56 border-r border-[var(--theme-border)] bg-[var(--theme-surface)] flex flex-col overflow-hidden">
               {/* Clickable header collapses the panel — no separate close button */}
               <div
                 onClick={() => setLeftOpen(false)}
@@ -184,14 +225,14 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
                 <DocumentPanel />
               </div>
             </aside>
-            <div className="w-0.5 shrink-0 bg-[var(--theme-border)] hover:bg-[var(--theme-primary)]/40 transition-colors cursor-col-resize" />
+            <div className="sgf-ui w-0.5 shrink-0 bg-[var(--theme-border)] hover:bg-[var(--theme-primary)]/40 transition-colors cursor-col-resize" />
           </>
         )}
 
         {showLeft && !isFullContentContext && !leftOpen && (
           <button
             onClick={() => setLeftOpen(true)}
-            className="w-5 shrink-0 flex flex-col items-center justify-center gap-1 border-r border-[var(--theme-border)] bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]"
+            className="sgf-ui w-5 shrink-0 flex flex-col items-center justify-center gap-1 border-r border-[var(--theme-border)] bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]"
           >
             <Icon name="chevron-right" size="xs" />
             <span
@@ -204,6 +245,7 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
         )}
 
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
+          {showCanvas && <Toolbar />}
           {showCanvas && <EditorCanvas />}
           {context === "stats" && <StatsPanel />}
           {context === "export" && <ExportPanel />}
@@ -211,8 +253,8 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
 
         {!isFullContentContext && (context === "layout" || context === "nlp") && (
           <>
-            <div className="w-0.5 shrink-0 bg-[var(--theme-border)]" />
-            <aside className="shrink-0 w-56 border-l border-[var(--theme-border)] bg-[var(--theme-surface)] overflow-hidden flex flex-col">
+            <div className="sgf-ui w-0.5 shrink-0 bg-[var(--theme-border)]" />
+            <aside className="sgf-ui shrink-0 w-56 border-l border-[var(--theme-border)] bg-[var(--theme-surface)] overflow-hidden flex flex-col">
               {context === "layout" && <StylePanel />}
               {context === "nlp" && <NLPPanel />}
             </aside>
@@ -223,7 +265,7 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
       {(statusMessage || isAnalyzing) && (
         <div
           className={[
-            "shrink-0 flex items-center gap-2 px-3 py-1 text-[10px] font-medium border-t border-[var(--theme-border)]",
+            "sgf-ui shrink-0 flex items-center gap-2 px-3 py-1 text-[10px] font-medium border-t border-[var(--theme-border)]",
             statusMessage?.kind === "error"
               ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
               : statusMessage?.kind === "warning"

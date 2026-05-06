@@ -8,36 +8,11 @@ import type {
 import type { SDocument, STextBlock } from "../models/sdm";
 import { isTextBlock } from "../models/sdm";
 import { flattenBlocks, updateBlock } from "../models/sdm-factory";
-
-declare global {
-  interface Window {
-    saucer?: {
-      call<T = string>(name: string, params?: unknown[]): Promise<T>;
-      exposed?: Record<string, (...args: unknown[]) => Promise<string>>;
-    };
-  }
-}
-
-function binding(name: string) {
-  return window.saucer?.exposed?.[name];
-}
-
-async function nlpCall<T>(
-  fn: ((...args: unknown[]) => Promise<string>) | undefined,
-  ...args: unknown[]
-): Promise<{ ok: boolean; data?: T; error?: string }> {
-  if (typeof fn !== "function") return { ok: false, error: "not connected" };
-  try {
-    const raw = await fn(...args);
-    return JSON.parse(raw) as { ok: boolean; data?: T; error?: string };
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
-}
+import { ipcBinding, ipcTryCall } from "./ipc";
 
 /** Check if the NLP C++ engine is reachable. */
 export function isNLPConnected(): boolean {
-  return typeof window.saucer?.exposed?.["nlp_health"] === "function";
+  return typeof ipcBinding("nlp_health") === "function";
 }
 
 export interface AnalyzeOptions {
@@ -56,7 +31,7 @@ export async function analyzeText(
   const lang = "en";
 
   // Tokenize — fall back to whitespace split if engine unavailable
-  const tokRes = await nlpCall<string[]>(binding("nlp_tokenize"), text);
+  const tokRes = await ipcTryCall<string[]>("nlp_tokenize", text);
   const rawTokens = tokRes.ok && tokRes.data
     ? tokRes.data
     : text.split(/\s+/).filter(Boolean);
@@ -64,10 +39,7 @@ export async function analyzeText(
 
   // POS tagging (opt-in)
   if (options?.pos) {
-    const posRes = await nlpCall<Array<{ pos: string }>>(
-      binding("nlp_pos"),
-      text,
-    );
+    const posRes = await ipcTryCall<Array<{ pos: string }>>("nlp_pos", text);
     if (posRes.ok && posRes.data) {
       posRes.data.forEach((p, i) => {
         const tok = tokens[i];
@@ -78,9 +50,9 @@ export async function analyzeText(
 
   // Keywords (default on)
   if (options?.keywords !== false) {
-    const kwRes = await nlpCall<
+    const kwRes = await ipcTryCall<
       Array<{ term: string; tfidf_score: number; frequency: number; pos: string }>
-    >(binding("nlp_keywords"), text, 20, lang);
+    >("nlp_keywords", text, 20, lang);
     if (kwRes.ok && kwRes.data) {
       const kwSet = new Map(kwRes.data.map((k) => [k.term.toLowerCase(), k.tfidf_score]));
       tokens.forEach((t) => {
@@ -95,9 +67,9 @@ export async function analyzeText(
 
   // NER (default on)
   if (options?.ner !== false) {
-    const nerRes = await nlpCall<
+    const nerRes = await ipcTryCall<
       Array<{ text: string; type: string; position: number }>
-    >(binding("nlp_entities"), text, lang);
+    >("nlp_entities", text, lang);
     if (nerRes.ok && nerRes.data) {
       for (const ent of nerRes.data) {
         const entWords = ent.text.split(/\s+/);
@@ -120,7 +92,7 @@ export async function analyzeText(
   // Readability (default on)
   let readability: BlockReadability | undefined;
   if (options?.readability !== false) {
-    const rdRes = await nlpCall<{
+    const rdRes = await ipcTryCall<{
       flesch_kincaid_grade:  number;
       readability_score:     number;
       complexity:            string;
@@ -128,7 +100,7 @@ export async function analyzeText(
       sentence_count:        number;
       avg_sentence_length:   number;
       suggestions:           string[];
-    }>(binding("nlp_readability"), text);
+    }>("nlp_readability", text);
     if (rdRes.ok && rdRes.data) {
       readability = {
         fleschKincaidGrade:  rdRes.data.flesch_kincaid_grade,

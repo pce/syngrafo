@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useEditor } from "../../store/editor-store";
 import { isTextBlock, type SBlock, type SBlockType } from "../../models/sdm";
 import { createBlock } from "../../models/sdm-factory";
@@ -59,10 +59,83 @@ function previewText(block: SBlock): string {
   return `[${block.type}]`;
 }
 
-function getChildren(block: SBlock): SBlock[] {
-  if (!("children" in block)) return [];
-  const ch = (block as unknown as { children?: SBlock[] }).children;
-  return Array.isArray(ch) ? (ch as SBlock[]) : [];
+function getBlockChildren(block: SBlock): SBlock[] {
+  const b = block as { children?: unknown };
+  return Array.isArray(b.children) ? (b.children as SBlock[]) : [];
+}
+
+// ─── Block type picker ───────────────────────────────────────────────────────
+
+interface BlockCategory {
+  label: string;
+  types: SBlockType[];
+}
+
+const BLOCK_CATEGORIES: BlockCategory[] = [
+  { label: "Text",      types: ["h1", "h2", "h3", "h4", "p", "quote", "figcaption"] },
+  { label: "List",      types: ["ul", "ol"] },
+  { label: "Media",     types: ["img", "code"] },
+  { label: "Structure", types: ["hr", "pagebreak"] },
+  { label: "Layout",    types: ["hbox", "vbox", "grid", "callout"] },
+  { label: "Table",     types: ["table"] },
+];
+
+const BLOCK_TYPE_LABEL: Partial<Record<SBlockType, string>> = {
+  h1: "Heading 1", h2: "Heading 2", h3: "Heading 3", h4: "Heading 4",
+  p: "Paragraph", quote: "Blockquote", figcaption: "Caption",
+  ul: "Bullet list", ol: "Numbered list",
+  img: "Image", code: "Code block",
+  hr: "Divider", pagebreak: "Page break",
+  hbox: "Horizontal box", vbox: "Vertical box",
+  grid: "Grid", callout: "Callout",
+  table: "Table",
+};
+
+interface BlockPickerPopoverProps {
+  onPick: (type: SBlockType) => void;
+  onClose: () => void;
+}
+
+function BlockPickerPopover({ onPick, onClose }: BlockPickerPopoverProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full right-0 z-30 mt-0.5 w-52 bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-lg shadow-lg overflow-y-auto max-h-72"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {BLOCK_CATEGORIES.map((cat) => (
+        <div key={cat.label}>
+          <div className="px-2 py-1 text-[8px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-50 bg-[var(--theme-bg)]/40 sticky top-0">
+            {cat.label}
+          </div>
+          <div className="px-1 pb-1">
+            {cat.types.map((t) => (
+              <button
+                key={t}
+                onClick={() => { onPick(t); onClose(); }}
+                className="w-full text-left flex items-center gap-2 px-2 py-1 rounded text-[10px] text-[var(--theme-text)] hover:bg-[var(--theme-primary)]/10 hover:text-[var(--theme-primary)] transition-colors"
+              >
+                <span className="font-mono opacity-50 text-[9px] w-12 shrink-0">{t.toUpperCase()}</span>
+                <span>{BLOCK_TYPE_LABEL[t] ?? t}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 
@@ -94,7 +167,7 @@ function TreeRow({
   const isSelected = id === selectedId;
   const isContainer = CONTAINER_TYPES.has(block.type);
   const isExpanded = expandedIds.has(id);
-  const children = getChildren(block);
+  const children = getBlockChildren(block);
 
   const childProps: Omit<TreeRowProps, "block"> = {
     selectedId, expandedIds,
@@ -222,15 +295,18 @@ export function BlockTreePanel() {
     dispatch({ type: "DUPLICATE_BLOCK", id });
   }, [dispatch]);
 
-  const handleAdd = useCallback(() => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const handleAdd = useCallback((type: SBlockType = "p") => {
     if (!doc) return;
-    const block = createBlock("p");
+    const block = createBlock(type);
     dispatch({
       type: "ADD_BLOCK",
       block,
       ...(selectedBlockId != null ? { afterId: selectedBlockId } : {}),
     });
     dispatch({ type: "SELECT_BLOCK", id: block.id });
+    setPickerOpen(false);
   }, [dispatch, doc, selectedBlockId]);
 
   const rowProps: Omit<TreeRowProps, "block"> = {
@@ -252,14 +328,24 @@ export function BlockTreePanel() {
           Blocks
         </span>
         <span className="text-[9px] text-[var(--theme-text-muted)] opacity-50">{blocks.length}</span>
-        <button
-          onClick={handleAdd}
-          disabled={!doc}
-          className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 transition-opacity font-bold disabled:opacity-40"
-          title="Add paragraph block"
-        >
-          + Add
-        </button>
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setPickerOpen((v) => !v)}
+            disabled={!doc}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] text-[10px] font-bold hover:opacity-90 transition-opacity disabled:opacity-40 whitespace-nowrap shrink-0"
+            title="Insert a new block"
+          >
+            <Icon name="plus" size="xs" />
+            <span>Add</span>
+            <Icon name="chevron-down" size="xs" />
+          </button>
+          {pickerOpen && (
+            <BlockPickerPopover
+              onPick={handleAdd}
+              onClose={() => setPickerOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Tree */}

@@ -2,21 +2,11 @@ import React, { useState, useCallback, useEffect } from "react";
 import { useEditor } from "../../store/editor-store";
 import { isTextBlock, type SBlock, type Span } from "../../models/sdm";
 import { Icon } from "../../components/Icon";
-
-declare global {
-  interface Window {
-    saucer?: {
-      call<T = string>(name: string, params?: unknown[]): Promise<T>;
-      exposed?: Record<string, (...args: unknown[]) => Promise<string>>;
-    };
-  }
-}
-
-async function ipcCall(name: string, ...args: unknown[]): Promise<string | null> {
-  const fn = window.saucer?.exposed?.[name];
-  if (typeof fn !== "function") return null;
-  return fn(...args);
-}
+import { ipcRawCall, parseIpcResult } from "../../services/ipc";
+import { htmlToBlocks } from "../../services/html-parser";
+import { blocksFromJson, decodeDocument } from "../../models";
+import { loadSdocBundle } from "../../services/sdoc-bundle";
+import { setAssetBlob, clearAssetBlobs } from "../../hooks/useAssetSrc";
 
 /** Removes runtime `nlp` fields from blocks before IPC transmission.
  *  The backend schema does not include NLP annotations and they must be
@@ -25,19 +15,6 @@ function stripNlp(blocks: SBlock[]): SBlock[] {
   return JSON.parse(
     JSON.stringify(blocks, (k, v) => (k === "nlp" ? undefined : v)),
   ) as SBlock[];
-}
-
-interface IpcResult<T = unknown> {
-  ok: boolean;
-  data?: T;
-  error?: string;
-}
-
-function parseIpcResult<T>(raw: string | null): IpcResult<T> {
-  if (raw === null) throw new Error("IPC binding not available");
-  const parsed = JSON.parse(raw) as IpcResult<T>;
-  if (!parsed.ok) throw new Error(parsed.error ?? "Unknown backend error");
-  return parsed;
 }
 
 interface RecentExport {
@@ -193,6 +170,98 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
+  const [importHtml, setImportHtml] = useState("");
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importJson, setImportJson]       = React.useState("");
+  const [importJsonMsg, setImportJsonMsg] = React.useState<string | null>(null);
+  const [isPickingFile, setIsPickingFile] = React.useState(false);
+
+  /**
+   * Open the native OS file picker via IPC, read the selected file, then
+   * either load it as the current document (full SDM envelope) or append
+   * its blocks (bare SBlock[] array).
+   *
+   * The browser File API / <input type="file"> is blocked in this webview;
+   * dms_select_files + dms_read_file is the correct native path.
+   */
+  const handleFilePickerLoad = useCallback(async () => {
+    if (isPickingFile) return;
+    setIsPickingFile(true);
+    try {
+      const pickRaw = await ipcRawCall("dms_select_files");
+      const pickRes = parseIpcResult<{ paths: string[] }>(pickRaw);
+      const paths   = pickRes.data?.paths ?? [];
+      if (paths.length === 0) return; // user cancelled
+
+      const path    = paths[0]!;
+      const ext     = path.split(".").pop()?.toLowerCase();
+
+      if (ext === "sdoc") {
+        // .sdoc ZIP bundle — fetch as data-URL, unzip in JS, populate blob store
+        const duRaw = await ipcRawCall("dms_fetch_data_url", path);
+        const duRes = parseIpcResult<{ data_url: string }>(duRaw);
+        const dataUrl = duRes.data?.data_url;
+        if (!dataUrl) throw new Error("Could not read bundle file");
+
+        clearAssetBlobs();
+        const bundle = loadSdocBundle(dataUrl);
+        for (const [uri, blobUrl] of bundle.assets) setAssetBlob(uri, blobUrl);
+
+        dispatch({ type: "SET_DOCUMENT", doc: bundle.document });
+        dispatch({ type: "SET_DOCUMENT_PATH", path });
+        dispatch({
+          type: "SET_STATUS",
+          text: `Loaded “${bundle.document.meta.title}” — ${bundle.assets.size} asset${bundle.assets.size === 1 ? "" : "s"} embedded`,
+          kind: "success",
+        });
+        return;
+      }
+      const readRaw = await ipcRawCall("dms_read_file", path);
+      const readRes = parseIpcResult<{ content: string | null }>(readRaw);
+      const text    = readRes.data?.content;
+
+      if (!text) {
+        dispatch({ type: "SET_STATUS", text: "File is empty or binary", kind: "warning" });
+        return;
+      }
+
+      const parsed: unknown = JSON.parse(text);
+
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed) &&
+        (parsed as Record<string, unknown>)["$schema"] === "syngrafo/1"
+      ) {
+        // Full SDM document — replace the current document
+        const sdoc = decodeDocument(text);
+        dispatch({ type: "SET_DOCUMENT", doc: sdoc });
+        dispatch({ type: "SET_DOCUMENT_PATH", path });
+        dispatch({
+          type: "SET_STATUS",
+          text: `Loaded "${sdoc.meta.title}" (${sdoc.blocks.length} blocks)`,
+          kind: "success",
+        });
+      } else {
+        // Bare SBlock[] fragment — append to current document
+        const blocks = blocksFromJson(parsed);
+        if (blocks.length === 0) {
+          dispatch({ type: "SET_STATUS", text: "No blocks found in file", kind: "warning" });
+          return;
+        }
+        dispatch({ type: "IMPORT_BLOCKS", blocks });
+        dispatch({
+          type: "SET_STATUS",
+          text: `Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} from file`,
+          kind: "success",
+        });
+      }
+    } catch (err) {
+      dispatch({ type: "SET_STATUS", text: `File error: ${(err as Error).message}`, kind: "error" });
+    } finally {
+      setIsPickingFile(false);
+    }
+  }, [isPickingFile, dispatch]);
 
   const flash = (msg: string) => {
     setCopyMsg(msg);
@@ -201,7 +270,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
 
   const loadRecentExports = useCallback(async () => {
     try {
-      const raw = await ipcCall("dms_get_recent_exports", 10);
+      const raw = await ipcRawCall("dms_get_recent_exports", 10);
       const res = parseIpcResult<RecentExport[]>(raw);
       setRecentExports(res.data ?? []);
     } catch {
@@ -216,7 +285,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
   const handleSave = useCallback(async () => {
     if (!doc) return;
     try {
-      const raw = await ipcCall(
+      const raw = await ipcRawCall(
         "dms_document_save",
         doc.id,
         doc.meta.title,
@@ -242,7 +311,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
     if (!doc) return;
     dispatch({ type: "SET_EXPORTING", value: true });
     try {
-      const raw = await ipcCall(
+      const raw = await ipcRawCall(
         "dms_save_pdf",
         doc.id,
         doc.meta.title,
@@ -268,7 +337,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
     if (!doc) return;
     dispatch({ type: "SET_EXPORTING", value: true });
     try {
-      const raw = await ipcCall(
+      const raw = await ipcRawCall(
         "dms_save_html",
         doc.id,
         doc.meta.title,
@@ -323,6 +392,40 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
     }
   }, [doc, dispatch]);
 
+  const handleImportHTML = useCallback(() => {
+    if (!doc || !importHtml.trim()) return;
+    const parsed = htmlToBlocks(importHtml);
+    if (parsed.length === 0) {
+      dispatch({ type: "SET_STATUS", text: "No blocks parsed from HTML", kind: "warning" });
+      return;
+    }
+    dispatch({ type: "IMPORT_BLOCKS", blocks: parsed });
+    dispatch({ type: "SET_STATUS", text: `Imported ${parsed.length} block${parsed.length === 1 ? "" : "s"}`, kind: "success" });
+    setImportMsg(`Imported ${parsed.length} block${parsed.length === 1 ? "" : "s"} ✓`);
+    setImportHtml("");
+    setTimeout(() => setImportMsg(null), 3000);
+  }, [doc, importHtml, dispatch]);
+
+  const handleImportJson = useCallback(() => {
+    if (!doc || !importJson.trim()) return;
+    let blocks: SBlock[];
+    try {
+      blocks = blocksFromJson(importJson.trim());
+    } catch (e) {
+      dispatch({ type: "SET_STATUS", text: `JSON parse error: ${(e as Error).message}`, kind: "error" });
+      return;
+    }
+    if (blocks.length === 0) {
+      dispatch({ type: "SET_STATUS", text: "No blocks found in JSON", kind: "warning" });
+      return;
+    }
+    dispatch({ type: "IMPORT_BLOCKS", blocks });
+    dispatch({ type: "SET_STATUS", text: `Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"}`, kind: "success" });
+    setImportJsonMsg(`Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} ✓`);
+    setImportJson("");
+    setTimeout(() => setImportJsonMsg(null), 3000);
+  }, [doc, importJson, dispatch]);
+
   const sectionCls =
     "rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface)] p-4 flex flex-col gap-3";
   const btnPrimary =
@@ -363,6 +466,109 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
           >
             <Icon name="close" size="xs" />
           </button>
+        )}
+      </div>
+
+      <div className={sectionCls}>
+        <div>
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
+            <Icon name="download" size="xs" className="rotate-180" />
+            Import HTML
+          </h3>
+          <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">
+            Paste HTML and click Import — blocks are appended to the document.
+            Divs, sections, tables, lists, and headings are all recognised.
+          </p>
+        </div>
+        <textarea
+          value={importHtml}
+          onChange={(e) => setImportHtml(e.target.value)}
+          rows={6}
+          placeholder={"<h1>Title</h1>\n<p>Paragraph text...</p>\n<ul><li>Item</li></ul>"}
+          className="w-full resize-y rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[10px] px-2 py-1.5 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+          spellCheck={false}
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={handleImportHTML}
+            disabled={!importHtml.trim() || !doc}
+            className={btnPrimary}
+          >
+            Import blocks
+          </button>
+          <button
+            onClick={() => { setImportHtml(""); setImportMsg(null); }}
+            disabled={!importHtml.trim()}
+            className={btnOutline}
+          >
+            Clear
+          </button>
+        </div>
+        {importMsg && (
+          <p className="text-[10px] text-emerald-600 font-medium">{importMsg}</p>
+        )}
+      </div>
+
+      <div className={sectionCls}>
+        <div>
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
+            <Icon name="download" size="xs" className="rotate-180" />
+            Import SDM JSON
+          </h3>
+          <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">
+            Load a full <code className="font-mono">.sdoc</code> / <code className="font-mono">.json</code> document
+            (replaces the current document), or paste a bare blocks array below to append.
+          </p>
+        </div>
+        {/* Label-based file inputs are blocked in this webview — use the native picker via IPC instead. */}
+        <button
+          onClick={() => void handleFilePickerLoad()}
+          disabled={isPickingFile}
+          className={btnPrimary}
+        >
+          {isPickingFile ? (
+            <span className="flex items-center justify-center gap-1.5">
+              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              Opening…
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-1.5">
+              <Icon name="download" size="xs" className="rotate-180" />
+              Load from file…
+            </span>
+          )}
+        </button>
+        <div className="flex items-center gap-2 text-[9px] text-[var(--theme-text-muted)] opacity-40">
+          <div className="flex-1 h-px bg-current" />
+          or paste a blocks array
+          <div className="flex-1 h-px bg-current" />
+        </div>
+        <textarea
+          value={importJson}
+          onChange={(e) => setImportJson(e.target.value)}
+          rows={5}
+          placeholder={'[{"type":"p","spans":[{"text":"Hello"}]}]'}
+          className="w-full resize-y rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[10px] px-2 py-1.5 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+          spellCheck={false}
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={handleImportJson}
+            disabled={!importJson.trim() || !doc}
+            className={btnPrimary}
+          >
+            Import blocks
+          </button>
+          <button
+            onClick={() => { setImportJson(""); setImportJsonMsg(null); }}
+            disabled={!importJson.trim()}
+            className={btnOutline}
+          >
+            Clear
+          </button>
+        </div>
+        {importJsonMsg && (
+          <p className="text-[10px] text-emerald-600 font-medium">{importJsonMsg}</p>
         )}
       </div>
 
@@ -469,7 +675,7 @@ export function ExportPanel({ onClose }: ExportPanelProps): React.ReactElement {
                   {exp.title || "Untitled"}
                 </span>
                 <button
-                  onClick={() => void ipcCall("dms_open_path", exp.path)}
+                  onClick={() => void ipcRawCall("dms_open_path", exp.path)}
                   className="shrink-0 text-[var(--theme-primary)] hover:opacity-70 transition-opacity font-bold"
                   title={exp.path}
                 >

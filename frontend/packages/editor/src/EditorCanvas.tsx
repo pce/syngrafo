@@ -153,11 +153,11 @@ export function EditorCanvas(): React.ReactElement {
   return (
     <div
       ref={containerRef}
-      className="editor-canvas-outer flex-1 min-h-0 overflow-y-auto bg-[var(--theme-bg)]"
+      className="sgf-canvas-outer flex-1 min-h-0 overflow-y-auto bg-[var(--theme-bg)]"
       onClick={handleContainerClick}
     >
       <div
-        className="editor-canvas-page mx-auto my-8 bg-white text-black shadow-lg rounded-sm"
+        className="sgf-canvas-page mx-auto my-8 bg-white text-black shadow-lg rounded-sm"
         style={{
           width: `${w}mm`,
           minHeight: `${h}mm`,
