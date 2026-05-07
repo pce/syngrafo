@@ -1,0 +1,24 @@
+{
+  "$schema": "syngrafo/1",
+  "id": "tpl-book-chapter",
+  "meta": { "title": "Book Chapter", "created_at": 1700000000, "updated_at": 1700000000 },
+  "page": { "size": "a5", "orientation": "portrait", "margin": "md", "showPageNumbers": true },
+  "styles": {
+    "chapter-num": { "props": { "font": "sans", "size": "xs", "tracking": "wide", "color": "#9ca3af", "weight": "semibold" } },
+    "drop-cap":    { "props": { "font": "serif", "size": "4xl", "weight": "bold", "leading": "tight" } },
+    "body":        { "props": { "font": "serif", "leading": "relaxed", "size": "sm" } },
+    "epigraph":    { "props": { "font": "serif", "style": "italic", "color": "#6b7280", "align": "center", "leading": "relaxed" } }
+  },
+  "blocks": [
+    { "id": "b1", "type": "p",    "style": "chapter-num", "spans": [{ "text": "CHAPTER ONE" }] },
+    { "id": "b2", "type": "h1",   "spans": [{ "text": "The Beginning" }] },
+    { "id": "b3", "type": "quote","style": "epigraph",    "spans": [{ "text": "An epigraph or opening quote goes here." }] },
+    { "id": "hr1","type": "hr" },
+    { "id": "b4", "type": "p",    "style": "body", "spans": [{ "text": "The story begins here. Replace this with your own prose …" }] },
+    { "id": "b5", "type": "p",    "style": "body", "spans": [{ "text": "Continue the narrative …" }] },
+    { "id": "pb1","type": "pagebreak" },
+    { "id": "b6", "type": "p",    "style": "chapter-num", "spans": [{ "text": "CHAPTER TWO" }] },
+    { "id": "b7", "type": "h1",   "spans": [{ "text": "The Next Chapter" }] },
+    { "id": "b8", "type": "p",    "style": "body", "spans": [{ "text": "The second chapter begins …" }] }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "$schema": "syngrafo/1",
+  "id": "tpl-invoice",
+  "meta": { "title": "Invoice", "created_at": 1700000000, "updated_at": 1700000000 },
+  "page": { "size": "a4", "orientation": "portrait", "margin": "md" },
+  "styles": {
+    "inv-title": { "props": { "font": "sans", "size": "4xl", "weight": "bold", "tracking": "tight" } },
+    "inv-meta": { "props": { "font": "mono", "size": "sm", "color": "#6b7280" } },
+    "inv-label": { "props": { "font": "sans", "size": "xs", "weight": "semibold", "tracking": "wide", "color": "#9ca3af" } },
+    "inv-th": { "props": { "font": "sans", "size": "xs", "weight": "bold", "tracking": "wide", "color": "#374151", "background": "#f3f4f6" } },
+    "inv-footer": { "props": { "font": "sans", "size": "sm", "weight": "semibold", "background": "#f9fafb" } },
+    "inv-total": { "props": { "font": "sans", "weight": "bold", "size": "lg" } }
+  },
+  "blocks": [
+    {
+      "id": "hdr",
+      "type": "hbox",
+      "gap": "md",
+      "children": [
+        {
+          "id": "col-l",
+          "type": "col",
+          "width": "55%",
+          "children": [
+            { "id": "l1", "type": "h1", "style": "inv-title", "spans": [{ "text": "INVOICE" }] },
+            { "id": "l2", "type": "p", "style": "inv-meta", "spans": [{ "text": "Your Company Name" }] },
+            { "id": "l3", "type": "p", "style": "inv-meta", "spans": [{ "text": "123 Business Street, City" }] },
+            { "id": "l4", "type": "p", "style": "inv-meta", "spans": [{ "text": "VAT / Tax ID: DE000000000" }] }
+          ]
+        },
+        {
+          "id": "col-r",
+          "type": "col",
+          "width": "45%",
+          "children": [
+            { "id": "r1", "type": "p", "style": "inv-label", "spans": [{ "text": "Invoice #" }] },
+            { "id": "r2", "type": "p", "style": "inv-meta", "spans": [{ "text": "INV-2025-001" }] },
+            { "id": "r3", "type": "p", "style": "inv-label", "spans": [{ "text": "Date" }] },
+            { "id": "r4", "type": "p", "style": "inv-meta", "spans": [{ "text": "2025-01-01" }] },
+            { "id": "r5", "type": "p", "style": "inv-label", "spans": [{ "text": "Due" }] },
+            { "id": "r6", "type": "p", "style": "inv-meta", "spans": [{ "text": "Net 30" }] }
+          ]
+        }
+      ]
+    },
+    { "id": "hr1", "type": "hr" },
+    { "id": "bt0", "type": "p", "style": "inv-label", "spans": [{ "text": "Bill To" }] },
+    { "id": "bt1", "type": "p", "spans": [{ "text": "Client Name" }] },
+    { "id": "bt2", "type": "p", "style": "inv-meta", "spans": [{ "text": "Client Address · City · ZIP" }] },
+    { "id": "hr2", "type": "hr" },
+
+    {
+      "id": "tbl",
+      "type": "table",
+      "data_source": { "type": "csv", "path": "data/documents/invoice/invoice-items.csv" },
+      "children": [
+        {
+          "id": "tr-head",
+          "type": "tr",
+          "header": true,
+          "children": [
+            { "id": "th1", "type": "th", "style": "inv-th", "spans": [{ "text": "Description" }] },
+            { "id": "th2", "type": "th", "style": "inv-th", "spans": [{ "text": "Qty" }] },
+            { "id": "th3", "type": "th", "style": "inv-th", "spans": [{ "text": "Unit Price" }] },
+            { "id": "th4", "type": "th", "style": "inv-th", "spans": [{ "text": "Amount" }] }
+          ]
+        },
+        {
+          "id": "tr-foot",
+          "type": "tr",
+          "footer": true,
+          "style": "inv-footer",
+          "children": [
+            {
+              "id": "tf1",
+              "type": "td",
+              "colspan": 3,
+              "styleOverrides": { "weight": "semibold" },
+              "spans": [{ "text": "Subtotal" }]
+            },
+            {
+              "id": "tf2",
+              "type": "td",
+              "agg": "sum",
+              "col_key": "amount",
+              "prefix": "€ ",
+              "decimals": 2,
+              "styleOverrides": { "weight": "bold" },
+              "spans": [{ "text": "" }]
+            }
+          ]
+        }
+      ]
+    },
+
+    { "id": "hr3", "type": "hr" },
+    {
+      "id": "totals",
+      "type": "hbox",
+      "gap": "md",
+      "children": [
+        { "id": "tc-l", "type": "col", "width": "60%", "children": [] },
+        {
+          "id": "tc-r",
+          "type": "col",
+          "width": "40%",
+          "children": [
+            {
+              "id": "t1",
+              "type": "p",
+              "style": "inv-meta",
+              "spans": [{ "text": "Tax (19 %): — see subtotal above" }]
+            },
+            {
+              "id": "t2",
+              "type": "p",
+              "style": "inv-total",
+              "spans": [{ "text": "Total Due: (subtotal + 19 % VAT)" }]
+            }
+          ]
+        }
+      ]
+    },
+    { "id": "hr4", "type": "hr" },
+    {
+      "id": "note",
+      "type": "callout",
+      "variant": "info",
+      "title": "Data source",
+      "children": [
+        {
+          "id": "note-p",
+          "type": "p",
+          "spans": [
+            {
+              "text": "The line items above are loaded from invoice-items.csv next to this template. Edit that file to add or change items — the Subtotal updates automatically (SUM computed in JS, no spreadsheet needed). For distribution, embed the CSV into a .sdoc bundle."
+            }
+          ]
+        }
+      ]
+    },
+    { "id": "hr5", "type": "hr" },
+    { "id": "terms", "type": "p", "style": "inv-meta", "spans": [{ "text": "Payment Terms: Net 30. Bank transfer to IBAN DE00 0000 0000 0000." }] }
+  ]
+}

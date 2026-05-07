@@ -94,8 +94,17 @@ endif()
 # Apple (default):  Apple Vision — zero extra deps, fastest on Apple Silicon.
 #                   Set NLP_APPLE_VISION=OFF to use Tesseract instead (e.g. CI parity).
 #
-# Non-Apple:        Tesseract always — find_package first, fetch from source if not found.
+# Non-Apple:        Tesseract preferred; detection order:
+#                   1. CMake config (find_package)
+#                   2. pkg-config (Ubuntu libtesseract-dev ships tesseract.pc)
+#                   3. FetchContent — guarded by NLP_FETCH_TESSERACT (default ON).
+#                      Set OFF on platforms / CI jobs where building leptonica+
+#                      tesseract from source is not desired (e.g. Windows CI until
+#                      the leptonica GDI+ / Windows-SDK-26100 issue is resolved).
 #
+option(NLP_FETCH_TESSERACT
+    "Fetch and build Tesseract+Leptonica from source when not found in system"
+    ON)
 if(APPLE)
     option(NLP_APPLE_VISION "Use Apple Vision OCR on macOS" ON)
     if(NLP_APPLE_VISION)
@@ -108,8 +117,42 @@ endif()
 
 # Tesseract — built when: non-Apple, or Apple with NLP_APPLE_VISION=OFF
 if(NOT APPLE OR NOT NLP_APPLE_VISION)
+    # ── Detection order ───────────────────────────────────────────────────────
+    # 1. CMake config mode  — find_package() (Tesseract ships TesseractConfig.cmake
+    #    when built from source and installed; NOT shipped by Ubuntu libtesseract-dev)
+    # 2. pkg-config         — Ubuntu/Debian libtesseract-dev ships tesseract.pc;
+    #    no cmake config file; pick it up via PkgConfig::TESSERACT_PC
+    # 3. FetchContent       — build from source (Windows CI; distros without dev pkg)
     find_package(Tesseract QUIET)
+
+    # ── Step 2: pkg-config fallback ───────────────────────────────────────────
     if(NOT Tesseract_FOUND AND NOT TARGET Tesseract::libtesseract)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(TESSERACT_PC QUIET IMPORTED_TARGET tesseract)
+            if(TESSERACT_PC_FOUND)
+                message(STATUS "[nlp] Tesseract found via pkg-config (system)")
+                add_library(Tesseract::libtesseract ALIAS PkgConfig::TESSERACT_PC)
+                set(Tesseract_FOUND TRUE)
+
+                # ocr_addon_tesseract.cpp calls pixRead/pixDestroy directly.
+                # GNU ld --as-needed won't follow libtesseract.so → liblept.so;
+                # leptonica must be on the final link command explicitly.
+                find_library(NLP_LEPT_LIBRARY NAMES lept leptonica)
+                if(NLP_LEPT_LIBRARY)
+                    target_link_libraries(nlp_engine PRIVATE "${NLP_LEPT_LIBRARY}")
+                    message(STATUS "[nlp] leptonica explicit link: ${NLP_LEPT_LIBRARY}")
+                else()
+                    message(WARNING "[nlp] leptonica not found — linker may fail on liblept symbols")
+                endif()
+            endif()
+        endif()
+    endif()
+
+    # ── Step 3: FetchContent — leptonica + tesseract from source ─────────────
+    # Guarded by NLP_FETCH_TESSERACT (default ON).  Set OFF via CMakePresets or
+    # -DNLP_FETCH_TESSERACT=OFF to skip this path and build without OCR.
+    if(NOT Tesseract_FOUND AND NOT TARGET Tesseract::libtesseract AND NLP_FETCH_TESSERACT)
         # On MSVC leptonica defaults SW_BUILD=ON, which calls find_package(SW REQUIRED).
         # SW is the sw.io package manager — we never want it; disable before the subdir runs.
         set(BUILD_PROG  OFF CACHE BOOL "" FORCE)
@@ -121,18 +164,55 @@ if(NOT APPLE OR NOT NLP_APPLE_VISION)
         )
         FetchContent_MakeAvailable(leptonica)
 
-        # LeptonicaConfig.cmake in the build tree includes LeptonicaTargets.cmake
-        # at line ~31, but that file is only written by cmake's install step.
-        # Tesseract's find_package(Leptonica REQUIRED) therefore fails at configure
-        # time.  Export the build-tree targets now so the file exists when tesseract
-        # processes its find_package call.
-        export(EXPORT LeptonicaTargets
-            NAMESPACE Leptonica::
-            FILE "${leptonica_BINARY_DIR}/LeptonicaTargets.cmake"
-        )
+        # ── MSVC / Windows SDK 26100 (Windows 11 24H2) GDI+ fix ──────────────
+        # leptonica's GDI+ code (GdiplusHeaders.h, GdiplusFlat.h) uses IStream
+        # and PROPID which are declared in <objbase.h> / <objidl.h>.  The Windows
+        # 11 SDK (10.0.26100.0) no longer includes those headers transitively
+        # from <windows.h>, causing "error C2061: syntax error: identifier
+        # 'IStream'".  Force-include objbase.h before every leptonica source file.
+        if(MSVC AND TARGET leptonica)
+            set(_lept_msvc_fix "${CMAKE_CURRENT_BINARY_DIR}/leptonica_msvc_fix.h")
+            file(WRITE "${_lept_msvc_fix}" "#include <objbase.h>\n")
+            target_compile_options(leptonica PRIVATE "/FI${_lept_msvc_fix}")
+        endif()
 
-        # Tell tesseract's find_package(Leptonica REQUIRED) where the just-built tree lives.
-        set(Leptonica_DIR "${leptonica_BINARY_DIR}" CACHE PATH "" FORCE)
+        # ── Leptonica cmake-config path fix ───────────────────────────────────
+        # leptonica's src/CMakeLists.txt writes LeptonicaTargets.cmake to
+        # ${CMAKE_BINARY_DIR} (the ROOT build dir, not leptonica's binary dir)
+        # because it uses CMAKE_BINARY_DIR instead of CMAKE_CURRENT_BINARY_DIR.
+        # LeptonicaConfig.cmake (generated in ${leptonica_BINARY_DIR}) includes
+        # LeptonicaTargets.cmake via CMAKE_CURRENT_LIST_DIR — which resolves to
+        # ${leptonica_BINARY_DIR} — so the include() always fails.
+        #
+        # Additionally, LeptonicaConfig.cmake sets Leptonica_INCLUDE_DIRS to the
+        # INSTALL prefix (e.g. "/usr/local/include") which doesn't exist in a
+        # FetchContent build tree.
+        #
+        # Fix: generate a minimal LeptonicaConfig.cmake in a separate directory
+        # that correctly points at build-tree paths and does NOT need
+        # LeptonicaTargets.cmake (the leptonica target is a real build-tree target
+        # in this CMake project — no imported target wrapper is required).
+        set(_lept_find_dir "${CMAKE_CURRENT_BINARY_DIR}/leptonica_find")
+        file(MAKE_DIRECTORY "${_lept_find_dir}")
+        file(WRITE "${_lept_find_dir}/LeptonicaConfig.cmake"
+            "# Auto-generated by syngrafo/external/nlp for FetchContent-built leptonica.\n"
+            "# Uses build-tree paths, not the install prefix.\n"
+            "set(Leptonica_FOUND TRUE)\n"
+            "set(Leptonica_VERSION \"1.84.1\")\n"
+            "set(Leptonica_LIBRARIES leptonica)\n"
+            "set(Leptonica_INCLUDE_DIRS\n"
+            "    \"${leptonica_SOURCE_DIR}/src\"\n"
+            "    \"${leptonica_BINARY_DIR}/src\"\n"
+            ")\n"
+        )
+        file(WRITE "${_lept_find_dir}/LeptonicaConfig-version.cmake"
+            "set(PACKAGE_VERSION \"1.84.1\")\n"
+            "set(PACKAGE_VERSION_COMPATIBLE TRUE)\n"
+            "set(PACKAGE_VERSION_EXACT FALSE)\n"
+            "set(PACKAGE_VERSION_UNSUITABLE FALSE)\n"
+        )
+        # Point tesseract's find_package(Leptonica REQUIRED) at our custom config.
+        set(Leptonica_DIR "${_lept_find_dir}" CACHE PATH "" FORCE)
 
         set(DISABLE_TIFF         ON  CACHE BOOL "" FORCE)
         set(DISABLE_CURL         ON  CACHE BOOL "" FORCE)

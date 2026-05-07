@@ -1,0 +1,28 @@
+{
+  "$schema": "syngrafo/1",
+  "id": "tpl-letter",
+  "meta": { "title": "Personal Letter", "created_at": 1700000000, "updated_at": 1700000000 },
+  "page": { "size": "a4", "orientation": "portrait", "margin": "lg" },
+  "styles": {
+    "meta":  { "props": { "size": "sm", "color": "#6b7280", "font": "sans" } },
+    "body":  { "props": { "font": "serif", "leading": "relaxed" } },
+    "sign":  { "props": { "font": "serif", "style": "italic" } }
+  },
+  "blocks": [
+    { "id": "b1",  "type": "p", "style": "meta", "spans": [{ "text": "Your Name" }] },
+    { "id": "b2",  "type": "p", "style": "meta", "spans": [{ "text": "Street · City · ZIP" }] },
+    { "id": "b3",  "type": "p", "style": "meta", "spans": [{ "text": "your@email.com" }] },
+    { "id": "b4",  "type": "hr" },
+    { "id": "b5",  "type": "p", "style": "meta", "spans": [{ "text": "City, Date" }] },
+    { "id": "b6",  "type": "hr" },
+    { "id": "b7",  "type": "p", "style": "meta", "spans": [{ "text": "Recipient Name" }] },
+    { "id": "b8",  "type": "p", "style": "meta", "spans": [{ "text": "Recipient Address" }] },
+    { "id": "b9",  "type": "hr" },
+    { "id": "b10", "type": "p", "style": "body", "spans": [{ "text": "Dear [Name]," }] },
+    { "id": "b11", "type": "p", "style": "body", "spans": [{ "text": "I am writing to you regarding …" }] },
+    { "id": "b12", "type": "p", "style": "body", "spans": [{ "text": "Please feel free to reach out if you have any questions." }] },
+    { "id": "b13", "type": "p", "style": "body", "spans": [{ "text": "Yours sincerely," }] },
+    { "id": "b14", "type": "hr" },
+    { "id": "b15", "type": "p", "style": "sign", "spans": [{ "text": "Your Name" }] }
+  ]
+}

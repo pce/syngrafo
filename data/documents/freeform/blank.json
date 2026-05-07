@@ -1,0 +1,11 @@
+{
+  "$schema": "syngrafo/1",
+  "id": "tpl-freeform",
+  "meta": { "title": "Blank Document", "created_at": 1700000000, "updated_at": 1700000000 },
+  "page": { "size": "a4", "orientation": "portrait", "margin": "md" },
+  "styles": {},
+  "blocks": [
+    { "id": "b1", "type": "h1", "spans": [{ "text": "Untitled Document" }] },
+    { "id": "b2", "type": "p",  "spans": [{ "text": "" }] }
+  ]
+}

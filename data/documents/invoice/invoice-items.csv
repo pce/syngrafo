@@ -1,0 +1,5 @@
+description,qty,unit_price,amount
+Service Item A,1,1200.00,1200.00
+Service Item B,3,450.00,1350.00
+Consulting (4 h),4,175.00,700.00
+Expenses,1,85.00,85.00
