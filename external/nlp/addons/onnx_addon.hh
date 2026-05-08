@@ -8,7 +8,7 @@
  *   #include "onnx/onnx_service.hh"      — IOnnxService (engine-layer interface)
  *
  * ONNXAddon is compiled only when ONNX Runtime is present (NLP_WITH_ONNX defined).
- * To exclude it from the build: -DDISABLE_ONNX=ON
+ * To exclude it from the build: -DNLP_WITH_ONNX=OFF
  *
  * ### Supported modalities
  *   - Text embedding   — BERT-family mean-pool or [CLS] vector

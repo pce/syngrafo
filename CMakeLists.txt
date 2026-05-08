@@ -78,7 +78,17 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/modules/systray")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/modules/model_downloader")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/modules/updater")
 
-# ─── Frontend (bun build + asset embedding) ───────────────────────────────────
+# Audio / Video backends
+# cmake/audio.cmake and cmake/video.cmake must be included BEFORE the
+# add_subdirectory calls below so that AUDIO_CSOUND_FOUND / VIDEO_FFMPEG_FOUND
+# and the audio_csound / video_ffmpeg INTERFACE targets are already defined
+# when external/{audio,video}/CMakeLists.txt are processed.
+include(cmake/audio.cmake)
+include(cmake/video.cmake)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/audio")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/video")
+
+#Frontend (bun build + asset embedding)
 include(cmake/frontend.cmake)
 
 # ─── SQLite / SQLCipher detection ─────────────────────────────────────────────
@@ -136,6 +146,8 @@ target_link_libraries(syngrafo PRIVATE
     saucer::model_downloader  # NLP model management (libcurl)
     saucer::updater           # auto-updater (libcurl, no process spawning)
     SQLite::SQLite3           # DMS persistence layer
+    pce_audio                 # CSound offline render (no-op stub when OFF)
+    pce_video                 # FFmpeg video decode  (no-op stub when OFF)
     ${CMAKE_DL_LIBS}
 )
 
@@ -168,10 +180,24 @@ if(APPLE)
     include(cmake/bundle_apple.cmake)
 endif()
 
-# ─── CPack installer configuration ────────────────────────────────────────────
+# Windows: deploy onnxruntime.dll next to the executable
+# NLP_ORT_DLL_PATH is exported by external/nlp/CMakeLists.txt as a CACHE INTERNAL
+# variable when WIN32 and ONNX are enabled. The DLL must be in the same directory
+# as syngrafo.exe at runtime; the copy is also included in the CPack installer.
+if(WIN32 AND DEFINED NLP_ORT_DLL_PATH AND EXISTS "${NLP_ORT_DLL_PATH}")
+    add_custom_command(TARGET syngrafo POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${NLP_ORT_DLL_PATH}"
+            "$<TARGET_FILE_DIR:syngrafo>"
+        COMMENT "[syngrafo] Deploying onnxruntime.dll"
+    )
+    install(FILES "${NLP_ORT_DLL_PATH}" DESTINATION "." COMPONENT Runtime)
+endif()
+
+# CPack installer configuration
 include(cmake/cpack_config.cmake)
 
-# ─── Optional: llama.cpp LM inference (SGF_WITH_LM) ────────────────────────
+# Optional: llama.cpp LM inference (SGF_WITH_LM)
 #
 # Adds local GGUF inference via llama.cpp to the build.
 # When OFF (default) the LMEngine compiles as a no-op stub; the JS bindings

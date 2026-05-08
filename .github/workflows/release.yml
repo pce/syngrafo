@@ -6,6 +6,18 @@ on:
     tags: ["v*.*.*"]
   pull_request:
     branches: ["**"]
+  # Manual trigger — lets you cut a "media" release (audio + video backends
+  # enabled) from any branch or tag without touching the default build matrix.
+  workflow_dispatch:
+    inputs:
+      with_audio:
+        description: "Build with CSound audio backend (SGF_WITH_AUDIO=ON)"
+        type: boolean
+        default: false
+      with_video:
+        description: "Build with FFmpeg video backend (SGF_WITH_VIDEO=ON)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +30,13 @@ jobs:
     name: macOS 15 · AppleClang 16
     runs-on: macos-15
     timeout-minutes: 60
+    # WITH_AUDIO / WITH_VIDEO resolve to "ON"/"OFF" strings consumed by cmake.
+    # MEDIA_LABEL becomes e.g. "-media" when either flag is ON so artifact
+    # names are unique across standard and media builds in the same repo.
+    env:
+      WITH_AUDIO: ${{ inputs.with_audio && 'ON' || 'OFF' }}
+      WITH_VIDEO: ${{ inputs.with_video && 'ON' || 'OFF' }}
+      MEDIA_LABEL: ${{ (inputs.with_audio || inputs.with_video) && '-media' || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +62,15 @@ jobs:
           key: bun-macos-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-macos-
 
+      # ── Optional media deps (macOS — brew is available on the runner) ───────
+      - name: Install audio deps (macOS)
+        if: inputs.with_audio
+        run: brew install csound
+
+      - name: Install video deps (macOS)
+        if: inputs.with_video
+        run: brew install ffmpeg
+
       - name: Download NLP models
         run: python3 scripts/download_models.py download --models embed,vocab
 
@@ -54,7 +82,10 @@ jobs:
           bun run build.ts --minify
 
       - name: Configure
-        run: cmake -B build --preset ci-macos
+        run: >
+          cmake -B build --preset ci-macos
+          -DSGF_WITH_AUDIO=${{ env.WITH_AUDIO }}
+          -DSGF_WITH_VIDEO=${{ env.WITH_VIDEO }}
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.ncpu)
@@ -66,7 +97,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: installer-macos-${{ github.sha }}
+          name: installer-macos${{ env.MEDIA_LABEL }}-${{ github.sha }}
           path: build/Syngrafo-*.dmg
           if-no-files-found: warn
 
@@ -75,6 +106,10 @@ jobs:
     name: Ubuntu 24.04 · Clang 20
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      WITH_AUDIO: ${{ inputs.with_audio && 'ON' || 'OFF' }}
+      WITH_VIDEO: ${{ inputs.with_video && 'ON' || 'OFF' }}
+      MEDIA_LABEL: ${{ (inputs.with_audio || inputs.with_video) && '-media' || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -102,12 +137,20 @@ jobs:
             clang-20 libc++-20-dev libc++abi-20-dev lld-20 \
             libwebkitgtk-6.0-dev libgtk-4-dev libadwaita-1-dev \
             libjson-glib-dev \
-            libsqlite3-dev libtesseract-dev \
-            tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-fra \
-            tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por \
-            tesseract-ocr-jpn tesseract-ocr-chi-sim \
-            tesseract-ocr-rus tesseract-ocr-ell tesseract-ocr-ara \
+            libsqlite3-dev \
             ninja-build pkg-config
+
+      # ── Optional media deps (Linux) ─────────────────────────────────────────
+      - name: Install audio deps (Linux)
+        if: inputs.with_audio
+        run: sudo apt-get install -y --no-install-recommends libcsound64-dev
+
+      - name: Install video deps (Linux)
+        if: inputs.with_video
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            libavformat-dev libavcodec-dev libavutil-dev \
+            libswscale-dev libswresample-dev
 
       - name: Cache CPM deps
         uses: actions/cache@v4
@@ -123,8 +166,19 @@ jobs:
           key: bun-linux-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-linux-
 
+      # Cache the ORT FetchContent download (src + stamp) so the ~230 MB tarball
+      # is only fetched once per version.  On a cache hit CMake finds the
+      # ExternalProject stamp and skips the download step entirely.
+      - name: Cache ORT download (Linux)
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/_deps/onnxruntime-src
+            build/_deps/onnxruntime-subbuild
+          key: ort-linux-x64-1.17.3
+
       - name: Download NLP models
-        run: python3 scripts/download_models.py download --models embed,vocab
+        run: python3 scripts/download_models.py download --models embed,vocab,ocr
 
       - name: Frontend
         working-directory: frontend/packages/react-client
@@ -134,7 +188,10 @@ jobs:
           bun run build.ts --minify
 
       - name: Configure
-        run: cmake -B build --preset ci-linux
+        run: >
+          cmake -B build --preset ci-linux
+          -DSGF_WITH_AUDIO=${{ env.WITH_AUDIO }}
+          -DSGF_WITH_VIDEO=${{ env.WITH_VIDEO }}
 
       - name: Build
         run: cmake --build build --parallel $(nproc)
@@ -146,7 +203,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: installer-linux-${{ github.sha }}
+          name: installer-linux${{ env.MEDIA_LABEL }}-${{ github.sha }}
           # Upload both the .deb and the .tar.gz produced by CPack
           path: |
             build/Syngrafo-*.deb
@@ -163,6 +220,9 @@ jobs:
       # sys.stdout.reconfigure() call in download_models.py — avoids cp1252
       # UnicodeEncodeError from the progress bar's block characters).
       PYTHONUTF8: "1"
+      WITH_AUDIO: ${{ inputs.with_audio && 'ON' || 'OFF' }}
+      WITH_VIDEO: ${{ inputs.with_video && 'ON' || 'OFF' }}
+      MEDIA_LABEL: ${{ (inputs.with_audio || inputs.with_video) && '-media' || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -188,8 +248,18 @@ jobs:
           key: bun-windows-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-windows-
 
+      # Cache the ORT FetchContent download (src + stamp) so the ~230 MB zip
+      # is only fetched once per version.
+      - name: Cache ORT download (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/_deps/onnxruntime-src
+            build/_deps/onnxruntime-subbuild
+          key: ort-windows-x64-1.17.3
+
       - name: Download NLP models
-        run: python3 scripts/download_models.py download --models embed,vocab
+        run: python3 scripts/download_models.py download --models embed,vocab,ocr
 
       - name: Frontend
         working-directory: frontend/packages/react-client
@@ -202,8 +272,19 @@ jobs:
 
       # Windows Server 2025 ships curl.exe but not the libcurl dev package.
       # vcpkg is pre-installed on all GitHub-hosted Windows runners.
-      - name: Install libcurl (Windows)
+      # Tesseract is NOT installed here: the ONNX OCR backend (ocr_addon_onnx.cpp)
+      # auto-activates when no Tesseract target is found and NLP_WITH_ONNX=ON (default).
+      - name: Install system deps (Windows)
         run: vcpkg install curl:x64-windows
+
+      # ── Optional media deps (Windows — vcpkg) ───────────────────────────────
+      - name: Install audio deps (Windows)
+        if: inputs.with_audio
+        run: vcpkg install csound:x64-windows
+
+      - name: Install video deps (Windows)
+        if: inputs.with_video
+        run: vcpkg install ffmpeg:x64-windows
 
       - name: Configure
         # Pass vcpkg's installed-packages directory as CMAKE_PREFIX_PATH so that
@@ -214,6 +295,8 @@ jobs:
         run: >
           cmake -B build --preset ci-windows
           "-DCMAKE_PREFIX_PATH=$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows"
+          "-DSGF_WITH_AUDIO=$env:WITH_AUDIO"
+          "-DSGF_WITH_VIDEO=$env:WITH_VIDEO"
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -227,7 +310,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: installer-windows-${{ github.sha }}
+          name: installer-windows${{ env.MEDIA_LABEL }}-${{ github.sha }}
           # Upload both the NSIS .exe installer and the portable .zip
           path: |
             build/Syngrafo-*.exe
@@ -243,6 +326,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      MEDIA_LABEL: ${{ (inputs.with_audio || inputs.with_video) && '-media' || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -250,14 +335,21 @@ jobs:
       # Download all three installer artifacts into the same dist/ directory.
       # CPack names them Syngrafo-<ver>-{Darwin,Linux,Windows}.{dmg,deb,…}
       # so the filenames are unique and can all live in one flat directory.
+      # The MEDIA_LABEL suffix must match what the build jobs produced.
       - uses: actions/download-artifact@v4
-        with: { name: "installer-macos-${{ github.sha }}", path: dist }
+        with:
+          name: "installer-macos${{ env.MEDIA_LABEL }}-${{ github.sha }}"
+          path: dist
 
       - uses: actions/download-artifact@v4
-        with: { name: "installer-linux-${{ github.sha }}", path: dist }
+        with:
+          name: "installer-linux${{ env.MEDIA_LABEL }}-${{ github.sha }}"
+          path: dist
 
       - uses: actions/download-artifact@v4
-        with: { name: "installer-windows-${{ github.sha }}", path: dist }
+        with:
+          name: "installer-windows${{ env.MEDIA_LABEL }}-${{ github.sha }}"
+          path: dist
 
       - name: List release assets
         run: ls -lh dist/

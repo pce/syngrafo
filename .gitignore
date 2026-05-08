@@ -11,6 +11,12 @@ frontend/packages/react-client/dist/
 frontend/packages/react-client/node_modules/
 frontend/packages/editor/node_modules/
 frontend/packages/editor/dist/
+
+frontend/packages/audio/node_modules/
+frontend/packages/video/node_modules/
+frontend/packages/shared/node_modules/
+
+
 # frontend/packages/**/node_modules/
 # frontend/packages/**/dist/
 

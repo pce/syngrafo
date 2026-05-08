@@ -4,7 +4,10 @@
   "private": true,
   "workspaces": [
     "packages/react-client",
-    "packages/editor"
+    "packages/editor",
+    "packages/shared",
+    "packages/audio",
+    "packages/video"
   ],
   "scripts": {
     "build": "cd packages/react-client && bun run build.ts --minify",

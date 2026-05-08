@@ -24,6 +24,8 @@
 #include "dms_bindings.hh"
 #include "bindings/pdf_bindings.hh"
 #include "bindings/lm_bindings.hh"   // LM inference — no-op when SGF_WITH_LM=OFF
+#include "bindings/audio_bindings.hh" // CSound offline render — no-op when SGF_WITH_AUDIO=OFF
+#include "bindings/video_bindings.hh" // FFmpeg video decode   — no-op when SGF_WITH_VIDEO=OFF
 #include <saucer/modules/desktop.hpp>
 
 #include <filesystem>
@@ -204,8 +206,12 @@ struct EngineHandle {
     }
 #endif
 
-    // ── OCR Addon ──────────────────────────────────────────────────────────
-    // Backend is compile-time: NLP_APPLE_VISION → Apple Vision; NLP_WITH_TESSERACT → libtesseract.
+    // Backend selected at compile time (exactly one of):
+    //   NLP_APPLE_VISION   → Apple Vision (macOS default, fastest on Apple Silicon)
+    //   NLP_WITH_TESSERACT → libtesseract (Linux via apt; Windows via vcpkg)
+    //   NLP_ONNX_OCR       → PP-OCRv4 ONNX (cross-platform fallback; needs
+    //                        data/models/ocr_rec.onnx + data/models/ocr_keys.txt;
+    //                        run: python3 scripts/download_models.py download --models ocr)
     ocr_addon = std::make_shared<OCRAddon>();
     if (ocr_addon->initialize()) {
       engine->set_ocr_service(ocr_addon);
@@ -221,9 +227,9 @@ struct EngineHandle {
                  fs::absolute(model_dir).string());
     } else {
       std::print(
-          "[nlp] capabilities: embed={} sentiment={} ner={} toxicity={}\n",
+          "[nlp] capabilities: embed={} sentiment={} ner={} toxicity={} ocr={}\n",
           engine->has_onnx(), engine->has_sentiment_model(),
-          engine->has_ner_model(), engine->has_toxicity_model());
+          engine->has_ner_model(), engine->has_toxicity_model(), engine->has_ocr());
     }
   }
 
@@ -487,7 +493,7 @@ static void register_bindings(saucer::smartview &wv, EngineHandle &nlp) {
   }
 #else
   wv.expose("nlp_embed", [](string) -> string {
-    return err_str("embed requires ONNX — built with DISABLE_ONNX");
+    return err_str("embed requires ONNX — built with NLP_WITH_ONNX=OFF");
   });
 #endif
 }
@@ -569,8 +575,12 @@ if (typeof window.__lm_error === 'undefined')
             nlp.engine->has_ocr() ? "true" : "false",
 #ifdef NLP_APPLE_VISION
             "vision",
-#else
+#elif defined(NLP_ONNX_OCR)
+            "onnx",
+#elif defined(NLP_WITH_TESSERACT)
             "tesseract",
+#else
+            "none",
 #endif
             NLP_ENGINE_VERSION,
             nlp.engine->has_onnx() ? "true" : "false",
@@ -672,6 +682,8 @@ if (typeof window.__lm_error === 'undefined')
     pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);
     pce::dms::register_pdf_bindings(*webview, dms, pdf, desk);
     pce::dms::register_lm_bindings(*webview, lm_engine, model_dl);
+    pce::dms::register_audio_bindings(*webview);
+    pce::dms::register_video_bindings(*webview);
 
 #ifndef NDEBUG
     webview->set_dev_tools(true);

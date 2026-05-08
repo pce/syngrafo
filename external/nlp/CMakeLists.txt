@@ -26,10 +26,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(simdutf)
 
 # ONNX Runtime (Simplified for this manual CMakeLists)
-option(DISABLE_ONNX "Disable ONNX" OFF)
-if(NOT DISABLE_ONNX)
+option(NLP_WITH_ONNX "Enable ONNX Runtime (embedding + ONNX OCR inference)" ON)
+if(NLP_WITH_ONNX)
     if(APPLE)
         set(ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.17.3/onnxruntime-osx-arm64-1.17.3.tgz")
+    elseif(WIN32)
+        set(ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.17.3/onnxruntime-win-x64-1.17.3.zip")
     else()
         set(ORT_URL "https://github.com/microsoft/onnxruntime/releases/download/v1.17.3/onnxruntime-linux-x64-1.17.3.tgz")
     endif()
@@ -237,6 +239,46 @@ if(NOT APPLE OR NOT NLP_APPLE_VISION)
     endif()
 endif()
 
+# ONNX OCR fallback
+# When neither Apple Vision nor Tesseract is available AND ONNX Runtime is
+# present, use the PP-OCRv4 ONNX recognition backend.
+# Also available on any platform via -DNLP_ONNX_OCR_FORCE=ON (e.g. macOS with
+# NLP_APPLE_VISION=OFF and no Tesseract, or to test the ONNX path on Linux).
+#
+# Model files (place in data/models/ or set NLP_MODEL_DIR):
+#   ocr_rec.onnx         — PP-OCRv4 mobile recognition model (~4.8 MB) [DEFAULT]
+#   ocr_rec_server.onnx  — PP-OCRv4 server recognition model (~13 MB)  [optional upgrade]
+#   ocr_keys.txt         — character vocabulary (ppocr_keys_v1.txt, 6623 chars)
+#
+# The runtime loader tries ocr_rec.onnx first; if absent it falls back to
+# ocr_rec_server.onnx.  Both share the same ocr_keys.txt vocabulary.
+#
+# Download default (mobile):  python3 scripts/download_models.py download --models ocr
+# Download server (full):     python3 scripts/download_models.py download --models ocr_full
+option(NLP_ONNX_OCR_FORCE
+    "Force ONNX OCR backend even when Tesseract or Apple Vision is available"
+    OFF)
+
+set(_nlp_need_onnx_ocr FALSE)
+if(NLP_ONNX_OCR_FORCE)
+    set(_nlp_need_onnx_ocr TRUE)
+elseif(NLP_WITH_ONNX)
+    # Auto-enable when no other OCR backend was selected and ONNX is available
+    if(NOT APPLE OR NOT NLP_APPLE_VISION)
+        if(NOT Tesseract_FOUND AND NOT TARGET Tesseract::libtesseract)
+            set(_nlp_need_onnx_ocr TRUE)
+        endif()
+    endif()
+endif()
+
+if(_nlp_need_onnx_ocr AND NLP_WITH_ONNX)
+    message(STATUS "[nlp] OCR: ONNX PP-OCRv4 (NLP_ONNX_OCR)")
+    target_sources(nlp_engine PRIVATE addons/ocr_addon_onnx.cpp)
+    target_compile_definitions(nlp_engine PUBLIC NLP_ONNX_OCR)
+elseif(_nlp_need_onnx_ocr AND NOT NLP_WITH_ONNX)
+    message(WARNING "[nlp] OCR: ONNX OCR requested but NLP_WITH_ONNX=OFF — no OCR backend")
+endif()
+
 target_include_directories(nlp_engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated/include>
@@ -247,11 +289,16 @@ target_link_libraries(nlp_engine PUBLIC
     simdutf::simdutf
 )
 
-if(NOT DISABLE_ONNX)
+if(NLP_WITH_ONNX)
     target_compile_definitions(nlp_engine PUBLIC NLP_WITH_ONNX)
     target_include_directories(nlp_engine PUBLIC "${onnxruntime_SOURCE_DIR}/include")
     if(APPLE)
         target_link_libraries(nlp_engine PUBLIC "${onnxruntime_SOURCE_DIR}/lib/libonnxruntime.dylib")
+    elseif(WIN32)
+        target_link_libraries(nlp_engine PUBLIC "${onnxruntime_SOURCE_DIR}/lib/onnxruntime.lib")
+        # Export the DLL path so the top-level CMakeLists can copy it next to the executable.
+        set(NLP_ORT_DLL_PATH "${onnxruntime_SOURCE_DIR}/lib/onnxruntime.dll"
+            CACHE INTERNAL "Path to onnxruntime.dll — must be deployed alongside the executable")
     else()
         target_link_libraries(nlp_engine PUBLIC "${onnxruntime_SOURCE_DIR}/lib/libonnxruntime.so")
     endif()

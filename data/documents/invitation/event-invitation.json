@@ -1,0 +1,22 @@
+{
+  "$schema": "syngrafo/1",
+  "id": "tpl-invitation",
+  "meta": { "title": "Event Invitation", "created_at": 1700000000, "updated_at": 1700000000 },
+  "page": { "size": "a5", "orientation": "portrait", "margin": "lg" },
+  "styles": {
+    "title": { "props": { "font": "serif", "size": "3xl", "weight": "bold", "align": "center" } },
+    "sub": { "props": { "font": "serif", "style": "italic", "align": "center", "color": "#6b7280" } },
+    "detail": { "props": { "font": "sans", "size": "sm", "align": "center", "leading": "relaxed" } },
+    "rsvp": { "props": { "font": "sans", "size": "xs", "align": "center", "weight": "semibold", "tracking": "wide" } }
+  },
+  "blocks": [
+    { "id": "b1", "type": "h1", "style": "title", "spans": [{ "text": "You're Invited!" }] },
+    { "id": "b2", "type": "p", "style": "sub", "spans": [{ "text": "Join us for a special occasion" }] },
+    { "id": "b3", "type": "hr" },
+    { "id": "b4", "type": "p", "style": "detail", "spans": [{ "text": "CalendarSVG - Saturday, 15 February 2025" }] },
+    { "id": "b5", "type": "p", "style": "detail", "spans": [{ "text": "ClockSVG    - 7:00 PM – Midnight" }] },
+    { "id": "b6", "type": "p", "style": "detail", "spans": [{ "text": "MapSVG      - The Grand Ballroom, 123 Main Street" }] },
+    { "id": "b7", "type": "hr" },
+    { "id": "b8", "type": "p", "style": "rsvp", "spans": [{ "text": "RSVP by 1 February · events@example.com" }] }
+  ]
+}

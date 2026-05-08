@@ -1,0 +1,72 @@
+{
+  "$schema": "syngrafo/1",
+  "id": "tpl-report",
+  "meta": { "title": "Quarterly Report", "created_at": 1700000000, "updated_at": 1700000000 },
+  "page": { "size": "a4", "orientation": "portrait", "margin": "md", "showPageNumbers": true },
+  "styles": {
+    "kpi-label": { "props": { "font": "sans", "size": "xs", "weight": "semibold", "tracking": "wide", "color": "#9ca3af" } },
+    "kpi-value": { "props": { "font": "sans", "size": "4xl", "weight": "bold" } },
+    "section-h": { "props": { "font": "sans", "weight": "bold", "size": "xl", "tracking": "tight" } },
+    "caption":   { "props": { "font": "sans", "size": "xs", "color": "#6b7280", "style": "italic" } }
+  },
+  "blocks": [
+    { "id": "b1", "type": "h1", "spans": [{ "text": "Q4 2024 Report" }] },
+    { "id": "b2", "type": "p", "style": "caption", "spans": [{ "text": "Prepared by Finance & Operations · 2024" }] },
+    { "id": "hr1", "type": "hr" },
+    {
+      "id": "kpi", "type": "hbox", "gap": "lg",
+      "children": [
+        { "id": "k1", "type": "col", "width": "33%", "children": [
+          { "id": "kl1", "type": "p", "style": "kpi-label", "spans": [{ "text": "Revenue" }] },
+          { "id": "kv1", "type": "p", "style": "kpi-value", "spans": [{ "text": "€ 1.2M" }] }
+        ]},
+        { "id": "k2", "type": "col", "width": "33%", "children": [
+          { "id": "kl2", "type": "p", "style": "kpi-label", "spans": [{ "text": "Growth" }] },
+          { "id": "kv2", "type": "p", "style": "kpi-value", "spans": [{ "text": "+18 %" }] }
+        ]},
+        { "id": "k3", "type": "col", "width": "34%", "children": [
+          { "id": "kl3", "type": "p", "style": "kpi-label", "spans": [{ "text": "NPS" }] },
+          { "id": "kv3", "type": "p", "style": "kpi-value", "spans": [{ "text": "72" }] }
+        ]}
+      ]
+    },
+    { "id": "hr2", "type": "hr" },
+    { "id": "h2a", "type": "h2", "style": "section-h", "spans": [{ "text": "Executive Summary" }] },
+    { "id": "p1",  "type": "p",  "spans": [{ "text": "This quarter saw continued growth across all business units …" }] },
+    { "id": "h2b", "type": "h2", "style": "section-h", "spans": [{ "text": "Key Findings" }] },
+    { "id": "c1",  "type": "callout", "variant": "info",    "title": "Market",      "children": [{ "id": "cp1", "type": "p", "spans": [{ "text": "Expansion in DACH region exceeded targets by 22 %." }] }] },
+    { "id": "c2",  "type": "callout", "variant": "warning", "title": "Ops",         "children": [{ "id": "cp2", "type": "p", "spans": [{ "text": "Supply-chain delays impacted Q4 delivery SLAs." }] }] },
+    { "id": "c3",  "type": "callout", "variant": "success", "title": "Engineering", "children": [{ "id": "cp3", "type": "p", "spans": [{ "text": "Platform migration completed on schedule." }] }] },
+    { "id": "h2c", "type": "h2", "style": "section-h", "spans": [{ "text": "Recommendations" }] },
+    { "id": "ol1", "type": "ol", "children": [
+      { "id": "li1", "type": "li", "spans": [{ "text": "Prioritise supply-chain resilience initiatives for Q1." }] },
+      { "id": "li2", "type": "li", "spans": [{ "text": "Accelerate DACH go-to-market investment." }] },
+      { "id": "li3", "type": "li", "spans": [{ "text": "Continue platform modernisation roadmap." }] }
+    ]},
+    { "id": "hr3", "type": "hr" },
+    { "id": "h2d", "type": "h2", "style": "section-h", "spans": [{ "text": "Appendix" }] },
+    {
+      "id": "atbl", "type": "table",
+      "children": [
+        { "id": "atr0", "type": "tr", "children": [
+          { "id": "ath1", "type": "th", "spans": [{ "text": "Business Unit" }] },
+          { "id": "ath2", "type": "th", "spans": [{ "text": "Q3" }] },
+          { "id": "ath3", "type": "th", "spans": [{ "text": "Q4" }] },
+          { "id": "ath4", "type": "th", "spans": [{ "text": "Δ" }] }
+        ]},
+        { "id": "atr1", "type": "tr", "children": [
+          { "id": "atd11", "type": "td", "spans": [{ "text": "Products" }] },
+          { "id": "atd12", "type": "td", "spans": [{ "text": "€ 520k" }] },
+          { "id": "atd13", "type": "td", "spans": [{ "text": "€ 630k" }] },
+          { "id": "atd14", "type": "td", "spans": [{ "text": "+21 %" }] }
+        ]},
+        { "id": "atr2", "type": "tr", "children": [
+          { "id": "atd21", "type": "td", "spans": [{ "text": "Services" }] },
+          { "id": "atd22", "type": "td", "spans": [{ "text": "€ 310k" }] },
+          { "id": "atd23", "type": "td", "spans": [{ "text": "€ 380k" }] },
+          { "id": "atd24", "type": "td", "spans": [{ "text": "+23 %" }] }
+        ]}
+      ]
+    }
+  ]
+}

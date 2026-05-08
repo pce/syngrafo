@@ -78,7 +78,7 @@ public:
         return true;
 #else
         (void)model_path; (void)vocab_path;
-        return false;  // built with -DDISABLE_ONNX=ON
+        return false;  // built with -DNLP_WITH_ONNX=OFF
 #endif
     }
 

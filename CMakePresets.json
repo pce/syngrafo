@@ -67,7 +67,7 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "clang-22",
         "CMAKE_CXX_COMPILER": "clang++-22",
-        "DISABLE_ONNX": "ON"
+        "NLP_WITH_ONNX": "OFF"
       }
     },
     {
@@ -80,8 +80,8 @@
     },
     {
       "name": "ci-linux",
-      "displayName": "Syngrafo — CI Linux (Clang 20 + libc++, no ONNX)",
-      "description": "Ubuntu 24.04 CI: clang-20 with libc++-20 (full C++23).",
+      "displayName": "Syngrafo — CI Linux (Clang 20 + libc++)",
+      "description": "Ubuntu 24.04 CI: clang-20 with libc++-20 (full C++23). ONNX enabled (default ON) — ORT download is cached between CI runs. No libtesseract-dev in apt (libstdc++ ABI mismatch); NLP_FETCH_TESSERACT=OFF skips the source build. ONNX OCR auto-activates as the fallback backend.",
       "inherits": "default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -90,20 +90,54 @@
         "CMAKE_CXX_FLAGS": "-stdlib=libc++",
         "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
         "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
-        "DISABLE_ONNX": "ON"
+        "NLP_FETCH_TESSERACT": "OFF"
+      }
+    },
+    {
+      "name": "local-fetch",
+      "displayName": "Syngrafo — Local: all backends built from source (no brew/port/vcpkg)",
+      "description": "Builds audio (libsndfile+CSound), video (FFmpeg), and LM (llama.cpp) from source via FetchContent/ExternalProject. Requires cmake, a C/C++ compiler, and make. First build is slow (~10-15 min); subsequent builds reuse _deps_installed/.",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SGF_WITH_AUDIO": "ON",
+        "SGF_FETCH_AUDIO": "ON",
+        "SGF_WITH_VIDEO": "ON",
+        "SGF_FETCH_VIDEO": "ON",
+        "SGF_WITH_LM": "ON"
+      }
+    },
+    {
+      "name": "local-fetch-debug",
+      "displayName": "Syngrafo — Local Debug: all backends from source",
+      "description": "Debug variant of local-fetch.",
+      "inherits": "local-fetch",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "local-vcpkg",
+      "displayName": "Syngrafo — Local: all backends via vcpkg (set VCPKG_ROOT first)",
+      "description": "Uses CMAKE_PREFIX_PATH from VCPKG_ROOT to find csound/ffmpeg/tesseract. Run: VCPKG_ROOT=/path/to/vcpkg python scripts/dev.py release --with-audio --with-video --with-lm",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SGF_WITH_AUDIO": "ON",
+        "SGF_WITH_VIDEO": "ON",
+        "SGF_WITH_LM": "ON"
       }
     },
     {
       "name": "ci-windows",
       "displayName": "Syngrafo — CI Windows (MSVC + Ninja, Release)",
-      "description": "Windows CI: MSVC cl.exe via Ninja. vcpkg packages found via CMAKE_PREFIX_PATH — no vcpkg toolchain (its add_library hook causes infinite recursion with saucer). NLP_FETCH_TESSERACT=OFF skips building leptonica+tesseract from source; leptonica 1.84.1 fails to compile with Windows SDK 10.0.26100.0 (GDI+ IStream issue) — OCR is planned for Windows but not required for CI.",
+      "description": "Windows CI: MSVC cl.exe via Ninja. vcpkg provides only curl:x64-windows (libcurl for updater/model_downloader). Tesseract is NOT installed — the ONNX OCR backend (ocr_addon_onnx.cpp) auto-activates since NLP_WITH_ONNX=ON (default) and no Tesseract target is found. NLP_FETCH_TESSERACT=OFF is kept as a safety net so the FetchContent source-build path (leptonica+tesseract) is never attempted.",
       "inherits": "default",
       "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl",
-        "DISABLE_ONNX": "ON",
         "NLP_FETCH_TESSERACT": "OFF"
       }
     }
@@ -117,7 +151,10 @@
     { "name": "build-ci", "configurePreset": "ci-linux-clang22" },
     { "name": "build-ci-macos", "configurePreset": "ci-macos" },
     { "name": "build-ci-linux", "configurePreset": "ci-linux" },
-    { "name": "build-ci-windows", "configurePreset": "ci-windows" }
+    { "name": "build-ci-windows", "configurePreset": "ci-windows" },
+    { "name": "build-local-fetch", "configurePreset": "local-fetch" },
+    { "name": "build-local-fetch-debug", "configurePreset": "local-fetch-debug" },
+    { "name": "build-local-vcpkg", "configurePreset": "local-vcpkg" }
   ],
   "testPresets": [
     { "name": "test-default", "configurePreset": "default", "output": { "outputOnFailure": true } },

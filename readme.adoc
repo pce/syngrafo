@@ -42,19 +42,47 @@ export NLP_MODEL_DIR=$(pwd)/data/models
 ----
 
 
-Granular:
 
-[source,bash]
-----
-# frontend
-cd frontend/packages/react-client && bun install && bun run build.ts --minify
 
-# C++ debug build (rebuilds frontend automatically with --use-client)
-python3 scripts/dev.py debug --use-client -j8
+=== The three pathes
 
-# run
-./build/syngrafo.app/Contents/MacOS/syngrafo
-----
+.Prerequisites
+[cols="1,1,2",options="header", frame="none"]
+|===
+| Tool | Min | Purpose
+| CMake | 3.25 | Build system
+| Clang / AppleClang | C++23 (Clang 18+ / AppleClang 16+) | Compiler
+| Bun | 1.0 | Frontend bundler
+| Python 3 | 3.9 | Dev runner, model scripts
+|===
+
+
+Two new CMakePresets:
+
+- `local-fetch`: no brew/port/vcpkg required; sets `SGF_FETCH_AUDIO=ON`, `SGF_FETCH_VIDEO=ON`, `SGF_WITH_LM=ON`. Subsequent builds reuse `_deps_installed/`.
+- `local-vcpkg`: feature flags ON, no fetch flags; `dev.py` injects `CMAKE_PREFIX_PATH` from `VCPKG_ROOT`.
+
+
+// 1. **vcpkg route** (`-DSGF_DEPS_MODE=vcpkg`): Use vcpkg to provide prebuilt binaries. User sets `VCPKG_ROOT` or passes `--vcpkg-root`.
+// 2. **FetchContent route** (`-DSGF_DEPS_MODE=fetch`): Download and compile from source into `build/_deps` without any package manager.
+// 3. **System/global route** (`-DSGF_DEPS_MODE=system`): Use installed system libraries (pkg-config, find_package, etc.).
+
+Local Compilation
+
+```/scripts/dev.py
+# vcpkg (fastest once installed):
+VCPKG_ROOT=~/vcpkg python scripts/dev.py release \
+    --with-audio --with-video --with-lm
+
+# pure fetch (no package manager at all):
+python scripts/dev.py release \
+    --with-audio --with-video --with-lm --deps-mode fetch
+
+# system (MacPorts, manual install, SGF_CSOUND_ROOT):
+python scripts/dev.py release \
+    --with-audio --with-video --with-lm --deps-mode system \
+    --cmake-extra SGF_CSOUND_ROOT=/opt/local SGF_FFMPEG_ROOT=/opt/local
+```
 
 == Concept
 
@@ -165,25 +193,6 @@ Default workspace path: `{source}/.syngrafo/{zone-slug}/`
 
 Zones support **AES-256 encryption** via SQLCipher. Passphrase → PBKDF2 key → macOS Keychain. Locked zones expose no index data; full search/NLP resumes on unlock.
 
-== NLP Models
-
-Optional ONNXAddon
-
-[source,bash]
-----
-python3 scripts/download_models.py download
-python3 scripts/download_models.py check
-----
-
-[cols="2,3,1,3",options="header", frame="none"]
-|===
-| File | Model | Size | Purpose
-| `embed.onnx` | all-MiniLM-L6-v2 (int8) | 23 MB | 384-dim sentence embeddings
-| `sentiment.onnx` | distilbert-sst-2 | 67 MB | Positive / negative
-| `ner.onnx` | bert-base-NER | 415 MB | CoNLL-2003 entities
-| `toxicity.onnx` | toxic-bert | 415 MB | Multi-label toxicity
-| `vocab.txt` | BERT WordPiece | 232 KB | Shared tokeniser
-|===
 
 == Database
 
@@ -207,30 +216,33 @@ auto rows = db.from("dms_zones")
 While the Migration offers StaticFileSources they are intentionally compile-time in Code
 
 
-== Build
 
-.Prerequisites
-[cols="1,1,2",options="header", frame="none"]
-|===
-| Tool | Min | Purpose
-| CMake | 3.25 | Build system
-| Clang / AppleClang | C++23 (Clang 18+ / AppleClang 16+) | Compiler
-| Bun | 1.0 | Frontend bundler
-| Python 3 | 3.9 | Dev runner, model scripts
-|===
+== NLP Models
+
+Optional ONNXAddon
 
 [source,bash]
 ----
-# debug build
-python3 scripts/dev.py debug --use-client -j8
-
-# force CMake to rescan dist/
-cmake -S . -B build && cmake --build build --config Debug
-
-# tests
-python3 scripts/dev.py test --target syngrafo
+python3 scripts/download_models.py download
+python3 scripts/download_models.py check
 ----
 
+[cols="2,3,1,3",options="header", frame="none"]
+|===
+| File | Model | Size | Purpose
+| `embed.onnx` | all-MiniLM-L6-v2 (int8) | 23 MB | 384-dim sentence embeddings
+| `sentiment.onnx` | distilbert-sst-2 | 67 MB | Positive / negative
+| `ner.onnx` | bert-base-NER | 415 MB | CoNLL-2003 entities
+| `toxicity.onnx` | toxic-bert | 415 MB | Multi-label toxicity
+| `vocab.txt` | BERT WordPiece | 232 KB | Shared tokeniser
+|===
+
+
+== OCR ONNX
+
+- **macOS** | Apple Vision | `NLP_APPLE_VISION` (default ON) |
+- **Windows** | PP-OCRv4 ONNX | `NLP_WITH_ONNX=ON` + no tesseract → auto-fallback in `ocr_addon_onnx.cpp` |
+- **Linux** | PP-OCRv4 ONNX | `NLP_WITH_ONNX=ON` (default) + no tesseract → auto-fallback in `ocr_addon_onnx.cpp` |
 
 
 

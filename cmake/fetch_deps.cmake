@@ -48,7 +48,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(saucer)
 
-# ── saucer::desktop (file/folder picker) ─────────────────────────────────────
+# MSVC / Windows SDK 26100: force-include COM headers for saucer
+# Windows SDK 10.0.26100.0 no longer pulls in <objbase.h> and <objidl.h>
+# transitively from <windows.h> when WIN32_LEAN_AND_MEAN is defined.  Saucer's
+# private headers (win32.utils.hpp, wv2.module.stable.cpp) reference IStream
+# and CoTaskMemFree which live in those excluded headers.  The same pattern is
+# already applied to leptonica in external/nlp/CMakeLists.txt.
+if(MSVC AND TARGET saucer)
+    set(_saucer_msvc_fix "${CMAKE_BINARY_DIR}/saucer_msvc_fix.h")
+    file(WRITE "${_saucer_msvc_fix}"
+        "/* auto-generated: Windows SDK 26100 COM fix for saucer */\n"
+        "#include <objbase.h>\n"
+        "#include <objidl.h>\n"
+    )
+    target_compile_options(saucer PRIVATE "/FI${_saucer_msvc_fix}")
+    message(STATUS "[saucer] Applied Windows SDK 26100 COM header fix (/FI objbase.h objidl.h)")
+endif()
+
+# saucer::desktop (file/folder picker)
 # saucer v8 does NOT auto-add desktop — confirmed from saucer's CMakeLists.txt.
 # Must be added explicitly. Added AFTER saucer so the saucer targets saucer-
 # desktop links against (saucer::saucer) are already defined.

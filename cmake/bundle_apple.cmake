@@ -6,7 +6,7 @@
 # deep-sign re-validates everything in one pass.
 
 # ONNX Runtime
-if(NOT DISABLE_ONNX)
+if(NLP_WITH_ONNX)
     set(_ORT_DYLIB
         "${FETCHCONTENT_BASE_DIR}/onnxruntime-src/lib/libonnxruntime.1.17.3.dylib")
 

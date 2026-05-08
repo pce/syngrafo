@@ -17,7 +17,7 @@ from typing import Iterable, List, Optional
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
-# ── optional log file ─────────────────────────────────────────────────────────
+# optional log file
 # Set DEV_LOG_FILE=/path/to/file.log (or pass --log-file on the CLI) to mirror
 # all log output to a file.  Useful for inspecting long configure runs.
 _LOG_FILE: Optional[Path] = None
@@ -89,6 +89,65 @@ def clean_cmake_cache(build_dir: Path) -> None:
     if cmake_files.is_dir():
         shutil.rmtree(cmake_files)
         logging.info("Cleaned %s/", cmake_files)
+
+
+
+def _detect_vcpkg_triplet() -> str:
+    """Return the default vcpkg triplet for the current OS + architecture."""
+    import platform as _plat
+    system  = _plat.system()           # Darwin / Linux / Windows
+    machine = _plat.machine()          # arm64 / x86_64 / AMD64 / aarch64
+    if system == "Darwin":
+        return "arm64-osx"  if machine in ("arm64", "aarch64") else "x64-osx"
+    if system == "Linux":
+        return "arm64-linux" if machine in ("arm64", "aarch64") else "x64-linux"
+    if system == "Windows":
+        return "arm64-windows" if machine in ("ARM64", "arm64") else "x64-windows"
+    return "x64-linux"
+
+
+def _resolve_vcpkg_root(args: "argparse.Namespace") -> Optional[Path]:
+    """Return the vcpkg root Path, or None if not found.
+
+    Priority: --vcpkg-root CLI arg  >  VCPKG_ROOT env var.
+    The returned Path is guaranteed to contain vcpkg(.exe).
+    """
+    candidates: List[str] = []
+    if getattr(args, "vcpkg_root", None):
+        candidates.append(str(args.vcpkg_root))
+    vcpkg_env = os.environ.get("VCPKG_ROOT", "").strip()
+    if vcpkg_env:
+        candidates.append(vcpkg_env)
+
+    for c in candidates:
+        root = Path(c)
+        exe  = root / ("vcpkg.exe" if sys.platform == "win32" else "vcpkg")
+        if exe.exists():
+            return root
+        logging.warning("vcpkg root '%s' given but executable not found at %s", c, exe)
+    return None
+
+
+def _vcpkg_install(
+    vcpkg_root: Path,
+    packages: List[str],
+    triplet: str,
+    dry: bool = False,
+) -> bool:
+    """Run `vcpkg install <pkg>:<triplet>` for each package."""
+    exe = vcpkg_root / ("vcpkg.exe" if sys.platform == "win32" else "vcpkg")
+    pkg_specs = [f"{p}:{triplet}" for p in packages]
+    cmd = [str(exe), "install"] + pkg_specs
+    logging.info("[vcpkg] %s", " ".join(cmd))
+    if dry:
+        logging.info("[vcpkg] (dry-run — skipped)")
+        return True
+    try:
+        run(cmd, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        logging.warning("[vcpkg] install failed: %s", exc)
+        return False
 
 
 def cmake_configure(source_dir: Path, build_dir: Path, build_type: str = "Release", extra: Optional[List[str]] = None) -> None:
@@ -241,6 +300,30 @@ def _build_parser() -> argparse.ArgumentParser:
     p_rel.add_argument(
         "--fresh", action="store_true",
         help="Wipe CMakeCache.txt + CMakeFiles/ before configuring (keeps _deps/)")
+    p_rel.add_argument(
+        "--with-audio", action="store_true", default=False,
+        help="Enable CSound offline-render backend (-DSGF_WITH_AUDIO=ON)")
+    p_rel.add_argument(
+        "--with-video", action="store_true", default=False,
+        help="Enable FFmpeg video-decode backend (-DSGF_WITH_VIDEO=ON)")
+    p_rel.add_argument(
+        "--with-lm", action="store_true", default=False,
+        help="Enable llama.cpp GGUF inference backend (-DSGF_WITH_LM=ON)")
+    p_rel.add_argument(
+        "--deps-mode",
+        choices=["auto", "system", "vcpkg", "fetch"],
+        default="auto",
+        help=(
+            "How to resolve optional media/LM library deps (default: auto).\n"
+            "  auto   — use vcpkg when VCPKG_ROOT is set, else system detection\n"
+            "  system — rely on pkg-config / find_library only (no downloads)\n"
+            "  vcpkg  — require vcpkg (error if not found); auto-install packages\n"
+            "  fetch  — add -DSGF_FETCH_AUDIO/VIDEO=ON (build from source into build/_deps)\n"
+        ),
+    )
+    p_rel.add_argument(
+        "--vcpkg-root", type=Path, default=None, metavar="PATH",
+        help="Path to vcpkg root dir (overrides VCPKG_ROOT env var).")
 
     # deploy
     p_dep = sub.add_parser("deploy", help="Package and prepare release for a platform")
@@ -295,7 +378,9 @@ def _cmake_configure_with_retry(
         if presets_file.exists():
             preset = "debug" if build_type == "Debug" else "default"
             logging.info("Using CMake preset '%s'...", preset)
-            run(["cmake", "--preset", preset], cwd=sd)
+            # Extra -D flags are forwarded *after* --preset so user overrides
+            # (e.g. --with-audio, vcpkg paths) are applied on top of the preset.
+            run(["cmake", "--preset", preset] + (extra or []), cwd=sd)
         else:
             cmake_configure(sd, bd, build_type=build_type, extra=extra)
     except subprocess.CalledProcessError:
@@ -309,7 +394,7 @@ def _cmake_configure_with_retry(
         clean_cmake_cache(bd)
         if presets_file.exists():
             preset = "debug" if build_type == "Debug" else "default"
-            run(["cmake", "--preset", preset], cwd=sd)
+            run(["cmake", "--preset", preset] + (extra or []), cwd=sd)
         else:
             cmake_configure(sd, bd, build_type=build_type, extra=extra)
 
@@ -339,7 +424,80 @@ def _cmd_release(args: argparse.Namespace) -> int:
     sd: Path = args.source_dir
     plat: str = args.platform
     logging.info("Configuring Release build for %s in %s", plat, bd)
-    extra = args.cmake_extra or []
+
+    extra = list(args.cmake_extra or [])
+
+    # Feature flags
+    with_audio = getattr(args, "with_audio", False)
+    with_video = getattr(args, "with_video", False)
+    with_lm    = getattr(args, "with_lm",    False)
+    deps_mode  = getattr(args, "deps_mode",  "auto")
+
+    if with_audio:
+        extra.append("SGF_WITH_AUDIO=ON")
+        logging.info("  Audio backend: ON  (-DSGF_WITH_AUDIO=ON)")
+    if with_video:
+        extra.append("SGF_WITH_VIDEO=ON")
+        logging.info("  Video backend: ON  (-DSGF_WITH_VIDEO=ON)")
+    if with_lm:
+        extra.append("SGF_WITH_LM=ON")
+        logging.info("  LM backend:    ON  (-DSGF_WITH_LM=ON)")
+
+    # dependency resolution note: LM (llama.cpp) always uses FetchContent
+    needs_media_deps = with_audio or with_video
+
+    if deps_mode in ("auto", "vcpkg"):
+        vcpkg_root = _resolve_vcpkg_root(args)
+
+        if vcpkg_root and needs_media_deps:
+            triplet = _detect_vcpkg_triplet()
+            logging.info("  Deps mode: vcpkg  (root=%s, triplet=%s)", vcpkg_root, triplet)
+
+            # Auto-install required vcpkg packages for requested features.
+            packages: List[str] = []
+            if with_audio:
+                packages.append("csound")
+            if with_video:
+                packages.append("ffmpeg")
+            dry = getattr(args, "dry_run", False)
+            _vcpkg_install(vcpkg_root, packages, triplet, dry=dry)
+
+            # Pass vcpkg's installed prefix to cmake as CMAKE_PREFIX_PATH.
+            # We deliberately avoid CMAKE_TOOLCHAIN_FILE: vcpkg's toolchain
+            # wraps add_library globally and triggers infinite recursion with
+            # saucer's CPM hook (reproduced with CMake 3.28+ + vcpkg 2024+).
+            # CMAKE_PREFIX_PATH gives find_package() access to the same headers
+            # and libs without the hook.
+            prefix = vcpkg_root / "installed" / triplet
+            if prefix.exists():
+                logging.info("  CMake prefix path: %s", prefix)
+                extra.append(f"CMAKE_PREFIX_PATH={prefix}")
+            else:
+                logging.warning(
+                    "vcpkg installed prefix not found: %s \u2014 "
+                    "cmake will fall back to system detection", prefix)
+
+        elif vcpkg_root is None and deps_mode == "vcpkg":
+            logging.error(
+                "--deps-mode vcpkg requested but no vcpkg root found.\n"
+                "  Set VCPKG_ROOT or pass --vcpkg-root /path/to/vcpkg")
+            return 1
+        elif vcpkg_root is None and deps_mode == "auto" and needs_media_deps:
+            logging.info(
+                "  Deps mode: system (VCPKG_ROOT not set).\n"
+                "  Tip: set VCPKG_ROOT or pass --vcpkg-root to auto-install media libs.\n"
+                "  Tip: pass --deps-mode fetch to build audio/video from source.")
+
+    elif deps_mode == "fetch":
+        logging.info("  Deps mode: fetch  (build audio/video from source into build/_deps)")
+        if with_audio:
+            extra.append("SGF_FETCH_AUDIO=ON")
+        if with_video:
+            extra.append("SGF_FETCH_VIDEO=ON")
+
+    else:  # deps_mode == "system"
+        logging.info("  Deps mode: system  (pkg-config / find_library only)")
+
     processed_extra = [
         (e if e.startswith("-D") else f"-D{e}") for e in extra
     ]
@@ -470,7 +628,7 @@ def _cmd_deps(args: argparse.Namespace) -> int:
     system = _plat.system()  # "Darwin", "Linux", "Windows"
     logging.info("Detected platform: %s", system)
 
-    # ── Required tools ────────────────────────────────────────────────────────
+    # Required tools
     # cmake  : build system
     # clang / gcc / MSVC : C++23 compiler (detected by CMake itself)
     # bun    : frontend build toolchain (https://bun.sh)
@@ -478,7 +636,7 @@ def _cmd_deps(args: argparse.Namespace) -> int:
     # pkg-config : used by CMake SQLCipher detection
 
     if system == "Darwin":
-        # ── macOS ─────────────────────────────────────────────────────────────
+        # macOS
         if _has("brew"):
             mgr = "brew"
             def install(*pkgs: str) -> bool:
@@ -488,13 +646,31 @@ def _cmd_deps(args: argparse.Namespace) -> int:
             def install(*pkgs: str) -> bool:
                 return _run_install(["sudo", "port", "install"] + list(pkgs))
         else:
-            logging.error(
-                "No package manager found on macOS.\n"
-                "Install Homebrew from https://brew.sh  or  MacPorts from https://www.macports.org"
+            mgr = None
+            logging.warning(
+                "No package manager found on macOS (brew / port).\n"
+                "Continuing with individual tool checks.\n"
+                "\n"
+                "  Toolchain tools (if missing):\n"
+                "    xcode-select --install          → git, python3, clang\n"
+                "    https://cmake.org/download/     → cmake pkg installer\n"
+                "    https://vcpkg.io                → C++ library deps (tesseract, etc.)\n"
+                "\n"
+                "  C/C++ library deps (saucer, etc.) are fetched automatically\n"
+                "  via FetchContent into build/_deps at CMake configure time.\n"
+                "\n"
+                "  Optional media backends (if you need them):\n"
+                "    vcpkg install csound ffmpeg  (set VCPKG_ROOT before cmake)\n"
+                "    cmake -DSGF_CSOUND_ROOT=/path -DSGF_FFMPEG_ROOT=/path ...\n"
             )
-            return 1
+            def install(*pkgs: str) -> bool:  # noqa: F811
+                logging.warning("  Skipping auto-install of [%s] — no package manager", ", ".join(pkgs))
+                return False
 
-        logging.info("Using package manager: %s", mgr)
+        if mgr:
+            logging.info("Using package manager: %s", mgr)
+        else:
+            logging.info("Checking individual tools (no package manager)...")
 
         tools = {
             "cmake":      (["cmake"],       "cmake"),
@@ -505,7 +681,10 @@ def _cmd_deps(args: argparse.Namespace) -> int:
             if _has(tool):
                 logging.info("  %-14s already installed", tool)
             else:
-                logging.info("  %-14s installing via %s\u2026", tool, mgr)
+                if mgr:
+                    logging.info("  %-14s installing via %s\u2026", tool, mgr)
+                else:
+                    logging.info("  %-14s NOT found \u2014 install manually (see above)", tool)
                 install(*pkgs)
 
         # bun (frontend)
@@ -517,7 +696,6 @@ def _cmd_deps(args: argparse.Namespace) -> int:
                           "curl -fsSL https://bun.sh/install | bash"])
 
     elif system == "Linux":
-        # ── Linux ─────────────────────────────────────────────────────────────
         if _has("apt-get"):
             mgr = "apt-get"
             def install(*pkgs: str) -> bool:
@@ -586,7 +764,6 @@ def _cmd_deps(args: argparse.Namespace) -> int:
                           "curl -fsSL https://bun.sh/install | bash"])
 
     elif system == "Windows":
-        # ── Windows ───────────────────────────────────────────────────────────
         if _has("winget"):
             mgr = "winget"
             def install(*ids: str) -> bool:

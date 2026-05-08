@@ -90,7 +90,7 @@ export function loadSdocBundle(dataUrl: string): SdocBundle {
 // ── Save ─────────────────────────────────────────────────────────────────────
 
 export interface SdocAsset {
-  /** e.g. "VHCLogo.png" — the filename inside assets/ */
+  /** e.g. "Logo.png" — the filename inside assets/ */
   filename: string;
   data:     Uint8Array;
 }

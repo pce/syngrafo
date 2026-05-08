@@ -137,7 +137,59 @@ MODELS: dict[str, ModelSpec] = {
         output_node="logits",
         activation="sigmoid",
     ),
-    # ── Tesseract OCR language data ──────────────────────────────────────────
+    # ONNX OCR — cross-platform fallback (Windows / Linux without Tesseract)
+    # PP-OCRv4 mobile recognition model — fast, ~4.8 MB, supports Latin + CJK + Arabic.
+    # This is the DEFAULT model: downloaded by `--models ocr` and loaded first at runtime.
+    # Used when neither Apple Vision (macOS) nor system Tesseract is available.
+    # Paired with ocr_keys.txt (character vocabulary, ppocr_keys_v1.txt format).
+    #
+    # On macOS:         Apple Vision is used by default; install this for the ONNX path.
+    # On Linux:         libtesseract-dev is preferred; this is the fallback.
+    # On Windows:       vcpkg tesseract is preferred; this is the fallback.
+    # Any platform:     cmake -DNLP_ONNX_OCR_FORCE=ON to force this path.
+    #
+    # Source: PaddleOCR PP-OCRv4 mobile rec model, converted to ONNX via paddle2onnx.
+    # Hosted on ModelScope by RapidAI (authoritative mirror, version-pinned to v3.8.0).
+    # URL and SHA256 verified from RapidAI/RapidOCR @ main:python/rapidocr/default_models.yaml
+    # SHA256: 48fc40f24f6d2a207a2b1091d3437eb3cc3eb6b676dc3ef9c37384005483683b
+    "ocr_rec": ModelSpec(
+        filename="ocr_rec.onnx",
+        url=(
+            "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.8.0/"
+            "onnx/PP-OCRv4/rec/ch_PP-OCRv4_rec_mobile.onnx"
+        ),
+        size_hint="~4.8 MB",
+        description="PP-OCRv4 mobile rec (ONNX) — fast cross-platform OCR, Latin + CJK + Arabic",
+        required=False,
+    ),
+    # PP-OCRv4 server recognition model — higher accuracy, ~13 MB.
+    # OPTIONAL: downloaded separately via `--models ocr_rec_server` or `--models ocr_full`.
+    # At runtime the C++ backend tries ocr_rec.onnx first; if absent it falls back to
+    # ocr_rec_server.onnx.  Both share the same ocr_keys.txt vocabulary.
+    # SHA256: 6a2676219be9907c7fc9cf61ebaa843bf2898777def567925b78886fcd90c07a
+    "ocr_rec_server": ModelSpec(
+        filename="ocr_rec_server.onnx",
+        url=(
+            "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.8.0/"
+            "onnx/PP-OCRv4/rec/ch_PP-OCRv4_rec_server.onnx"
+        ),
+        size_hint="~13 MB",
+        description="PP-OCRv4 server rec (ONNX) — higher accuracy, optional upgrade over mobile",
+        required=False,
+    ),
+    # Vocab: ppocr_keys_v1.txt — 6623 characters used by ALL PP-OCRv4 rec models.
+    # Sourced directly from PaddleOCR GitHub (stable raw URL; file is version-frozen).
+    "ocr_keys": ModelSpec(
+        filename="ocr_keys.txt",
+        url=(
+            "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/"
+            "main/ppocr/utils/ppocr_keys_v1.txt"
+        ),
+        size_hint="~120 kB",
+        description="PP-OCR character vocabulary (6623 chars: Latin + CJK + Arabic + special)",
+        required=False,
+    ),
+    # Tesseract OCR language data
     # Tesseract is compiled into the app as a linked library (libtesseract),
     # NOT as a subprocess/CLI tool.  CMake finds it via find_package(Tesseract):
     #   macOS:          brew install tesseract
@@ -332,12 +384,19 @@ def _cmd_download(args: argparse.Namespace) -> int:
     """Handle the 'download' sub-command."""
     data_dir = Path(args.dir) if args.dir else _default_data_dir()
 
-    # Convenience alias: --models tessdata expands to all tessdata-* entries
+    # Convenience aliases:
+    #   tessdata   -> all tessdata-* entries
+    #   ocr        -> ocr_rec (mobile, ~4.8 MB, default) + ocr_keys
+    #   ocr_full   -> ocr_rec_server (server, ~13 MB) + ocr_keys
     raw_models = args.models or ""
     expanded: list[str] = []
     for k in (k.strip() for k in raw_models.split(",") if k.strip()):
         if k == "tessdata":
             expanded.extend(mk for mk in MODELS if mk.startswith("tessdata-"))
+        elif k == "ocr":
+            expanded.extend(["ocr_rec", "ocr_keys"])
+        elif k == "ocr_full":
+            expanded.extend(["ocr_rec_server", "ocr_keys"])
         else:
             expanded.append(k)
 
@@ -395,6 +454,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "  python3 scripts/download_models.py download\n"
             "  python3 scripts/download_models.py download --models embed,vocab\n"
             "  python3 scripts/download_models.py download --models tessdata\n"
+            "  python3 scripts/download_models.py download --models ocr\n"
+            "  python3 scripts/download_models.py download --models ocr_full\n"
             "  python3 scripts/download_models.py download --force\n"
             "  python3 scripts/download_models.py --dir /tmp/data download\n"
         ),
