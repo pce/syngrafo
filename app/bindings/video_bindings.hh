@@ -18,32 +18,9 @@
 #include <saucer/smartview.hpp>
 
 #include "../../external/video/video_backend.hpp"
+#include "../internal/encoding.hh"
 
 namespace pce::dms {
-
-namespace video_detail {
-
-/** Minimal self-contained base-64 encoder — no external dependency. */
-[[nodiscard]] inline std::string base64_encode(const std::vector<uint8_t>& bytes)
-{
-    static constexpr std::string_view B64 =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string out;
-    out.reserve(((bytes.size() + 2u) / 3u) * 4u);
-    for (std::size_t i = 0; i < bytes.size(); i += 3) {
-        const uint32_t b =
-            (static_cast<uint32_t>(bytes[i]) << 16) |
-            ((i + 1 < bytes.size()) ? (static_cast<uint32_t>(bytes[i + 1]) << 8) : 0u) |
-            ((i + 2 < bytes.size()) ?  static_cast<uint32_t>(bytes[i + 2])        : 0u);
-        out += B64[(b >> 18) & 0x3Fu];
-        out += B64[(b >> 12) & 0x3Fu];
-        out += (i + 1 < bytes.size()) ? B64[(b >> 6) & 0x3Fu] : '=';
-        out += (i + 2 < bytes.size()) ? B64[ b       & 0x3Fu] : '=';
-    }
-    return out;
-}
-
-} // namespace video_detail
 
 inline void register_video_bindings(saucer::smartview& wv)
 {
@@ -84,7 +61,7 @@ inline void register_video_bindings(saucer::smartview& wv)
             const auto& f   = *result;
             const string b64 =
                 "data:image/jpeg;base64," +
-                video_detail::base64_encode(f.jpeg_bytes);
+                pce::encoding::base64_encode(f.jpeg_bytes);
             return json{
                 {"ok",   true},
                 {"data", {
@@ -111,7 +88,7 @@ inline void register_video_bindings(saucer::smartview& wv)
                 return json{{"ok", false}, {"error", result.error()}}.dump();
             const string b64 =
                 "data:image/jpeg;base64," +
-                video_detail::base64_encode(result->jpeg_bytes);
+                pce::encoding::base64_encode(result->jpeg_bytes);
             return json{
                 {"ok",   true},
                 {"data", {

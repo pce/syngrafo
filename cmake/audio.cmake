@@ -207,6 +207,10 @@ if(NOT AUDIO_CSOUND_FOUND AND SGF_FETCH_AUDIO)
         DEPENDS libsndfile_build
         URL       "https://github.com/csound/csound/archive/refs/tags/6.18.1.tar.gz"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        PATCH_COMMAND
+            ${CMAKE_COMMAND}
+                "-DFILE=<SOURCE_DIR>/include/plugin.h"
+                -P "${CMAKE_CURRENT_LIST_DIR}/patches/csound_opadr.cmake"
         DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps_downloads"
         SOURCE_DIR   "${CMAKE_BINARY_DIR}/_deps_src/csound_src"
         BINARY_DIR   "${CMAKE_BINARY_DIR}/_deps_src/csound_build"

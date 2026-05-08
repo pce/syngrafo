@@ -62,6 +62,14 @@ jobs:
           key: bun-macos-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-macos-
 
+      - name: Cache ORT download (macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/_deps/onnxruntime-src
+            build/_deps/onnxruntime-subbuild
+          key: ort-macos-arm64-1.25.1
+
       # ── Optional media deps (macOS — brew is available on the runner) ───────
       - name: Install audio deps (macOS)
         if: inputs.with_audio
@@ -138,6 +146,7 @@ jobs:
             libwebkitgtk-6.0-dev libgtk-4-dev libadwaita-1-dev \
             libjson-glib-dev \
             libsqlite3-dev \
+            libcurl4-openssl-dev \
             ninja-build pkg-config
 
       # ── Optional media deps (Linux) ─────────────────────────────────────────
@@ -175,7 +184,7 @@ jobs:
           path: |
             build/_deps/onnxruntime-src
             build/_deps/onnxruntime-subbuild
-          key: ort-linux-x64-1.17.3
+          key: ort-linux-x64-1.25.1
 
       - name: Download NLP models
         run: python3 scripts/download_models.py download --models embed,vocab,ocr
@@ -256,7 +265,7 @@ jobs:
           path: |
             build/_deps/onnxruntime-src
             build/_deps/onnxruntime-subbuild
-          key: ort-windows-x64-1.17.3
+          key: ort-windows-x64-1.25.1
 
       - name: Download NLP models
         run: python3 scripts/download_models.py download --models embed,vocab,ocr

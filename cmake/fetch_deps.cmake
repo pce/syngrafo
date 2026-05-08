@@ -48,21 +48,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(saucer)
 
-# MSVC / Windows SDK 26100: force-include COM headers for saucer
-# Windows SDK 10.0.26100.0 no longer pulls in <objbase.h> and <objidl.h>
-# transitively from <windows.h> when WIN32_LEAN_AND_MEAN is defined.  Saucer's
-# private headers (win32.utils.hpp, wv2.module.stable.cpp) reference IStream
-# and CoTaskMemFree which live in those excluded headers.  The same pattern is
-# already applied to leptonica in external/nlp/CMakeLists.txt.
+# MSVC / Windows SDK 26100: force-include missing Win32 headers for saucer targets.
+# WIN32_LEAN_AND_MEAN (set by saucer) strips several headers from <windows.h>:
+#   <objbase.h> / <objidl.h>  — IStream, CoTaskMemFree (saucer core)
+#   <winternl.h>              — NTSTATUS (saucer win32 layer)
+#   <shellapi.h>              — ShellExecuteW (saucer-desktop)
 if(MSVC AND TARGET saucer)
     set(_saucer_msvc_fix "${CMAKE_BINARY_DIR}/saucer_msvc_fix.h")
     file(WRITE "${_saucer_msvc_fix}"
-        "/* auto-generated: Windows SDK 26100 COM fix for saucer */\n"
         "#include <objbase.h>\n"
         "#include <objidl.h>\n"
+        "#include <winternl.h>\n"
+        "#include <shellapi.h>\n"
     )
     target_compile_options(saucer PRIVATE "/FI${_saucer_msvc_fix}")
-    message(STATUS "[saucer] Applied Windows SDK 26100 COM header fix (/FI objbase.h objidl.h)")
+    message(STATUS "[saucer] Applied Windows SDK 26100 COM + NTSTATUS + Shell header fix")
 endif()
 
 # saucer::desktop (file/folder picker)
@@ -76,6 +76,13 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(saucer_desktop)
+
+# saucer-desktop also needs ShellExecuteW from <shellapi.h> which WIN32_LEAN_AND_MEAN
+# excludes.  Apply the same force-include used for saucer core.
+if(MSVC AND TARGET saucer-desktop)
+    target_compile_options(saucer-desktop PRIVATE "/FI${_saucer_msvc_fix}")
+    message(STATUS "[saucer-desktop] Applied Windows SDK header fix")
+endif()
 
 # saucer::pdf — export current WebView page as PDF.
 # v3.1.0 is the version referenced by the saucer v8 example tree.

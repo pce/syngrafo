@@ -224,20 +224,21 @@ if(SGF_WITH_LM)
     set(GGML_BLAS            OFF CACHE BOOL "" FORCE)  # avoid BLAS dep scan
     set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)  # static link, no rpath
 
-    # llama.cpp b4901 — March 2025.  Update by changing the tag and the SHA256.
-    # URL tarball avoids the Git + vcpkg recursion issue documented in
-    # fetch_deps.cmake.
     FetchContent_Declare(
         llama_cpp
-        URL      https://github.com/ggerganov/llama.cpp/archive/refs/tags/b4901.tar.gz
+        URL      https://github.com/ggml-org/llama.cpp/archive/refs/tags/b9072.tar.gz
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        PATCH_COMMAND
+            ${CMAKE_COMMAND}
+                "-DSOURCE_DIR=<SOURCE_DIR>"
+                -P "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/llama_patches.cmake"
     )
     FetchContent_MakeAvailable(llama_cpp)
 
     target_compile_definitions(syngrafo PRIVATE SGF_WITH_LM)
     target_link_libraries(syngrafo PRIVATE llama)
 
-    message(STATUS "[syngrafo] SGF_WITH_LM=ON — llama.cpp b4901 enabled")
+    message(STATUS "[syngrafo] SGF_WITH_LM=ON — llama.cpp b9072 enabled")
 else()
     message(STATUS "[syngrafo] SGF_WITH_LM=OFF — LMEngine is a no-op stub")
 endif()

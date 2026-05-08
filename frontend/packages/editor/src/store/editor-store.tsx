@@ -445,6 +445,7 @@ interface EditorProviderProps {
   initialDoc?: SDocument;
   initialContext?: WorkspaceContext;
   initialIntent?: DocumentIntent;
+  initialPath?: string | null;
 }
 
 export function EditorProvider({
@@ -452,6 +453,7 @@ export function EditorProvider({
   initialDoc,
   initialContext = "layout",
   initialIntent = "freeform",
+  initialPath,
 }: EditorProviderProps): React.ReactElement {
   const [state, dispatch] = useReducer(editorReducer, {
     doc: initialDoc ?? null,
@@ -465,7 +467,7 @@ export function EditorProvider({
     isDirty: false,
     isExporting: false,
     statusMessage: null,
-    documentPath: null,
+    documentPath: initialPath ?? null,
   } satisfies EditorState);
 
   const value = useMemo<EditorContextValue>(() => ({ state, dispatch }), [state]);

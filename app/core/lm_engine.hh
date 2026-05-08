@@ -257,28 +257,23 @@ namespace detail {
 /// First call measures the required buffer size; second call fills it.
 /// Falls back to manual ChatML if llama_chat_apply_template returns <= 0
 /// (unsupported template, missing BOS, etc.).
-inline std::string build_prompt(llama_model*                  model,
-                                 const std::vector<LMMessage>& messages)
+inline std::string build_prompt(const std::vector<LMMessage>& messages)
 {
-    // Convert domain messages to llama_chat_message (non-owning views —
-    // the strings in LMMessage outlive this call).
     std::vector<llama_chat_message> chat;
     chat.reserve(messages.size());
     for (const auto& m : messages)
         chat.push_back({m.role.c_str(), m.content.c_str()});
 
-    // ── Pass 1: measure ───────────────────────────────────────────────────────
     const int32_t needed = llama_chat_apply_template(
-        model, nullptr,
+        nullptr,
         chat.data(), chat.size(),
         /*add_ass=*/true,
         nullptr, 0);
 
     if (needed > 0) {
-        // ── Pass 2: fill ─────────────────────────────────────────────────────
         std::string buf(static_cast<std::size_t>(needed), '\0');
         llama_chat_apply_template(
-            model, nullptr,
+            nullptr,
             chat.data(), chat.size(),
             /*add_ass=*/true,
             buf.data(), needed);
@@ -311,7 +306,7 @@ inline InferenceResult run_inference(llama_model*            model,
 {
     std::print("[lm] inference begin  cancel_id={}\n", req.cancel_id);
 
-    const std::string prompt    = build_prompt(model, req.messages);
+    const std::string prompt    = build_prompt(req.messages);
     const int32_t     prompt_sz = static_cast<int32_t>(prompt.size());
 
     // ── Tokenise ──────────────────────────────────────────────────────────────
@@ -325,7 +320,7 @@ inline InferenceResult run_inference(llama_model*            model,
 
     std::vector<llama_token> tokens(static_cast<std::size_t>(prompt_limit));
     int32_t n_tokens = llama_tokenize(
-        model, prompt.c_str(), prompt_sz,
+        llama_model_get_vocab(model), prompt.c_str(), prompt_sz,
         tokens.data(), prompt_limit,
         /*add_special=*/true, /*parse_special=*/true);
 
@@ -335,7 +330,7 @@ inline InferenceResult run_inference(llama_model*            model,
         // Buffer too small — tokenise fully, then truncate from the front.
         const int32_t needed = -n_tokens;
         std::vector<llama_token> full(static_cast<std::size_t>(needed));
-        llama_tokenize(model, prompt.c_str(), prompt_sz,
+        llama_tokenize(llama_model_get_vocab(model), prompt.c_str(), prompt_sz,
                        full.data(), needed, true, true);
         // Keep the LAST prompt_limit tokens (most recent context).
         std::copy(full.cend() - prompt_limit, full.cend(), tokens.begin());
@@ -413,12 +408,12 @@ inline InferenceResult run_inference(llama_model*            model,
             const llama_token tok = llama_sampler_sample(smpl, ctx, -1);
             llama_sampler_accept(smpl, tok);
 
-            if (llama_token_is_eog(model, tok))
+            if (llama_vocab_is_eog(llama_model_get_vocab(model), tok))
                 break;
 
             // Decode token to UTF-8 text piece (zero-copy: reuse stack buffer).
             const int32_t n_piece = llama_token_to_piece(
-                model, tok, piece, static_cast<int32_t>(sizeof(piece)),
+                llama_model_get_vocab(model), tok, piece, static_cast<int32_t>(sizeof(piece)),
                 /*lstrip=*/0, /*special=*/false);
             if (n_piece > 0)
                 output.append(piece, static_cast<std::size_t>(n_piece));

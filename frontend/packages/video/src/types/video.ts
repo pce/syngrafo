@@ -125,12 +125,9 @@ export interface VideoProjectSettings {
   defaultImageDurationFrames: number;
 }
 
-/**
- * Top-level project document stored in IndexedDB.
- * `id` is 0 until the record is persisted (IndexedDB autoIncrement fills it in).
- */
+/** Top-level project document. */
 export interface VideoProject {
-  /** IndexedDB auto-increment primary key. 0 = not yet saved. */
+  /** Numeric id. 0 = not yet persisted. */
   id: number;
   name: string;
   fps: number;

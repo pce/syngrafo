@@ -7,3 +7,4 @@ export * from './event-bus/EventBus.ts';
 export * from './event-bus/operators.ts';
 export * from './utils/time.ts';
 export * from './utils/id.ts';
+export * from './ipc.ts';

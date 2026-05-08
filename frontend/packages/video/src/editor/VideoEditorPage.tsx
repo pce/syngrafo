@@ -22,8 +22,10 @@ import { VideoPreview }   from '../preview/VideoPreview.tsx';
 
 export interface VideoEditorPageProps {
   /** If provided, loads an existing project; otherwise creates a new one. */
-  projectId?: number;
-  onBack?:    () => void;
+  projectId?:  number;
+  onBack?:     () => void;
+  workingDir?: string;
+  className?:  string;
 }
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -31,6 +33,8 @@ const SAVE_DEBOUNCE_MS = 500;
 export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   projectId,
   onBack,
+  workingDir = '',
+  className  = '',
 }) => {
   const [project,    setProject]    = useState<VideoProject | null>(null);
   const [loading,    setLoading]    = useState(true);
@@ -168,6 +172,13 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     if (refreshed) handleProjectChange(refreshed);
   }, [project, handleProjectChange]);
 
+  useEffect(() => {
+    if (showExportDialog && !exportPath && workingDir) {
+      const name = (project?.name ?? 'output').replace(/[\/\\:*?"<>|]/g, '_') + '.mp4';
+      setExportPath(workingDir + '/' + name);
+    }
+  }, [showExportDialog]);
+
   const handleExport = useCallback(async () => {
     if (!project) return;
     setExporting(true);
@@ -204,7 +215,7 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-gray-950 text-white overflow-hidden">
+    <div className={`flex flex-col h-full w-full bg-gray-950 text-white overflow-hidden ${className}`}>
 
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-3 px-4 py-2 bg-gray-900 border-b border-gray-700 flex-shrink-0">
@@ -303,12 +314,26 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
             <h2 className="text-sm font-semibold text-white mb-4">Export Video</h2>
 
             <label className="block text-xs text-gray-400 mb-1">Output path</label>
-            <input
-              value={exportPath}
-              onChange={e => setExportPath(e.target.value)}
-              placeholder="/path/to/output.mp4"
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white mb-4 focus:outline-none focus:border-indigo-500"
-            />
+            <div className="flex gap-2 mb-4">
+              <input
+                value={exportPath}
+                onChange={e => setExportPath(e.target.value)}
+                placeholder="/path/to/output.mp4"
+                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+              <button
+                onClick={async () => {
+                  const name = (project?.name ?? 'output').replace(/[\/\\:*?"<>|]/g, '_') + '.mp4';
+                  const suggested = workingDir ? workingDir + '/' + name : name;
+                  const res = await videoService.selectSavePath(suggested, 'mp4');
+                  if (res.ok && res.data?.path) setExportPath(res.data.path);
+                }}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 shrink-0"
+                title="Browse for output path"
+              >
+                …
+              </button>
+            </div>
 
             <div className="flex justify-end gap-2">
               <button

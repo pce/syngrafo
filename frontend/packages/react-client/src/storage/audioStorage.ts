@@ -1,9 +1,5 @@
-/**
- * audioStorage — persistence layer for AudioRecordingDocument records.
- *
- * This is a minimal stub.  Replace the bodies with IndexedDB / SQLite (via
- * the saucer DMS bridge) as needed.
- */
+// In-memory persistence layer for AudioRecordingDocument records.
+// Disk persistence goes through the DMS IPC layer (dms_write_file / dms_read_file).
 
 import type { AudioRecordingDocument } from "../types/audio";
 

@@ -30,6 +30,7 @@ export interface EditorShellProps {
   doc: SDocument;
   initialContext?: WorkspaceContext;
   initialIntent?: DocumentIntent;
+  initialPath?: string;
   onSave?: (doc: SDocument) => Promise<void> | void;
   className?: string;
 }
@@ -42,6 +43,7 @@ export function EditorShell({
   doc,
   initialContext = "layout",
   initialIntent = "freeform",
+  initialPath,
   onSave,
   className = "",
 }: EditorShellProps): React.ReactElement {
@@ -50,6 +52,7 @@ export function EditorShell({
       initialDoc={doc}
       initialContext={initialContext}
       initialIntent={initialIntent}
+      initialPath={initialPath}
     >
       <EditorShellContent {...(onSave ? { onSave } : {})} className={className} />
     </EditorProvider>

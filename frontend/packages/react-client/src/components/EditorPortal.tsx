@@ -11,6 +11,7 @@ export interface EditorPortalProps {
   onClose?: () => void;
   /** Receives the updated document after the user presses Save. */
   onSave?: (doc: SDocument) => void;
+  workingDir?: string;
 }
 
 /**
@@ -20,18 +21,19 @@ export interface EditorPortalProps {
  * EditorShell subtree only exists while the portal is open — hooks, observers,
  * and timers all clean up automatically on close.
  */
-export function EditorPortal({ open, doc, onClose, onSave }: EditorPortalProps) {
+export function EditorPortal({ open, doc, onClose, onSave, workingDir }: EditorPortalProps) {
   if (!open) return null;
-  return <EditorPortalContent doc={doc} onClose={onClose} onSave={onSave} />;
+  return <EditorPortalContent doc={doc} onClose={onClose} onSave={onSave} workingDir={workingDir} />;
 }
 
 interface ContentProps {
   doc?: SDocument;
   onClose?: () => void;
   onSave?: (doc: SDocument) => void;
+  workingDir?: string;
 }
 
-function EditorPortalContent({ doc: docProp, onClose, onSave }: ContentProps) {
+function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: ContentProps) {
   const [doc] = useState<SDocument>(() => docProp ?? createDocument());
 
   const handleClose = useCallback(() => onClose?.(), [onClose]);
@@ -82,7 +84,7 @@ function EditorPortalContent({ doc: docProp, onClose, onSave }: ContentProps) {
         </button>
       </header>
 
-        <EditorShell doc={doc} onSave={onSave} className="flex-1 min-h-0" />
+        <EditorShell doc={doc} onSave={onSave} initialPath={workingDir} className="flex-1 min-h-0" />
     </div>,
     window.document.body,
   );

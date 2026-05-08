@@ -8,7 +8,11 @@ import { getDefaultScaleForInstrument, getScaleNotes } from "@/utils/audio/scale
 const COLORS = ["#4a90e2","#50e3c2","#e2574a","#e2c64a","#bd10e0","#9013fe","#4a6fe3"];
 const randomColor = () => COLORS[Math.floor(Math.random() * COLORS.length)] ?? "#4a90e2";
 
-const AudioTimelinePage = () => {
+interface AudioTimelinePageProps {
+  workingDir?: string;
+}
+
+const AudioTimelinePage = ({ workingDir: _workingDir }: AudioTimelinePageProps) => {
   const [tracks, setTracks] = useState<AudioTrack[]>(EMPTY_TRACKS);
 
 

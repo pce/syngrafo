@@ -97,7 +97,9 @@ export type IconName =
   | "color-swatch"
   | "tray"
   | "play"
-  | "dino";
+  | "dino"
+  | "csound"
+  | "ffmpeg";
 
 type IconSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -1092,6 +1094,18 @@ const ICONS: Record<
       <rect x="9" y="9" width="1" height="2" fill="currentColor" />
       <rect x="6" y="5" width="1" height="1" fill="currentColor" />
       <rect x="8" y="5" width="1" height="1" fill="currentColor" />
+    </svg>
+  ),
+  csound: (props) => (
+    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 6a8 8 0 1 0 0 12" />
+      <path d="M5 12 Q7 9 9 12 Q11 15 13 12 Q15 9 17 12" />
+    </svg>
+  ),
+  ffmpeg: (props) => (
+    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="1.5" />
+      <path d="M6 15 L6 9 L9 9 L9 15 L12 15 L12 10 L15 10 L15 15 L18 15" />
     </svg>
   ),
 };

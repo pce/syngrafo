@@ -14,6 +14,8 @@ import SearchResults from "./dms/SearchResults";
 import FilePanel from "./dms/FilePanel";
 import CommandBar from "./dms/CommandBar";
 import ThemePanel from "./ThemePanel";
+import { AudioPortal } from "./AudioPortal";
+import { VideoPortal } from "./VideoPortal";
 import BookmarksView from "./collections/BookmarksView";
 import Icon from "./Icon";
 import TimelinePage from "./dms/TimelinePage";
@@ -242,6 +244,8 @@ const Dashboard: React.FC = () => {
   const [showEditor,  setShowEditor]  = useState(false);
   const [showZone,   setShowZone]   = useState(false);
   const [showTheme,  setShowTheme]  = useState(false);
+  const [showAudio,  setShowAudio]  = useState(false);
+  const [showVideo,  setShowVideo]  = useState(false);
   const [activeView, setActiveView] = useState<"dms" | "timeline">("dms");
   // "bookmarks" and "zone-dashboard" override the path-based center panel routing
   const [centerView, setCenterView] = useState<"default" | "bookmarks" | "zone-dashboard">("default");
@@ -456,6 +460,20 @@ const Dashboard: React.FC = () => {
           >
             <Icon name="edit" size="xs" />
           </button>
+          <button
+            onClick={() => setShowAudio(true)}
+            title="Csound Audio Editor"
+            className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
+          >
+            <Icon name="csound" size="xs" />
+          </button>
+          <button
+            onClick={() => setShowVideo(true)}
+            title="FFmpeg Video Editor"
+            className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
+          >
+            <Icon name="ffmpeg" size="xs" />
+          </button>
           <div className="h-4 w-px bg-[var(--theme-border)]" />
           {/* Palette / Theme button */}
           <button
@@ -479,6 +497,8 @@ const Dashboard: React.FC = () => {
       </header>
 
       {showTheme && <ThemePanel onClose={() => setShowTheme(false)} />}
+      <AudioPortal open={showAudio} workingDir={state.selectedPath ?? state.currentPath} onClose={() => setShowAudio(false)} />
+      <VideoPortal open={showVideo} workingDir={state.selectedPath ?? state.currentPath} onClose={() => setShowVideo(false)} />
 
       {showZone && (
         <ZonePanel
@@ -750,7 +770,7 @@ const Dashboard: React.FC = () => {
           onRefresh={handleCommandBarRefresh}
         />
       )}
-      <EditorPortal open={showEditor} onClose={() => setShowEditor(false)} />
+      <EditorPortal open={showEditor} workingDir={state.selectedPath ?? state.currentPath} onClose={() => setShowEditor(false)} />
     </div>
   );
 };

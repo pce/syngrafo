@@ -1,23 +1,5 @@
-/**
- * Saucer IPC calls to the C++ video backend (libavformat/libavcodec/libswscale).
- * All methods wrap one `window.saucer.exposed` call and handle JSON parsing
- * + IPC-unavailable fallback transparently.
- */
-
-declare global {
-  interface Window {
-    saucer?: {
-      call<T = string>(name: string, params?: unknown[]): Promise<T>;
-      exposed?: Record<string, (...args: unknown[]) => Promise<string>>;
-    };
-  }
-}
-
-export interface IpcResult<T = unknown> {
-  ok: boolean;
-  data?: T;
-  error?: string;
-}
+import { ipcCall } from '@syngrafo/shared';
+export type { IpcResult } from '@syngrafo/shared';
 
 /** Returned by `exportVideo` on success. */
 export interface VideoExportResult {
@@ -39,20 +21,6 @@ export interface VideoFileInfo {
 export interface ImageSequenceImportResult {
   trackId: string;
   clipCount: number;
-}
-
-/** Falls back to `{ ok:false }` when running outside the Saucer webview. */
-async function ipcCall<T>(name: string, ...args: unknown[]): Promise<IpcResult<T>> {
-  const fn = window.saucer?.exposed?.[name];
-  if (typeof fn !== 'function') {
-    return { ok: false, error: 'IPC not available' };
-  }
-  try {
-    const raw = await fn(...args);
-    return JSON.parse(raw) as IpcResult<T>;
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
 }
 
 export const videoService = {
@@ -128,4 +96,10 @@ export const videoService = {
     frame: number,
   ): Promise<IpcResult<{ dataUrl: string }>> =>
     ipcCall<{ dataUrl: string }>('video_render_frame', projectJson, frame),
+
+  selectSavePath: (
+    suggestedName: string,
+    filterExt: string,
+  ): Promise<IpcResult<{ path: string }>> =>
+    ipcCall<{ path: string }>('dms_select_save_path', suggestedName, filterExt),
 };

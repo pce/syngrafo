@@ -69,7 +69,8 @@ Two new CMakePresets:
 
 Local Compilation
 
-```/scripts/dev.py
+
+```scripts/dev.py
 # vcpkg (fastest once installed):
 VCPKG_ROOT=~/vcpkg python scripts/dev.py release \
     --with-audio --with-video --with-lm
@@ -83,6 +84,9 @@ python scripts/dev.py release \
     --with-audio --with-video --with-lm --deps-mode system \
     --cmake-extra SGF_CSOUND_ROOT=/opt/local SGF_FFMPEG_ROOT=/opt/local
 ```
+
+// scripts/dev.py debug --fresh --with-audio --with-video --with-lm --deps-mode fetch
+
 
 == Concept
 

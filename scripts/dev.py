@@ -150,6 +150,58 @@ def _vcpkg_install(
         return False
 
 
+def _build_cmake_flags(args: argparse.Namespace) -> List[str]:
+    extra: List[str] = list(getattr(args, "cmake_extra", None) or [])
+    with_audio = getattr(args, "with_audio", False)
+    with_video = getattr(args, "with_video", False)
+    with_lm    = getattr(args, "with_lm",    False)
+    deps_mode  = getattr(args, "deps_mode",  "auto")
+
+    if with_audio:
+        extra.append("SGF_WITH_AUDIO=ON")
+        logging.info("  Audio backend: ON")
+    if with_video:
+        extra.append("SGF_WITH_VIDEO=ON")
+        logging.info("  Video backend: ON")
+    if with_lm:
+        extra.append("SGF_WITH_LM=ON")
+        logging.info("  LM backend:    ON")
+
+    needs_media = with_audio or with_video
+
+    if deps_mode in ("auto", "vcpkg"):
+        vcpkg_root = _resolve_vcpkg_root(args)
+        if vcpkg_root and needs_media:
+            triplet = _detect_vcpkg_triplet()
+            logging.info("  Deps mode: vcpkg  (root=%s, triplet=%s)", vcpkg_root, triplet)
+            packages: List[str] = []
+            if with_audio:
+                packages.append("csound")
+            if with_video:
+                packages.append("ffmpeg")
+            _vcpkg_install(vcpkg_root, packages, triplet, dry=getattr(args, "dry_run", False))
+            prefix = vcpkg_root / "installed" / triplet
+            if prefix.exists():
+                extra.append(f"CMAKE_PREFIX_PATH={prefix}")
+            else:
+                logging.warning("vcpkg prefix not found: %s", prefix)
+        elif vcpkg_root is None and deps_mode == "vcpkg":
+            logging.error("--deps-mode vcpkg: VCPKG_ROOT not set and --vcpkg-root not given")
+            raise SystemExit(1)
+        elif vcpkg_root is None and deps_mode == "auto" and needs_media:
+            logging.info(
+                "  Deps mode: system (VCPKG_ROOT not set).\n"
+                "  Tip: pass --deps-mode fetch to build audio/video from source.")
+    elif deps_mode == "fetch":
+        logging.info("  Deps mode: fetch (building from source into build/_deps)")
+        if with_audio:
+            extra.append("SGF_FETCH_AUDIO=ON")
+        if with_video:
+            extra.append("SGF_FETCH_VIDEO=ON")
+
+    return [(e if e.startswith("-D") else f"-D{e}") for e in extra]
+
+
 def cmake_configure(source_dir: Path, build_dir: Path, build_type: str = "Release", extra: Optional[List[str]] = None) -> None:
     extra = list(extra or [])
 
@@ -285,9 +337,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p_debug.add_argument("--source-dir", type=Path, default=Path("."))
     p_debug.add_argument("--target", type=str, default=None, help="CMake target name to build")
     p_debug.add_argument("-j", "--jobs", type=int, default=None)
-    p_debug.add_argument(
-        "--fresh", action="store_true",
+    p_debug.add_argument("--fresh", action="store_true",
         help="Wipe CMakeCache.txt + CMakeFiles/ before configuring (keeps _deps/)")
+    p_debug.add_argument("--cmake-extra", nargs="*", default=None, help="Extra -D flags for cmake configure")
+    p_debug.add_argument("--with-audio", action="store_true", default=False)
+    p_debug.add_argument("--with-video", action="store_true", default=False)
+    p_debug.add_argument("--with-lm",    action="store_true", default=False)
+    p_debug.add_argument("--deps-mode",
+        choices=["auto", "system", "vcpkg", "fetch"], default="auto")
+    p_debug.add_argument("--vcpkg-root", type=Path, default=None, metavar="PATH")
 
     # release
     p_rel = sub.add_parser("release", help="Build Release target for a platform")
@@ -402,18 +460,13 @@ def _cmake_configure_with_retry(
 def _cmd_debug(args: argparse.Namespace) -> int:
     bd: Path = args.build_dir
     sd: Path = args.source_dir
-
-    # Build the React frontend directly (cmake also does this during configure,
-    # but running it first means the dist/ assets are fresh before cmake scans
-    # them for saucer_embed()).
-    logging.info("Building frontend...")
     frontend_pkg = sd / "frontend" / "packages" / "react-client"
+    logging.info("Building frontend...")
     run(["bun", "run", "build.ts", "--minify"], cwd=frontend_pkg)
-
-    # Configure — includes saucer_embed() rescan of the updated dist/.
     logging.info("Configuring CMake (debug)...")
-    _cmake_configure_with_retry(sd, bd, build_type="Debug", fresh=args.fresh)
-
+    _cmake_configure_with_retry(
+        sd, bd, build_type="Debug",
+        extra=_build_cmake_flags(args), fresh=args.fresh)
     logging.info("Building debug target...")
     cmake_build(bd, config="Debug", target=args.target, jobs=args.jobs)
     return 0
@@ -422,88 +475,10 @@ def _cmd_debug(args: argparse.Namespace) -> int:
 def _cmd_release(args: argparse.Namespace) -> int:
     bd: Path = args.build_dir
     sd: Path = args.source_dir
-    plat: str = args.platform
-    logging.info("Configuring Release build for %s in %s", plat, bd)
-
-    extra = list(args.cmake_extra or [])
-
-    # Feature flags
-    with_audio = getattr(args, "with_audio", False)
-    with_video = getattr(args, "with_video", False)
-    with_lm    = getattr(args, "with_lm",    False)
-    deps_mode  = getattr(args, "deps_mode",  "auto")
-
-    if with_audio:
-        extra.append("SGF_WITH_AUDIO=ON")
-        logging.info("  Audio backend: ON  (-DSGF_WITH_AUDIO=ON)")
-    if with_video:
-        extra.append("SGF_WITH_VIDEO=ON")
-        logging.info("  Video backend: ON  (-DSGF_WITH_VIDEO=ON)")
-    if with_lm:
-        extra.append("SGF_WITH_LM=ON")
-        logging.info("  LM backend:    ON  (-DSGF_WITH_LM=ON)")
-
-    # dependency resolution note: LM (llama.cpp) always uses FetchContent
-    needs_media_deps = with_audio or with_video
-
-    if deps_mode in ("auto", "vcpkg"):
-        vcpkg_root = _resolve_vcpkg_root(args)
-
-        if vcpkg_root and needs_media_deps:
-            triplet = _detect_vcpkg_triplet()
-            logging.info("  Deps mode: vcpkg  (root=%s, triplet=%s)", vcpkg_root, triplet)
-
-            # Auto-install required vcpkg packages for requested features.
-            packages: List[str] = []
-            if with_audio:
-                packages.append("csound")
-            if with_video:
-                packages.append("ffmpeg")
-            dry = getattr(args, "dry_run", False)
-            _vcpkg_install(vcpkg_root, packages, triplet, dry=dry)
-
-            # Pass vcpkg's installed prefix to cmake as CMAKE_PREFIX_PATH.
-            # We deliberately avoid CMAKE_TOOLCHAIN_FILE: vcpkg's toolchain
-            # wraps add_library globally and triggers infinite recursion with
-            # saucer's CPM hook (reproduced with CMake 3.28+ + vcpkg 2024+).
-            # CMAKE_PREFIX_PATH gives find_package() access to the same headers
-            # and libs without the hook.
-            prefix = vcpkg_root / "installed" / triplet
-            if prefix.exists():
-                logging.info("  CMake prefix path: %s", prefix)
-                extra.append(f"CMAKE_PREFIX_PATH={prefix}")
-            else:
-                logging.warning(
-                    "vcpkg installed prefix not found: %s \u2014 "
-                    "cmake will fall back to system detection", prefix)
-
-        elif vcpkg_root is None and deps_mode == "vcpkg":
-            logging.error(
-                "--deps-mode vcpkg requested but no vcpkg root found.\n"
-                "  Set VCPKG_ROOT or pass --vcpkg-root /path/to/vcpkg")
-            return 1
-        elif vcpkg_root is None and deps_mode == "auto" and needs_media_deps:
-            logging.info(
-                "  Deps mode: system (VCPKG_ROOT not set).\n"
-                "  Tip: set VCPKG_ROOT or pass --vcpkg-root to auto-install media libs.\n"
-                "  Tip: pass --deps-mode fetch to build audio/video from source.")
-
-    elif deps_mode == "fetch":
-        logging.info("  Deps mode: fetch  (build audio/video from source into build/_deps)")
-        if with_audio:
-            extra.append("SGF_FETCH_AUDIO=ON")
-        if with_video:
-            extra.append("SGF_FETCH_VIDEO=ON")
-
-    else:  # deps_mode == "system"
-        logging.info("  Deps mode: system  (pkg-config / find_library only)")
-
-    processed_extra = [
-        (e if e.startswith("-D") else f"-D{e}") for e in extra
-    ]
+    logging.info("Configuring Release build for %s in %s", args.platform, bd)
     _cmake_configure_with_retry(
-        sd, bd, build_type="Release", extra=processed_extra, fresh=args.fresh
-    )
+        sd, bd, build_type="Release",
+        extra=_build_cmake_flags(args), fresh=args.fresh)
     cmake_build(bd, config="Release", target=args.target, jobs=args.jobs)
     return 0
 

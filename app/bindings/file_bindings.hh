@@ -26,6 +26,7 @@
 #pragma once
 #include "../dms_handle.hh"
 #include "../dms_monadic.hh"
+#include "../internal/encoding.hh"
 #include <saucer/modules/desktop.hpp>
 
 // Platform services: reveal_in_file_manager (NSWorkspace / SHOpenFolderAndSelectItems / D-Bus FileManager1).
@@ -148,40 +149,7 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
             if (ec) return DMSHandle::err_str(
                 std::format("failed to create parent dir: {}", ec.message()));
         }
-        // RFC-4648 base64 decode table
-        // Each entry maps ASCII byte → 6-bit value; -1 = not a valid base64 char.
-        static constexpr int8_t kDec[256] = {
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, //   0
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, //  16
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63, //  32  (+/)
-            52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1, //  48  (0-9)
-            -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14, //  64  (A-O)
-            15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1, //  80  (P-Z)
-            -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40, //  96  (a-o)
-            41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1, // 112  (p-z)
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 128
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 144
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 160
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 176
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 192
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 208
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 224
-            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, // 240
-        };
-        std::string out;
-        out.reserve(b64.size() * 3 / 4 + 3);
-        int buf = 0, bits = 0;
-        for (unsigned char c : b64) {
-            if (c == '=') break;        // padding — stop
-            const int v = kDec[c];
-            if (v < 0) continue;        // ignore whitespace / CR LF
-            buf = (buf << 6) | v;
-            bits += 6;
-            if (bits >= 8) {
-                bits -= 8;
-                out.push_back(static_cast<char>((buf >> bits) & 0xFF));
-            }
-        }
+        const std::string out = pce::encoding::base64_decode(b64);
         std::ofstream ofs(p, std::ios::out|std::ios::trunc|std::ios::binary);
         if (!ofs) return DMSHandle::err_str(std::format("cannot open '{}' for writing", path));
         ofs.write(out.data(), static_cast<std::streamsize>(out.size()));
@@ -198,26 +166,7 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         if (!f) return DMSHandle::err_str(std::format("failed to open '{}'", path));
         std::string data((std::istreambuf_iterator<char>(f)),
                           std::istreambuf_iterator<char>());
-        static const char* tbl =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        std::string out; out.reserve(((data.size()+2)/3)*4);
-        size_t i=0;
-        while (i+2<data.size()){
-            unsigned a=(unsigned char)data[i],b=(unsigned char)data[i+1],c=(unsigned char)data[i+2];
-            out.push_back(tbl[(a>>2)&0x3F]);
-            out.push_back(tbl[((a<<4)|(b>>4))&0x3F]);
-            out.push_back(tbl[((b<<2)|(c>>6))&0x3F]);
-            out.push_back(tbl[c&0x3F]);
-            i+=3;
-        }
-        if (i<data.size()){
-            unsigned a=(unsigned char)data[i];
-            unsigned b=(i+1<data.size())?(unsigned char)data[i+1]:0;
-            out.push_back(tbl[(a>>2)&0x3F]);
-            out.push_back(tbl[((a<<4)|(b>>4))&0x3F]);
-            if (i+1<data.size()){out.push_back(tbl[((b<<2)&0x3F)]);out.push_back('=');}
-            else {out.push_back('=');out.push_back('=');}
-        }
+        const std::string out = pce::encoding::base64_encode(data);
         return DMSHandle::ok_str(json{{"data_url",
             std::format("data:{};base64,{}", mime, out)}});
     });
