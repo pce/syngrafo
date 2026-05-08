@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 
 const IC = (n: string) => n as IconName;

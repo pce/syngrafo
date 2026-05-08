@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useDms } from "../../store/dms-store";
 import { dms, type Bookmark, type BookmarkKind } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 function fmtTs(ts: number): string {
   if (!ts) return "—";

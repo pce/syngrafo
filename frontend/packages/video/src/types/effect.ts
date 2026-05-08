@@ -1,6 +1,4 @@
-import type { EasingType } from '@syngrafo/shared';
-
-export type OperatorKind = 'fadeIn' | 'fadeOut' | 'transition' | 'freeze' | 'speedRamp';
+import type { EasingType, SpringConfig } from '@syngrafo/shared';
 
 export interface FadeInOp {
   kind: 'fadeIn';
@@ -42,4 +40,20 @@ export interface SpeedRampOp {
   easing: EasingType;
 }
 
-export type VideoOperator = FadeInOp | FadeOutOp | TransitionOp | SpeedRampOp;
+/**
+ * Ken Burns pan + zoom over the clip's full duration.
+ * Scale and offset are spring-interpolated from their `from` to `to` values.
+ */
+export interface KenBurnsOp {
+  kind: 'kenburns';
+  id: string;
+  clipId: string;
+  fromScale: number;
+  toScale: number;
+  /** Normalised UV pan offset; [0,0] = no pan. Positive = top-left shift. */
+  fromOffset: [number, number];
+  toOffset: [number, number];
+  springConfig?: SpringConfig;
+}
+
+export type VideoOperator = FadeInOp | FadeOutOp | TransitionOp | SpeedRampOp | KenBurnsOp;

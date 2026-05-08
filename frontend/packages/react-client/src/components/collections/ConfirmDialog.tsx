@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from "react";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 interface ConfirmDialogProps {
   title:     string;

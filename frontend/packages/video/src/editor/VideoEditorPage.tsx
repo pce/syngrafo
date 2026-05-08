@@ -1,24 +1,25 @@
 /**
- * VideoEditorPage.tsx
- * Top-level video editor page component.
+ * Top-level video editor shell.
  *
- * Handles:
- *  - Loading or creating a VideoProject from IndexedDB via videoStorage
- *  - Wiring VideoTimeline ↔ VideoPreview via videoBus playheadMove events
- *  - Persisting project changes (debounced 500 ms)
- *  - Asset import via native IPC (open file/folder dialog)
- *  - Export trigger via videoService.exportVideo
+ * Responsibilities:
+ *  - Load / create a {@link VideoProject} from in-memory storage on mount.
+ *  - Sync the playhead frame from {@link videoBus} `playheadMove` events.
+ *  - Debounce-persist project mutations (500 ms).
+ *  - Drive native file/folder import via {@link videoService}.
+ *  - Expose a collapsible, resizable {@link AssetBrowser} panel on the RIGHT side.
+ *  - Trigger {@link videoService.exportVideo} from the export dialog.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { videoBus } from '@syngrafo/shared';
-import { videoStorage } from '../storage/videoStorage.ts';
+import { videoStorage }  from '../storage/videoStorage.ts';
 import { videoService }  from '../ipc/video-service.ts';
-import { defaultProject } from '../types/video.ts';
-import type { VideoProject, VideoClip } from '../types/video.ts';
-import { clipFromSource } from '../types/video.ts';
-import { VideoTimeline }  from '../timeline/VideoTimeline.tsx';
-import { VideoPreview }   from '../preview/VideoPreview.tsx';
+import { defaultProject, clipFromSource } from '../types/video.ts';
+import type { VideoProject, VideoClip, VideoClipKind } from '../types/video.ts';
+import { VideoTimeline } from '../timeline/VideoTimeline.tsx';
+import { VideoPreview }  from '../preview/VideoPreview.tsx';
+import { Icon }          from '@syngrafo/ui';
+import { AssetBrowser }  from '../browser/AssetBrowser.tsx';
 
 export interface VideoEditorPageProps {
   /** If provided, loads an existing project; otherwise creates a new one. */
@@ -30,24 +31,38 @@ export interface VideoEditorPageProps {
 
 const SAVE_DEBOUNCE_MS = 500;
 
+/** Maps the three importable clip kinds to their header icon names. */
+const IMPORT_ICON = {
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+} as const;
+
+type AssetKind = 'image' | 'video' | 'audio';
+
 export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   projectId,
   onBack,
   workingDir = '',
   className  = '',
 }) => {
-  const [project,    setProject]    = useState<VideoProject | null>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [frame,      setFrame]      = useState(0);
-  const [editingName, setEditingName] = useState(false);
-  const [nameValue,  setNameValue]  = useState('');
+  const [project,          setProject]          = useState<VideoProject | null>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [frame,            setFrame]            = useState(0);
+  const [editingName,      setEditingName]      = useState(false);
+  const [nameValue,        setNameValue]        = useState('');
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [exportPath, setExportPath] = useState('');
-  const [exporting,  setExporting]  = useState(false);
+  const [exportPath,       setExportPath]       = useState('');
+  const [exporting,        setExporting]        = useState(false);
+  const [assetPanelOpen,   setAssetPanelOpen]   = useState(false);
+  const [assetPanelWidth,  setAssetPanelWidth]  = useState(280);
+  const [assetFilterKind,  setAssetFilterKind]  = useState<AssetKind | null>(null);
+  const [assetCurrentPath, setAssetCurrentPath] = useState('');
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizingRef  = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  // load project on mount
+
   useEffect(() => {
     let cancelled = false;
 
@@ -60,7 +75,6 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
         }
 
         if (!p) {
-          // Create a new default project
           const template = defaultProject('Untitled Project', 30);
           p = await videoStorage.createProject(template);
         }
@@ -80,13 +94,12 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     return () => { cancelled = true; };
   }, [projectId]);
 
-  // sync playhead frame from timeline bus
   useEffect(() => {
     const off = videoBus.on('playheadMove', ({ frame: f }) => setFrame(f));
     return off;
   }, []);
 
-  // debounce-persist on changes
+
   const handleProjectChange = useCallback((p: VideoProject) => {
     setProject(p);
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -97,7 +110,6 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     }, SAVE_DEBOUNCE_MS);
   }, []);
 
-  // project name commit
   const commitName = useCallback(() => {
     setEditingName(false);
     if (!project) return;
@@ -105,12 +117,13 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     handleProjectChange(updated);
   }, [project, nameValue, handleProjectChange]);
 
-  // import asset via IPC
-  const importFile = useCallback(async (kind: 'image' | 'video' | 'audio') => {
+
+  /** Native file-dialog import (kept available but not surfaced in the header). */
+  const importFile = useCallback(async (kind: AssetKind) => {
     if (!project) return;
 
-    const filter = kind === 'image'  ? 'image/*'
-                 : kind === 'audio'  ? 'audio/*'
+    const filter = kind === 'image' ? 'image/*'
+                 : kind === 'audio' ? 'audio/*'
                  : 'video/*';
 
     const result = await videoService.openFileDialog(filter);
@@ -119,10 +132,8 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     const { path } = result.data;
     const name = path.split('/').pop() ?? path;
 
-    // Add to asset library
     await videoStorage.addAsset({ name, kind, path });
 
-    // Add as a clip on the first suitable track (or create one)
     let track = project.tracks.find(t =>
       kind === 'audio' ? t.kind === 'audio' : t.kind === 'video'
     );
@@ -130,8 +141,8 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     let tracks = [...project.tracks];
     if (!track) {
       track = {
-        id: crypto.randomUUID(),
-        kind: kind === 'audio' ? 'audio' : 'video',
+        id:    crypto.randomUUID(),
+        kind:  kind === 'audio' ? 'audio' : 'video',
         label: kind === 'audio' ? 'Audio 1' : 'Video 1',
         muted: false, solo: false,
         layer: tracks.length,
@@ -140,12 +151,50 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
       tracks = [...tracks, track];
     }
 
-    const startFrame = frame;
-    const durFrames  = project.settings.defaultImageDurationFrames;
     const clip: VideoClip = clipFromSource(
       { kind, path },
-      startFrame,
-      durFrames,
+      frame,
+      project.settings.defaultImageDurationFrames,
+      track.layer,
+      track.id,
+      name,
+    );
+
+    tracks = tracks.map(t =>
+      t.id === track!.id ? { ...t, clips: [...t.clips, clip] } : t
+    );
+    handleProjectChange({ ...project, tracks });
+  }, [project, frame, handleProjectChange]);
+
+  /** Handles a file selection originating from the AssetBrowser side-panel. */
+  const handleAssetSelect = useCallback(async (path: string, kind: VideoClipKind) => {
+    if (!project) return;
+
+    const name = path.split('/').pop() ?? path;
+
+    await videoStorage.addAsset({ name, kind, path });
+
+    let track = project.tracks.find(t =>
+      kind === 'audio' ? t.kind === 'audio' : t.kind === 'video'
+    );
+
+    let tracks = [...project.tracks];
+    if (!track) {
+      track = {
+        id:    crypto.randomUUID(),
+        kind:  kind === 'audio' ? 'audio' : 'video',
+        label: kind === 'audio' ? 'Audio 1' : 'Video 1',
+        muted: false, solo: false,
+        layer: tracks.length,
+        clips: [],
+      };
+      tracks = [...tracks, track];
+    }
+
+    const clip: VideoClip = clipFromSource(
+      { kind, path },
+      frame,
+      project.settings.defaultImageDurationFrames,
       track.layer,
       track.id,
       name,
@@ -167,14 +216,14 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
       console.warn('[VideoEditor] Image sequence import failed:', seqResult.error);
       return;
     }
-    // Backend creates the track — reload project from storage
     const refreshed = await videoStorage.getProject(project.id);
     if (refreshed) handleProjectChange(refreshed);
   }, [project, handleProjectChange]);
 
+
   useEffect(() => {
     if (showExportDialog && !exportPath && workingDir) {
-      const name = (project?.name ?? 'output').replace(/[\/\\:*?"<>|]/g, '_') + '.mp4';
+      const name = (project?.name ?? 'output').replace(/[/\\:*?"<>|]/g, '_') + '.mp4';
       setExportPath(workingDir + '/' + name);
     }
   }, [showExportDialog]);
@@ -198,9 +247,40 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     }
   }, [project, exportPath]);
 
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = { startX: e.clientX, startWidth: assetPanelWidth };
+
+    const onMove = (me: MouseEvent) => {
+      if (!resizingRef.current) return;
+      // Dragging LEFT widens the panel, dragging RIGHT narrows it.
+      const delta = resizingRef.current.startX - me.clientX;
+      setAssetPanelWidth(
+        Math.max(160, Math.min(600, resizingRef.current.startWidth + delta))
+      );
+    };
+
+    const onUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [assetPanelWidth]);
+
+
+  const handleKindFilter = useCallback((kind: AssetKind | null) => {
+    setAssetFilterKind(prev => prev === kind ? null : kind);
+    setAssetPanelOpen(true);
+  }, []);
+
+
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-950 text-gray-400">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--theme-bg)] text-[var(--theme-text-muted)]">
         <span className="text-sm">Loading project…</span>
       </div>
     );
@@ -208,127 +288,208 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
 
   if (!project) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-950 text-red-400">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--theme-bg)] text-[var(--theme-danger)]">
         <span className="text-sm">Failed to load project.</span>
       </div>
     );
   }
 
-  return (
-    <div className={`flex flex-col h-full w-full bg-gray-950 text-white overflow-hidden ${className}`}>
 
-      {/* ── Header bar ─────────────────────────────────────────────────────── */}
-      <header className="flex items-center gap-3 px-4 py-2 bg-gray-900 border-b border-gray-700 flex-shrink-0">
+  return (
+    <div className={`flex flex-col h-full w-full bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden ${className}`}>
+
+      <header className="flex items-center gap-3 px-4 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] flex-shrink-0">
+
         {onBack && (
           <button
             onClick={onBack}
-            className="text-gray-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-gray-800"
+            className="flex items-center gap-1 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] text-sm
+                       px-2 py-1 rounded hover:bg-[var(--theme-bg)]"
             aria-label="Back"
           >
-            ← Back
+            <Icon name="arrow-left" size={14} aria-hidden /> Back
           </button>
         )}
 
-        {/* Project name */}
         {editingName ? (
           <input
             autoFocus
             value={nameValue}
             onChange={e => setNameValue(e.target.value)}
             onBlur={commitName}
-            onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
-            className="bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-sm text-white w-48 focus:outline-none focus:border-indigo-500"
+            onKeyDown={e => {
+              if (e.key === 'Enter') commitName();
+              if (e.key === 'Escape') setEditingName(false);
+            }}
+            className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded px-2 py-0.5 text-sm
+                       text-[var(--theme-text)] w-48 focus:outline-none focus:border-[var(--theme-primary)]"
           />
         ) : (
           <button
             onClick={() => setEditingName(true)}
-            className="text-sm font-medium text-gray-100 hover:text-white hover:bg-gray-800 rounded px-2 py-0.5"
+            className="text-sm font-medium text-[var(--theme-text)] hover:text-[var(--theme-text)]
+                       hover:bg-[var(--theme-bg)] rounded px-2 py-0.5"
             title="Click to rename"
           >
             {project.name}
           </button>
         )}
 
-        <span className="text-xs text-gray-600">
+        <span className="text-xs text-[var(--theme-text-muted)]">
           {project.resolution.width}×{project.resolution.height} @ {project.fps}fps
         </span>
 
         <div className="flex-1" />
 
-        {/* Import buttons */}
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500">Import:</span>
-          {(['image', 'video', 'audio'] as const).map(k => (
-            <button
-              key={k}
-              onClick={() => importFile(k)}
-              className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 capitalize"
-            >
-              {k === 'image' ? '🖼' : k === 'video' ? '🎬' : '🔊'} {k}
-            </button>
-          ))}
-          <button
-            onClick={importImageSequence}
-            className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300"
-            title="Import image sequence from folder"
-          >
-            📁 Sequence
-          </button>
-        </div>
+        <button
+          onClick={() => setAssetPanelOpen(v => !v)}
+          className={[
+            'flex items-center gap-1 text-xs px-2 py-1 rounded',
+            assetPanelOpen
+              ? 'bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]'
+              : 'bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)]',
+          ].join(' ')}
+          aria-pressed={assetPanelOpen}
+          aria-label="Toggle asset browser"
+        >
+          <Icon name="folder-open" size={14} aria-hidden /> Assets
+        </button>
 
-        <div className="w-px h-5 bg-gray-700" />
+        <div className="w-px h-5 bg-[var(--theme-border)]" />
 
-        {/* Export */}
         <button
           onClick={() => setShowExportDialog(true)}
-          className="text-xs px-3 py-1.5 rounded bg-indigo-700 hover:bg-indigo-600 text-white font-medium"
+          className="flex items-center gap-1 text-xs px-3 py-1.5 rounded
+                     bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] font-medium"
         >
-          ⬆ Export
+          <Icon name="upload" size={12} aria-hidden /> Export
         </button>
       </header>
 
-      {/* ── Body: Preview (top) + Timeline (bottom) ─────────────────────── */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* Preview panel — 60% height */}
-        <div
-          className="flex-none bg-gray-950 border-b border-gray-800 overflow-hidden"
-          style={{ height: '60%' }}
-        >
-          <VideoPreview project={project} frame={frame} />
+        <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+          <div
+            className="flex-none bg-[var(--theme-bg)] border-b border-[var(--theme-border)] overflow-hidden"
+            style={{ height: '60%' }}
+          >
+            <VideoPreview project={project} frame={frame} />
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            <VideoTimeline
+              project={project}
+              onProjectChange={handleProjectChange}
+            />
+          </div>
         </div>
 
-        {/* Timeline panel — 40% height */}
-        <div className="flex-1 overflow-hidden">
-          <VideoTimeline
-            project={project}
-            onProjectChange={handleProjectChange}
+        {assetPanelOpen && (
+          <div
+            className="w-1 flex-shrink-0 cursor-col-resize bg-[var(--theme-border)]
+                       hover:bg-[var(--theme-primary)]/50 transition-colors"
+            onMouseDown={handleResizeMouseDown}
+            aria-hidden
           />
-        </div>
+        )}
+
+        {assetPanelOpen && (
+          <aside
+            className="flex-shrink-0 flex flex-col border-l border-[var(--theme-border)]
+                       bg-[var(--theme-surface)] overflow-hidden"
+            style={{ width: assetPanelWidth }}
+          >
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--theme-border)] shrink-0 flex-wrap gap-y-1">
+              <span className="text-xs font-semibold text-[var(--theme-text)] mr-1 select-none">Assets</span>
+
+              <button
+                onClick={() => setAssetFilterKind(null)}
+                className={[
+                  'text-xs px-2 py-0.5 rounded',
+                  assetFilterKind === null
+                    ? 'bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]'
+                    : 'bg-[var(--theme-bg)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]',
+                ].join(' ')}
+                aria-pressed={assetFilterKind === null}
+              >
+                All
+              </button>
+
+              {(['image', 'video', 'audio'] as const).map(k => (
+                <button
+                  key={k}
+                  onClick={() => handleKindFilter(k)}
+                  className={[
+                    'flex items-center gap-1 text-xs px-2 py-0.5 rounded',
+                    assetFilterKind === k
+                      ? 'bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]'
+                      : 'bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]',
+                  ].join(' ')}
+                  aria-pressed={assetFilterKind === k}
+                  title={`Filter: ${k}`}
+                >
+                  <Icon name={IMPORT_ICON[k]} size={11} aria-hidden />
+                  {k.charAt(0).toUpperCase() + k.slice(1)}
+                </button>
+              ))}
+
+              <button
+                onClick={importImageSequence}
+                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded
+                           bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
+                title="Import image sequence from folder"
+              >
+                <Icon name="folder-open" size={11} aria-hidden /> Seq
+              </button>
+
+              <div className="flex-1" />
+
+              <button
+                onClick={() => setAssetPanelOpen(false)}
+                className="flex items-center justify-center w-5 h-5 rounded
+                           text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]
+                           hover:bg-[var(--theme-bg)]"
+                aria-label="Close asset panel"
+              >
+                <Icon name="x" size={12} aria-hidden />
+              </button>
+            </div>
+
+            <AssetBrowser
+              workingDir={workingDir}
+              onFileSelect={handleAssetSelect}
+              filterKind={assetFilterKind}
+              onPathChange={setAssetCurrentPath}
+              className="flex-1 min-h-0"
+            />
+          </aside>
+        )}
       </div>
 
-      {/* ── Export dialog ─────────────────────────────────────────────────── */}
       {showExportDialog && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 w-96 shadow-2xl">
-            <h2 className="text-sm font-semibold text-white mb-4">Export Video</h2>
+        <div className="fixed inset-0 bg-[var(--theme-bg)]/70 flex items-center justify-center z-50">
+          <div className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-lg p-6 w-96 shadow-2xl">
+            <h2 className="text-sm font-semibold text-[var(--theme-text)] mb-4">Export Video</h2>
 
-            <label className="block text-xs text-gray-400 mb-1">Output path</label>
+            <label className="block text-xs text-[var(--theme-text-muted)] mb-1">Output path</label>
             <div className="flex gap-2 mb-4">
               <input
                 value={exportPath}
                 onChange={e => setExportPath(e.target.value)}
                 placeholder="/path/to/output.mp4"
-                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded px-3 py-2
+                           text-sm text-[var(--theme-text)] focus:outline-none focus:border-[var(--theme-primary)]"
               />
               <button
                 onClick={async () => {
-                  const name = (project?.name ?? 'output').replace(/[\/\\:*?"<>|]/g, '_') + '.mp4';
+                  const name = (project?.name ?? 'output')
+                    .replace(/[/\\:*?"<>|]/g, '_') + '.mp4';
                   const suggested = workingDir ? workingDir + '/' + name : name;
                   const res = await videoService.selectSavePath(suggested, 'mp4');
                   if (res.ok && res.data?.path) setExportPath(res.data.path);
                 }}
-                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 shrink-0"
+                className="px-3 py-2 rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)]
+                           text-sm text-[var(--theme-text-muted)] shrink-0"
                 title="Browse for output path"
               >
                 …
@@ -338,14 +499,16 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowExportDialog(false)}
-                className="px-4 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300"
+                className="px-4 py-1.5 rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)]
+                           text-sm text-[var(--theme-text-muted)]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleExport}
                 disabled={!exportPath.trim() || exporting}
-                className="px-4 py-1.5 rounded bg-indigo-700 hover:bg-indigo-600 text-sm text-white disabled:opacity-50"
+                className="px-4 py-1.5 rounded bg-[var(--theme-primary)] hover:opacity-90
+                           text-sm text-[var(--theme-primary-fg)] disabled:opacity-50"
               >
                 {exporting ? 'Exporting…' : 'Export'}
               </button>

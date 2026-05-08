@@ -231,7 +231,7 @@ inline Palette median_cut(const uint8_t* rgba, int w, int h, int ncolors) {
 ///
 /// Example: palette = '[{"r":0,"g":106,"b":255},{"r":255,"g":107,"b":0}]'
 inline Palette resolve(const std::string& name, const uint8_t* rgba, int w, int h) {
-    // ── Inline JSON palette ───────────────────────────────────────────────────
+    // Inline JSON palette
     if (!name.empty() && name.front() == '[') {
         Palette p;
         try {
@@ -409,4 +409,3 @@ inline void smooth(std::vector<int>& idx, int w, int h) {
 
 } // namespace pal
 } // namespace pce::dms
-

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from "react";
 import { useDms } from "../../store/dms-store";
 import { dms } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 const SearchBar: React.FC = () => {
   const { state, dispatch } = useDms();

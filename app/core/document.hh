@@ -39,7 +39,6 @@
 
 namespace pce::dms {
 
-// ─── BlockType ────────────────────────────────────────────────────────────────
 
 /// Mirrors the TypeScript `BlockType` union in the frontend editor.
 enum class BlockType : uint8_t {
@@ -130,14 +129,13 @@ enum class BlockType : uint8_t {
     return BlockType::Custom;
 }
 
-// ─── BlockMetadata ────────────────────────────────────────────────────────────
 
 /// Arbitrary per-block metadata as a string→string map.
 /// Typed helpers cover the most common fields.
 struct BlockMetadata {
     std::unordered_map<std::string, std::string> fields;
 
-    // ── Typed accessors ───────────────────────────────────────────────────────
+    // Typed accessors
     [[nodiscard]] std::string get(std::string_view key,
                                    std::string_view def = "") const {
         const auto it = fields.find(std::string{key});
@@ -150,7 +148,7 @@ struct BlockMetadata {
         return fields.count(std::string{key}) > 0;
     }
 
-    // Common well-known fields ─────────────────────────────────────────────────
+    // Common well-known fields
     [[nodiscard]] std::string parent_id()       const { return get("parentId"); }
     [[nodiscard]] std::string width()           const { return get("width"); }
     [[nodiscard]] std::string height()          const { return get("height"); }
@@ -162,7 +160,6 @@ struct BlockMetadata {
     [[nodiscard]] bool empty() const noexcept { return fields.empty(); }
 };
 
-// ─── StyleRef ─────────────────────────────────────────────────────────────────
 
 /// Reference to a named CSS-class style + optional inline overrides.
 struct StyleRef {
@@ -170,7 +167,6 @@ struct StyleRef {
     std::string overrides;   ///< inline CSS (serialised as JSON string)
 };
 
-// ─── Block ────────────────────────────────────────────────────────────────────
 
 /// A structural unit inside a Document.
 /// Mirrors the TypeScript `Block` class in the frontend editor, but as a plain
@@ -183,7 +179,6 @@ struct Block {
     BlockMetadata  metadata;                    ///< Structured per-block data
     std::vector<Block> children;                ///< Nested blocks (hbox/vbox/li/…)
 
-    // ── Convenience predicates ────────────────────────────────────────────────
     [[nodiscard]] bool is_layout_container() const noexcept {
         return type == BlockType::HBox || type == BlockType::VBox
             || type == BlockType::Col  || type == BlockType::Grid;
@@ -208,7 +203,6 @@ struct Block {
     }
 };
 
-// ─── NLPResult ────────────────────────────────────────────────────────────────
 
 /// Lightweight result of NLP analysis on a document's text.
 /// Produced by DMSHandle::index_one_file_ and stored in nlp_notes.
@@ -222,7 +216,6 @@ struct NLPResult {
     std::optional<std::vector<float>> embedding;  ///< Dense vector (nullopt when not computed)
 };
 
-// ─── Entity / Keyword value types ─────────────────────────────────────────────
 
 /// A single extracted named entity.
 struct Entity {
@@ -238,7 +231,6 @@ struct Keyword {
     float       score{0.f};
 };
 
-// ─── Document ────────────────────────────────────────────────────────────────
 
 /// A rich document: filesystem identity + plain text + block structure + NLP.
 ///
@@ -247,14 +239,14 @@ struct Keyword {
 ///   Content   — text, snippet, blocks (for document editor)
 ///   NLP       — optional NLPResult (populated by indexing pipeline)
 struct Document {
-    // ── Identity ──────────────────────────────────────────────────────────────
+    //  Identity
     std::string  path;
     std::string  filename;
     std::string  extension;
     std::string  mime_type;
     std::string  kind;          ///< "text" | "code" | "image" | "document" | …
 
-    // ── Content ───────────────────────────────────────────────────────────────
+    // Content
     std::string        text;    ///< Full plain-text content
     std::string        snippet; ///< First ~280 chars for display
 
@@ -262,15 +254,14 @@ struct Document {
     /// Empty for plain-text-only documents.
     std::vector<Block> blocks;
 
-    // ── Filesystem metadata ───────────────────────────────────────────────────
+    // Filesystem metadata
     int64_t  size_bytes {0};
     int64_t  mtime      {0};  ///< Last-modified Unix timestamp
     int64_t  indexed_at {0};  ///< When this document was last NLP-indexed
 
-    // ── NLP metadata (first-class citizen) ────────────────────────────────────
     std::optional<NLPResult> nlp;
 
-    // ── Predicates ────────────────────────────────────────────────────────────
+    // Predicates
     [[nodiscard]] bool has_content()  const noexcept { return !text.empty(); }
     [[nodiscard]] bool is_indexed()   const noexcept { return indexed_at > 0; }
     [[nodiscard]] bool has_blocks()   const noexcept { return !blocks.empty(); }
@@ -319,31 +310,12 @@ struct Document {
     }
 };
 
-// ─── NLP operations on Document (declarations) ────────────────────────────────
+//  NLP operations on Document (declarations)
 //
 // Implementations live close to the NLP engine.  Declared here so any layer
 // can use them without depending on DMSHandle or NLPEngine headers.
 //
 // Forward-declare the NLPEngine to keep this header dependency-free.
 namespace nlp { class NLPEngine; }
-
-/// Run the full NLP pipeline on a document's text, populating doc.nlp.
-/// Engine must outlive the call.  Thread-safe (engine holds its own mutex).
-///
-/// On success sets doc.nlp and returns a reference to it.
-/// On failure returns std::unexpected with the error description.
-// Expected<NLPResult> analyze_document(Document& doc, nlp::NLPEngine& engine);
-
-/// Extract named entities from doc.text (does not require prior indexing).
-// Expected<std::vector<Entity>> extract_entities(const Document& doc,
-//                                                 nlp::NLPEngine& engine);
-
-/// Extract keywords from doc.text.
-// Expected<std::vector<Keyword>> extract_keywords(const Document& doc,
-//                                                  nlp::NLPEngine& engine,
-//                                                  int max_n = 15);
-
-/// One-sentence extractive summary (returns the highest-scoring sentence).
-// Expected<std::string> summarize(const Document& doc, nlp::NLPEngine& engine);
 
 } // namespace pce::dms

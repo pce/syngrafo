@@ -25,17 +25,38 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(simdutf)
 
-# ONNX Runtime (Simplified for this manual CMakeLists)
-option(NLP_WITH_ONNX "Enable ONNX Runtime (embedding + ONNX OCR inference)" ON)
+# ONNX Runtime — pre-built binary download
+# Downloads the official Microsoft pre-built binary tarball from GitHub releases.
+# This avoids building ORT from source (~1 h, many extra deps).  The tarball
+# ships headers + a single .dylib/.so/.dll that is ready to link against with
+# no cmake-config or find_package() integration required.
+#
+# SGF_ORT_VERSION controls the download URL and the filename baked into the
+# binary.  To upgrade:
+#   1. Update SGF_ORT_VERSION here.
+#   2. Update the three URL_HASH values below (SHA-256 of the new tarballs).
+#   3. Update the ORT cache-key suffixes in .github/workflows/release.yml.
+#
+# Platform defaults:
+#   macOS  — OFF: OCR handled by Apple Vision (native, zero extra deps);
+#            set NLP_WITH_ONNX=ON explicitly to enable ONNX embedding on macOS.
+#   Linux / Windows — ON: no native OCR; ONNX provides both OCR and embeddings.
+if(APPLE)
+    option(NLP_WITH_ONNX "Enable ONNX Runtime (embedding + ONNX OCR inference)" OFF)
+else()
+    option(NLP_WITH_ONNX "Enable ONNX Runtime (embedding + ONNX OCR inference)" ON)
+endif()
 if(NLP_WITH_ONNX)
+    # No FORCE: allows -DSGF_ORT_VERSION=<ver> overrides on the command line.
+    set(SGF_ORT_VERSION "1.25.1" CACHE STRING "ONNX Runtime version (matches dylib/dll filename)")
     if(APPLE)
-        set(ORT_URL  "https://github.com/microsoft/onnxruntime/releases/download/v1.25.1/onnxruntime-osx-arm64-1.25.1.tgz")
+        set(ORT_URL  "https://github.com/microsoft/onnxruntime/releases/download/v${SGF_ORT_VERSION}/onnxruntime-osx-arm64-${SGF_ORT_VERSION}.tgz")
         set(ORT_HASH "SHA256=18987ec3187b5f29ba798109750f6135060560ad4e0a52678fcc753ee8fb3091")
     elseif(WIN32)
-        set(ORT_URL  "https://github.com/microsoft/onnxruntime/releases/download/v1.25.1/onnxruntime-win-x64-1.25.1.zip")
+        set(ORT_URL  "https://github.com/microsoft/onnxruntime/releases/download/v${SGF_ORT_VERSION}/onnxruntime-win-x64-${SGF_ORT_VERSION}.zip")
         set(ORT_HASH "SHA256=33f2e8a63774811f99a5fc224cac32f4eed8c27643d46c6cc685319fa8f18019")
     else()
-        set(ORT_URL  "https://github.com/microsoft/onnxruntime/releases/download/v1.25.1/onnxruntime-linux-x64-1.25.1.tgz")
+        set(ORT_URL  "https://github.com/microsoft/onnxruntime/releases/download/v${SGF_ORT_VERSION}/onnxruntime-linux-x64-${SGF_ORT_VERSION}.tgz")
         set(ORT_HASH "SHA256=eb566a49cfc49ef0642f809b69340b5bb656c7c4905ba873526d226f2c005816")
     endif()
 
@@ -67,6 +88,7 @@ if(APPLE)
         "-framework ImageIO"
         "-framework PDFKit"
     )
+    set(_nlp_have_ocr_backend TRUE)   # Apple Vision always provides OCR on Apple
 elseif(WIN32)
     target_sources(nlp_engine PRIVATE
         addons/platform_services_windows.cpp   # reveal_in_file_manager via SHOpenFolderAndSelectItems
@@ -239,6 +261,7 @@ if(NOT APPLE OR NOT NLP_APPLE_VISION)
         target_sources(nlp_engine PRIVATE addons/ocr_addon_tesseract.cpp)
         target_compile_definitions(nlp_engine PUBLIC NLP_WITH_TESSERACT)
         target_link_libraries(nlp_engine PRIVATE Tesseract::libtesseract)
+        set(_nlp_have_ocr_backend TRUE)
     endif()
 endif()
 
@@ -278,8 +301,16 @@ if(_nlp_need_onnx_ocr AND NLP_WITH_ONNX)
     message(STATUS "[nlp] OCR: ONNX PP-OCRv4 (NLP_ONNX_OCR)")
     target_sources(nlp_engine PRIVATE addons/ocr_addon_onnx.cpp)
     target_compile_definitions(nlp_engine PUBLIC NLP_ONNX_OCR)
+    set(_nlp_have_ocr_backend TRUE)
 elseif(_nlp_need_onnx_ocr AND NOT NLP_WITH_ONNX)
     message(WARNING "[nlp] OCR: ONNX OCR requested but NLP_WITH_ONNX=OFF — no OCR backend")
+endif()
+
+# No real OCR backend was selected (Apple Vision / Tesseract / ONNX).
+# Compile the no-op stub so pce::nlp::backend::extract_text* are always defined.
+if(NOT _nlp_have_ocr_backend)
+    message(STATUS "[nlp] OCR: no backend — using no-op stubs (ocr_addon_stub.cpp)")
+    target_sources(nlp_engine PRIVATE addons/ocr_addon_stub.cpp)
 endif()
 
 target_include_directories(nlp_engine PUBLIC

@@ -15,7 +15,7 @@ frontend/packages/editor/dist/
 frontend/packages/audio/node_modules/
 frontend/packages/video/node_modules/
 frontend/packages/shared/node_modules/
-
+frontend/packages/ui/node_modules/
 
 # frontend/packages/**/node_modules/
 # frontend/packages/**/dist/

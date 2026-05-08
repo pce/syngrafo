@@ -44,48 +44,61 @@ export NLP_MODEL_DIR=$(pwd)/data/models
 
 
 
-=== The three pathes
+=== The three paths
+
+
+[cols="1,2,2", options="header", frame="none", border="none"]
+|===
+| Path | When to use | How
+
+| *vcpkg*
+| Fastest once vcpkg is installed; recommended on Windows.
+| Set `VCPKG_ROOT`; `dev.py` injects `CMAKE_PREFIX_PATH` automatically. +
+  CMakePreset: `local-vcpkg`
+
+| *FetchContent*
+| No package manager at all; self-contained; first build is slow (~10-15 min).
+| Sets `SGF_FETCH_AUDIO=ON`, `SGF_FETCH_VIDEO=ON`, `SGF_WITH_LM=ON`. +
+  Subsequent builds reuse `_deps_installed/`. +
+  CMakePreset: `local-fetch`
+
+| *System*
+| Libraries already installed (Homebrew, MacPorts, manual prefix).
+| Pass `--deps-mode system`; optionally supply `SGF_CSOUND_ROOT` / `SGF_FFMPEG_ROOT`.
+|===
+
+.Local compilation
+
+
+[source,bash]
+----
+# vcpkg (fastest once installed):
+VCPKG_ROOT=~/vcpkg python scripts/dev.py release \
+    --with-audio --with-video --with-lm
+
+# FetchContent (no package manager at all):
+python scripts/dev.py release \
+    --with-audio --with-video --with-lm --deps-mode fetch
+
+# system (MacPorts, manual install):
+python scripts/dev.py release \
+    --with-audio --with-video --with-lm --deps-mode system \
+    --cmake-extra SGF_CSOUND_ROOT=/opt/local SGF_FFMPEG_ROOT=/opt/local
+----
+
+// add `--fresh` to wipe the CMake cache and repopulate build/_deps.
+
 
 .Prerequisites
-[cols="1,1,2",options="header", frame="none"]
+[cols="1,1,2",options="header", frame="none", border="none"]
 |===
 | Tool | Min | Purpose
-| CMake | 3.25 | Build system
+| CMake | 3.28 | Build system
 | Clang / AppleClang | C++23 (Clang 18+ / AppleClang 16+) | Compiler
 | Bun | 1.0 | Frontend bundler
 | Python 3 | 3.9 | Dev runner, model scripts
 |===
 
-
-Two new CMakePresets:
-
-- `local-fetch`: no brew/port/vcpkg required; sets `SGF_FETCH_AUDIO=ON`, `SGF_FETCH_VIDEO=ON`, `SGF_WITH_LM=ON`. Subsequent builds reuse `_deps_installed/`.
-- `local-vcpkg`: feature flags ON, no fetch flags; `dev.py` injects `CMAKE_PREFIX_PATH` from `VCPKG_ROOT`.
-
-
-// 1. **vcpkg route** (`-DSGF_DEPS_MODE=vcpkg`): Use vcpkg to provide prebuilt binaries. User sets `VCPKG_ROOT` or passes `--vcpkg-root`.
-// 2. **FetchContent route** (`-DSGF_DEPS_MODE=fetch`): Download and compile from source into `build/_deps` without any package manager.
-// 3. **System/global route** (`-DSGF_DEPS_MODE=system`): Use installed system libraries (pkg-config, find_package, etc.).
-
-Local Compilation
-
-
-```scripts/dev.py
-# vcpkg (fastest once installed):
-VCPKG_ROOT=~/vcpkg python scripts/dev.py release \
-    --with-audio --with-video --with-lm
-
-# pure fetch (no package manager at all):
-python scripts/dev.py release \
-    --with-audio --with-video --with-lm --deps-mode fetch
-
-# system (MacPorts, manual install, SGF_CSOUND_ROOT):
-python scripts/dev.py release \
-    --with-audio --with-video --with-lm --deps-mode system \
-    --cmake-extra SGF_CSOUND_ROOT=/opt/local SGF_FFMPEG_ROOT=/opt/local
-```
-
-// scripts/dev.py debug --fresh --with-audio --with-video --with-lm --deps-mode fetch
 
 
 == Concept
@@ -223,30 +236,52 @@ While the Migration offers StaticFileSources they are intentionally compile-time
 
 == NLP Models
 
-Optional ONNXAddon
+ONNX Runtime is enabled by default on **Linux and Windows** only.
+On **macOS**, OCR uses Apple Vision (native, zero extra deps) and `NLP_WITH_ONNX` defaults to `OFF` —
+no 230 MB ORT download, no dylib bundling.
+Pass `-DNLP_WITH_ONNX=ON` explicitly to enable ONNX-based embeddings on macOS.
 
+.Download (Linux / Windows)
 [source,bash]
 ----
-python3 scripts/download_models.py download
+python3 scripts/download_models.py download --models embed,vocab,ocr
 python3 scripts/download_models.py check
 ----
 
 [cols="2,3,1,3",options="header", frame="none"]
 |===
 | File | Model | Size | Purpose
-| `embed.onnx` | all-MiniLM-L6-v2 (int8) | 23 MB | 384-dim sentence embeddings
+| `embed.onnx` | all-MiniLM-L6-v2 (int8) | 23 MB | 384-dim sentence embeddings (Linux/Windows)
 | `sentiment.onnx` | distilbert-sst-2 | 67 MB | Positive / negative
 | `ner.onnx` | bert-base-NER | 415 MB | CoNLL-2003 entities
 | `toxicity.onnx` | toxic-bert | 415 MB | Multi-label toxicity
 | `vocab.txt` | BERT WordPiece | 232 KB | Shared tokeniser
 |===
 
+.Embeddings on macOS (planned)
+When `NLP_WITH_ONNX=OFF`, embeddings on macOS can be served by a cross-platform LM runner
+(via `SGF_WITH_LM` / llama.cpp) using a GGUF embedding model instead of ONNX.
+This keeps macOS fully self-contained and avoids any dependency on ORT.
 
-== OCR ONNX
 
-- **macOS** | Apple Vision | `NLP_APPLE_VISION` (default ON) |
-- **Windows** | PP-OCRv4 ONNX | `NLP_WITH_ONNX=ON` + no tesseract → auto-fallback in `ocr_addon_onnx.cpp` |
-- **Linux** | PP-OCRv4 ONNX | `NLP_WITH_ONNX=ON` (default) + no tesseract → auto-fallback in `ocr_addon_onnx.cpp` |
+== OCR backend
+
+[cols="1,2,2", options="header", frame="none"]
+|===
+| Platform | Backend | CMake flag
+
+| *macOS*
+| Apple Vision — native framework, no extra deps, hardware-accelerated on Apple Silicon.
+| `NLP_APPLE_VISION=ON` (default)
+
+| *Linux*
+| PP-OCRv4 via ONNX Runtime. Tesseract used if installed; ONNX auto-activates as fallback.
+| `NLP_WITH_ONNX=ON` (default)
+
+| *Windows*
+| PP-OCRv4 via ONNX Runtime. No Tesseract in CI; ONNX is the primary OCR path.
+| `NLP_WITH_ONNX=ON` (default)
+|===
 
 
 

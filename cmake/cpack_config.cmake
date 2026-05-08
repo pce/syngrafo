@@ -16,7 +16,10 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Local-first document management with NLP 
 set(CPACK_PACKAGE_VERSION             "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_HOMEPAGE_URL        "https://github.com/pce/syngrafo")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY   "Syngrafo")
-set(CPACK_STRIP_FILES                 TRUE)
+# Strip release packages; preserve debug symbols in Debug builds.
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CPACK_STRIP_FILES TRUE)
+endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
@@ -81,4 +84,3 @@ elseif(WIN32)
 endif()
 
 include(CPack)
-

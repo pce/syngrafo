@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import Dropdown from "../ui/Dropdown";
 import Toggle from "../ui/Toggle";
 

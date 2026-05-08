@@ -6,6 +6,7 @@
     "packages/react-client",
     "packages/editor",
     "packages/shared",
+    "packages/ui",
     "packages/audio",
     "packages/video"
   ],

@@ -21,6 +21,8 @@ import React, {
 
 import { toTimecode, videoBus, uid } from '@syngrafo/shared';
 import type { VideoProject, VideoTrackLane, VideoClip } from '../types/video.ts';
+import { clipFromSource } from '../types/video.ts';
+import { ASSET_DRAG_TYPE } from '../browser/AssetBrowser.tsx';
 import { Ruler }       from './Ruler.tsx';
 import { ClipBlock }   from './ClipBlock.tsx';
 import { TrackHeader } from './TrackHeader.tsx';
@@ -57,6 +59,7 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [scrollLeft,      setScrollLeft]      = useState(0);
   const [viewportWidth,   setViewportWidth]   = useState(800);
+  const [assetDragOver,   setAssetDragOver]   = useState<string | null>(null);
 
   // refs
   const scrollRef    = useRef<HTMLDivElement>(null);
@@ -283,6 +286,55 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
     document.addEventListener('mouseup',   onMouseUp);
   }, [project, pixelsPerFrame, updateClip]);
 
+  // asset drop from AssetBrowser
+
+  const handleAssetDragOver = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const handleAssetDrop = useCallback((e: React.DragEvent, targetTrackId: string | null) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData(ASSET_DRAG_TYPE);
+    if (!raw) return;
+    const { path, kind } = JSON.parse(raw) as { path: string; kind: string };
+    const name       = path.split('/').pop() ?? path;
+    const durFrames  = project.settings.defaultImageDurationFrames;
+
+    // Compute the frame position from the drop x coordinate within the scroll area
+    const scrollEl  = scrollRef.current;
+    const rect      = scrollEl?.getBoundingClientRect();
+    const dropFrame = rect
+      ? Math.max(0, Math.round((e.clientX - rect.left + scrollLeft) / pixelsPerFrame))
+      : playheadFrame;
+
+    let tracks = [...project.tracks];
+    let track: VideoTrackLane;
+
+    if (targetTrackId) {
+      const found = tracks.find(t => t.id === targetTrackId);
+      if (!found) return;
+      track = found;
+    } else {
+      const laneKind = kind === 'audio' ? 'audio' : 'video';
+      const count    = tracks.filter(t => t.kind === laneKind).length + 1;
+      const label    = kind === 'audio' ? `Audio ${count}` :
+                       kind === 'image' ? `Images ${count}` : `Video ${count}`;
+      track = { id: uid(), kind: laneKind as 'video' | 'audio' | 'effect',
+                label, muted: false, solo: false, layer: tracks.length, clips: [] };
+      tracks = [...tracks, track];
+    }
+
+    const clip = clipFromSource(
+      { kind: kind as 'image' | 'video' | 'audio', path },
+      dropFrame, durFrames, track.layer, track.id, name,
+    );
+    tracks = tracks.map(t => t.id === track.id ? { ...t, clips: [...t.clips, clip] } : t);
+    onProjectChange({ ...project, tracks });
+  }, [project, playheadFrame, scrollLeft, pixelsPerFrame, onProjectChange]);
+
   // add track
 
   const addTrack = useCallback((kind: 'video' | 'audio' | 'image') => {
@@ -348,16 +400,16 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
   const timecode = toTimecode(playheadFrame, fps);
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-white overflow-hidden">
+    <div className="flex flex-col h-full bg-[var(--theme-surface)] text-[var(--theme-text)] overflow-hidden">
 
       {/* ── Controls bar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 border-b border-gray-700 flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] flex-shrink-0">
 
         {/* Transport */}
         <button
           aria-label={isPlaying ? 'Pause' : 'Play'}
           onClick={() => setIsPlaying(p => !p)}
-          className="w-8 h-8 flex items-center justify-center rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm"
+          className="w-8 h-8 flex items-center justify-center rounded bg-[var(--theme-primary)] hover:bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] text-sm"
         >
           {isPlaying ? '⏸' : '▶'}
         </button>
@@ -365,20 +417,20 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
         <button
           aria-label="Stop"
           onClick={() => { setIsPlaying(false); handleSeek(0); }}
-          className="w-8 h-8 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-white text-sm"
+          className="w-8 h-8 flex items-center justify-center rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] text-[var(--theme-text)] text-sm"
         >
           ⏹
         </button>
 
         {/* Timecode */}
-        <span className="font-mono text-xs text-gray-300 w-28 tabular-nums">
+        <span className="font-mono text-xs text-[var(--theme-text-muted)] w-28 tabular-nums">
           {timecode}
         </span>
 
-        <div className="w-px h-5 bg-gray-600" />
+        <div className="w-px h-5 bg-[var(--theme-border)]" />
 
         {/* Zoom */}
-        <span className="text-xs text-gray-500">Zoom</span>
+        <span className="text-xs text-[var(--theme-text-muted)]">Zoom</span>
         <input
           type="range"
           min={MIN_ZOOM}
@@ -386,20 +438,20 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
           step={0.05}
           value={zoom}
           onChange={e => setZoom(parseFloat(e.target.value))}
-          className="w-24 accent-indigo-400"
+          className="w-24 accent-[var(--theme-primary)]"
           aria-label="Timeline zoom"
         />
-        <span className="text-xs text-gray-500 w-8">{zoom.toFixed(1)}×</span>
+        <span className="text-xs text-[var(--theme-text-muted)] w-8">{zoom.toFixed(1)}×</span>
 
-        <div className="w-px h-5 bg-gray-600" />
+        <div className="w-px h-5 bg-[var(--theme-border)]" />
 
         {/* Add track buttons */}
-        <span className="text-xs text-gray-500">Add:</span>
+        <span className="text-xs text-[var(--theme-text-muted)]">Add:</span>
         {(['video', 'audio', 'image'] as const).map(kind => (
           <button
             key={kind}
             onClick={() => addTrack(kind)}
-            className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 capitalize"
+            className="text-xs px-2 py-1 rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] capitalize"
           >
             + {kind}
           </button>
@@ -409,20 +461,20 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
 
         {/* Selected clip info */}
         {selectedClipId && (
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-[var(--theme-text-muted)]">
             <button
               onClick={() => selectedClipId && splitClip(selectedClipId, playheadFrame)}
-              className="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
+              className="px-2 py-1 rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)]"
               title="Split at playhead (S)"
             >
               ✂ Split
             </button>
             <button
               onClick={() => deleteClip(selectedClipId)}
-              className="px-2 py-1 rounded bg-gray-700 hover:bg-red-700 text-gray-300"
+              className="px-2 py-1 rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-danger)]/80 text-[var(--theme-danger)]"
               title="Delete clip (Del)"
             >
-              🗑 Delete
+               Delete
             </button>
           </div>
         )}
@@ -433,12 +485,12 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
 
         {/* Track headers column — scrolls vertically with the lanes */}
         <div
-          className="flex-shrink-0 overflow-y-hidden border-r border-gray-700"
+          className="flex-shrink-0 overflow-y-hidden border-r border-[var(--theme-border)]"
           style={{ width: HEADER_WIDTH }}
         >
           {/* Ruler placeholder row */}
           <div
-            className="bg-gray-800 border-b border-gray-600"
+            className="bg-[var(--theme-surface)] border-b border-[var(--theme-border)]"
             style={{ height: 28, width: HEADER_WIDTH }}
           />
           {project.tracks.map(track => (
@@ -481,10 +533,30 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
                 <div
                   key={track.id}
                   className={[
-                    'relative border-b border-gray-700',
+                    'relative border-b border-[var(--theme-border)] transition-colors',
                     track.muted ? 'opacity-50' : '',
+                    assetDragOver === track.id
+                      ? 'bg-[var(--theme-primary)]/10 ring-1 ring-inset ring-[var(--theme-primary)]/60'
+                      : '',
                   ].join(' ')}
                   style={{ height: TRACK_HEIGHT }}
+                  onDragEnter={(e) => {
+                    if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE))
+                      setAssetDragOver(track.id);
+                  }}
+                  onDragOver={(e) => {
+                    handleAssetDragOver(e);
+                    if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE))
+                      setAssetDragOver(track.id);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node))
+                      setAssetDragOver(id => id === track.id ? null : id);
+                  }}
+                  onDrop={(e) => {
+                    setAssetDragOver(null);
+                    handleAssetDrop(e, track.id);
+                  }}
                   onClick={(e) => {
                     // Click on empty lane area — seek to that position
                     if ((e.target as HTMLElement).classList.contains('lane-bg')) {
@@ -495,14 +567,14 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
                   }}
                 >
                   {/* Lane background for click detection */}
-                  <div className="lane-bg absolute inset-0 bg-gray-900 pointer-events-auto" />
+                  <div className="lane-bg absolute inset-0 bg-[var(--theme-surface)] pointer-events-auto" />
 
                   {/* Grid lines every second */}
                   <div className="absolute inset-0 pointer-events-none">
                     {Array.from({ length: Math.floor(durationFrames / fps) + 1 }, (_, i) => (
                       <div
                         key={i}
-                        className="absolute top-0 h-full w-px bg-gray-700/40"
+                        className="absolute top-0 h-full w-px bg-[var(--theme-border)]/40"
                         style={{ left: i * fps * pixelsPerFrame }}
                       />
                     ))}
@@ -527,6 +599,33 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
                   ))}
                 </div>
               ))}
+
+              {/* Drop zone below all tracks — creates a new track */}
+              <div
+                className={[
+                  'flex items-center justify-center gap-1.5 border-2 border-dashed text-xs transition-colors select-none',
+                  assetDragOver === 'new'
+                    ? 'border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]'
+                    : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-border)]',
+                ].join(' ')}
+                style={{ height: 36, minWidth: totalWidth }}
+                onDragEnter={(e) => {
+                  if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) setAssetDragOver('new');
+                }}
+                onDragOver={(e) => {
+                  handleAssetDragOver(e);
+                  if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) setAssetDragOver('new');
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setAssetDragOver(null);
+                }}
+                onDrop={(e) => {
+                  setAssetDragOver(null);
+                  handleAssetDrop(e, null);
+                }}
+              >
+                {assetDragOver === 'new' ? 'Drop to create new track' : 'Drop asset here to add a new track'}
+              </div>
 
               {/* Playhead — full-height vertical line */}
               <div

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { nlp, type StreamChunk, type NLPStreamRequest } from "../services/nlp-service";
 import { markov } from "../services/markov-service";
 import { DocumentModel, type DocumentState } from "../models/document";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import AnalysisDashboard from "./analysis/AnalysisDashboard";
 
 /**

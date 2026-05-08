@@ -41,7 +41,7 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
     <div
       className={[
         'rounded-lg border transition-all duration-200',
-        node.enabled ? 'bg-gray-800 border-gray-600' : 'bg-gray-900 border-gray-700 opacity-50',
+        node.enabled ? 'bg-[var(--theme-surface)] border-[var(--theme-border)]' : 'bg-[var(--theme-surface)] border-[var(--theme-border)] opacity-50',
       ].join(' ')}
       style={{ borderLeftColor: color, borderLeftWidth: 3 }}
     >
@@ -51,22 +51,22 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
         <button
           onClick={() => onChange(node.id, { enabled: !node.enabled })}
           className={`w-4 h-4 rounded-sm border-2 flex-shrink-0 transition-colors ${
-            node.enabled ? 'bg-current border-current' : 'bg-transparent border-gray-500'
+            node.enabled ? 'bg-current border-current' : 'bg-transparent border-[var(--theme-text-muted)]'
           }`}
           style={{ color }}
           title={node.enabled ? 'Disable' : 'Enable'}
         />
 
-        <span className="text-xs font-semibold text-white flex-1 truncate">
+        <span className="text-xs font-semibold text-[var(--theme-text)] flex-1 truncate">
           {node.label || KIND_LABELS[node.kind] || node.kind}
         </span>
 
-        <span className="text-xs text-gray-500 font-mono">{index + 1}/{total}</span>
+        <span className="text-xs text-[var(--theme-text-muted)] font-mono">{index + 1}/{total}</span>
 
         <button
           onClick={() => onMoveUp(node.id)}
           disabled={isFirst}
-          className="text-gray-500 hover:text-gray-200 disabled:opacity-20 text-xs px-1"
+          className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] disabled:opacity-20 text-xs px-1"
           title="Move up in chain"
         >
           &#8593;
@@ -74,7 +74,7 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
         <button
           onClick={() => onMoveDown(node.id)}
           disabled={isLast}
-          className="text-gray-500 hover:text-gray-200 disabled:opacity-20 text-xs px-1"
+          className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] disabled:opacity-20 text-xs px-1"
           title="Move down in chain"
         >
           &#8595;
@@ -82,13 +82,13 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
 
         <button
           onClick={() => setExpanded(v => !v)}
-          className="text-gray-500 hover:text-gray-200 text-xs px-1"
+          className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] text-xs px-1"
         >
           {expanded ? '\u25B2' : '\u25BC'}
         </button>
         <button
           onClick={() => onRemove(node.id)}
-          className="text-gray-600 hover:text-red-400 text-xs px-1"
+          className="text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)] text-xs px-1"
         >
           &#x2715;
         </button>
@@ -96,11 +96,11 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
 
       {/* Expanded settings */}
       {expanded && (
-        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-gray-700">
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--theme-border)]">
           {/* Focus point picker (DoF & tilt-blur) */}
           {(node.kind === 'dof' || node.kind === 'tilt-blur') && (
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Focus point</label>
+              <label className="text-xs text-[var(--theme-text-muted)] block mb-1">Focus point</label>
               <FocusPicker
                 value={node.focusPoint}
                 onChange={fp => onChange(node.id, { focusPoint: fp })}
@@ -112,10 +112,10 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
           {Object.entries(node.params).map(([key, val]) => val !== undefined && (
             <div key={key}>
               <div className="flex justify-between mb-0.5">
-                <label className="text-xs text-gray-400 capitalize">
+                <label className="text-xs text-[var(--theme-text-muted)] capitalize">
                   {key.replace(/([A-Z])/g, ' $1')}
                 </label>
-                <span className="text-xs text-gray-500 font-mono">
+                <span className="text-xs text-[var(--theme-text-muted)] font-mono">
                   {(val as number).toFixed(2)}
                 </span>
               </div>
@@ -128,7 +128,7 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
                 onChange={e => onChange(node.id, {
                   params: { ...node.params, [key]: Number(e.target.value) },
                 })}
-                className="w-full accent-indigo-500"
+                className="w-full accent-[var(--theme-primary)]"
               />
             </div>
           ))}

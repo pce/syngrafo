@@ -125,11 +125,11 @@ export const ShaderChain: React.FC<ShaderChainProps> = ({ chain, onChange }) => 
   const totalHeight = chain.nodes.length * (ITEM_H + SPACING) + 48;
 
   return (
-    <div className="flex flex-col gap-3 p-3 bg-gray-900 rounded-xl border border-gray-700">
+    <div className="flex flex-col gap-3 p-3 bg-[var(--theme-surface)] rounded-xl border border-[var(--theme-border)]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">Shader Chain</h3>
-        <span className="text-xs text-gray-500">
+        <h3 className="text-sm font-semibold text-[var(--theme-text)]">Shader Chain</h3>
+        <span className="text-xs text-[var(--theme-text-muted)]">
           {chain.nodes.length} node{chain.nodes.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -157,20 +157,20 @@ export const ShaderChain: React.FC<ShaderChainProps> = ({ chain, onChange }) => 
         ))}
 
         {chain.nodes.length === 0 && (
-          <div className="flex items-center justify-center h-16 text-sm text-gray-600 border border-dashed border-gray-700 rounded-lg">
+          <div className="flex items-center justify-center h-16 text-sm text-[var(--theme-text-muted)] border border-dashed border-[var(--theme-border)] rounded-lg">
             No shaders — add one below
           </div>
         )}
       </div>
 
       {/* Add shader buttons */}
-      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-800">
+      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[var(--theme-border)]">
         {Object.keys(NODE_DEFAULTS).map(kind => (
           <button
             key={kind}
             onClick={() => addNode(kind)}
-            className="text-xs px-2.5 py-1 rounded-full bg-gray-800 hover:bg-gray-700
-              text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500
+            className="text-xs px-2.5 py-1 rounded-full bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)]
+              text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] border border-[var(--theme-border)] hover:border-[var(--theme-text-muted)]
               transition-colors"
           >
             + {NODE_DEFAULTS[kind]?.label ?? kind}

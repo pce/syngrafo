@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import { markov } from "../services/markov-service";
 import StatsDashboard from "./StatsDashboard";
 import { useTheme } from "../hooks/useTheme";

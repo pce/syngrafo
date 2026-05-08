@@ -1,5 +1,4 @@
 /**
- * video.ts
  * Core domain types for the @syngrafo/video package.
  *
  * Frames (integers) are the primary timeline unit throughout. Seconds are a
@@ -8,7 +7,9 @@
  */
 
 import type { EasingType, FrameRange, TimelineClip, TrackLane } from '@syngrafo/shared';
-import { uid } from '@syngrafo/shared';
+import { uid, SPRING_PRESETS } from '@syngrafo/shared';
+import type { ShaderNode } from './shader.ts';
+import type { VideoOperator } from './effect.ts';
 
 export type VideoClipKind = 'image' | 'video' | 'audio' | 'solid_color';
 
@@ -29,32 +30,6 @@ export interface VideoSource {
   color?: string;
 }
 
-export type ShaderNodeType =
-  | 'blur'
-  | 'brightness_contrast'
-  | 'rotate'
-  | 'opacity'
-  | 'chroma_key'
-  | 'custom_glsl';
-
-/**
- * Discriminated union of shader node variants.
- * Each variant carries only the parameters relevant to that operation.
- */
-export type ShaderNode =
-  | { type: 'blur'; radius: number }
-  | { type: 'brightness_contrast'; brightness: number; contrast: number; saturation: number }
-  | { type: 'rotate'; angleDeg: number }
-  | { type: 'opacity'; value: number }
-  | { type: 'chroma_key'; colorHex: string; threshold: number; softness: number }
-  | { type: 'custom_glsl'; fragmentSrc: string };
-
-/**
- * Ordered shader pipeline applied to a clip.
- * Index 0 receives the raw decoded frame; the last node produces the final output.
- */
-export type ShaderChain = ShaderNode[];
-
 export interface VideoKeyframe {
   id: string;
   property: 'opacity' | 'scale' | 'rotation' | 'posX' | 'posY' | 'volume';
@@ -70,7 +45,7 @@ export interface VideoKeyframe {
  */
 export interface VideoEffect {
   id: string;
-  kind: ShaderNodeType;
+  kind: 'blur' | 'brightness_contrast' | 'rotate' | 'opacity' | 'chroma_key' | 'custom_glsl';
   label: string;
   /** Clip-relative start frame (inclusive). */
   startFrame: number;
@@ -102,15 +77,15 @@ export interface VideoClip extends TimelineClip {
   posY: number;
   /** Clockwise rotation in degrees. */
   rotation: number;
-  shaderChain: ShaderChain;
+  shaderChain: ShaderNode[];
   effects: VideoEffect[];
+  operators: VideoOperator[];
   keyframes: VideoKeyframe[];
 }
 
 /**
  * VideoTrackLane narrows the shared TrackLane so that `clips` is typed as
  * VideoClip[] and adds a `layer` field for z-ordering at the track level.
- * Since VideoClip extends TimelineClip the structural constraint is satisfied.
  */
 export interface VideoTrackLane extends Omit<TrackLane, 'clips'> {
   /** z-ordering for the entire track: 0 = bottom. */
@@ -142,7 +117,7 @@ export interface VideoProject {
 }
 
 /**
- * Creates a VideoProject with sensible defaults and one empty video track.
+ * Creates a VideoProject with sensible defaults and one empty image track.
  * The returned object has `id: 0` — call videoStorage.createProject() to
  * persist it and receive the real numeric id back.
  *
@@ -153,8 +128,8 @@ export function defaultProject(name: string, fps = 30): VideoProject {
   const now = Date.now();
   const defaultTrack: VideoTrackLane = {
     id: uid(),
-    kind: 'video',
-    label: 'Video 1',
+    kind: 'image',
+    label: 'Images 1',
     muted: false,
     solo: false,
     layer: 0,
@@ -183,6 +158,9 @@ export function defaultProject(name: string, fps = 30): VideoProject {
  * Creates a VideoClip positioned at `startFrame` for `durationFrames` frames.
  * The `range.endFrame` is inclusive: endFrame = startFrame + durationFrames - 1.
  *
+ * For image clips, automatically populates `operators` with fade-in, fade-out,
+ * and a Ken Burns pan+zoom.
+ *
  * @param source         Describes the media source for the clip.
  * @param startFrame     Absolute timeline frame where the clip begins.
  * @param durationFrames Length of the clip in frames.
@@ -198,13 +176,24 @@ export function clipFromSource(
   trackId: string,
   label: string,
 ): VideoClip {
+  const id = uid();
   const range: FrameRange = {
     startFrame,
     endFrame: startFrame + durationFrames - 1,
   };
 
+  let operators: VideoOperator[] = [];
+  if (source.kind === 'image') {
+    const fadeFrames = Math.min(15, Math.floor(durationFrames * 0.15));
+    operators = [
+      { kind: 'fadeIn',   id: uid(), clipId: id, startFrame: 0,                          durationFrames: fadeFrames, easing: 'spring' },
+      { kind: 'fadeOut',  id: uid(), clipId: id, startFrame: durationFrames - fadeFrames, durationFrames: fadeFrames, easing: 'spring' },
+      { kind: 'kenburns', id: uid(), clipId: id, fromScale: 1.0, toScale: 1.15, fromOffset: [0, 0], toOffset: [0.02, 0.01], springConfig: SPRING_PRESETS.gentle },
+    ];
+  }
+
   return {
-    id: uid(),
+    id,
     trackId,
     label,
     range,
@@ -219,6 +208,7 @@ export function clipFromSource(
     rotation: 0,
     shaderChain: [],
     effects: [],
+    operators,
     keyframes: [],
   };
 }

@@ -1,6 +1,6 @@
 import React from "react";
 import { useDms } from "../../store/dms-store";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import { dms, type Zone } from "../../services/dms-service";
 
 const ZoneNavigator: React.FC = () => {

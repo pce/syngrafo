@@ -112,6 +112,15 @@ endif()
 # to set SGF_FFMPEG_ROOT).
 # ══════════════════════════════════════════════════════════════════════════════
 if(NOT VIDEO_FFMPEG_FOUND)
+    # Wipe any stale NOTFOUND entries written by a previous configure run.
+    # CMake's find_library / find_path skip the search when the variable
+    # already exists in the cache — even as NOTFOUND — so a newly installed
+    # FFmpeg would be silently missed without this explicit reset.
+    foreach(_comp ${_ffmpeg_components})
+        unset(_lib_${_comp} CACHE)
+        unset(_inc_${_comp} CACHE)
+    endforeach()
+
     set(_find_all_found TRUE)
 
     foreach(_comp ${_ffmpeg_components})
@@ -258,6 +267,7 @@ if(NOT VIDEO_FFMPEG_FOUND AND SGF_FETCH_VIDEO)
             "-framework CoreAudio"
             "-liconv"
             "-lz"
+            "-lbz2"
         )
     elseif(UNIX)
         target_link_libraries(ffmpeg_fetched INTERFACE

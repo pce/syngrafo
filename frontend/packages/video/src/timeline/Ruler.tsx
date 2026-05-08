@@ -65,7 +65,7 @@ export const Ruler: React.FC<RulerProps> = ({
 
   return (
     <div
-      className="relative select-none cursor-pointer bg-gray-800 border-b border-gray-600 overflow-hidden"
+      className="relative select-none cursor-pointer bg-[var(--theme-surface)] border-b border-[var(--theme-border)] overflow-hidden"
       style={{ height: 28, width: viewportWidth }}
       onClick={handleClick}
       title="Click to seek"
@@ -79,7 +79,7 @@ export const Ruler: React.FC<RulerProps> = ({
             <React.Fragment key={frame}>
               {/* Tick line */}
               <div
-                className={major ? 'absolute bg-gray-400' : 'absolute bg-gray-600'}
+                className={major ? 'absolute bg-[var(--theme-text-muted)]' : 'absolute bg-[var(--theme-border)]'}
                 style={{
                   left:   x,
                   top:    major ? 0 : 14,
@@ -90,7 +90,7 @@ export const Ruler: React.FC<RulerProps> = ({
               {/* Timecode label — only for major ticks */}
               {major && (
                 <div
-                  className="absolute text-[10px] text-gray-400 pl-1 whitespace-nowrap pointer-events-none"
+                  className="absolute text-[10px] text-[var(--theme-text-muted)] pl-1 whitespace-nowrap pointer-events-none"
                   style={{ left: x, top: 2 }}
                 >
                   {toTimecode(frame, fps)}

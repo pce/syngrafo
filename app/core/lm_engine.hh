@@ -4,22 +4,18 @@
  * @author Patrick Engel
  * @brief C++23 language-model inference engine for Syngrafo (SGF_WITH_LM guard).
  *
- * ## Architecture
+ * pce::lm
  *
- *   ┌────────────────────────────────────────────────────────────────┐
- *   │  pce::lm                                                       │
- *   │                                                                │
- *   │  WorkQueue<Req,Res>   — generic MPSC queue backed by jthread   │
- *   │    ├─ submit(Req) → Expected<Ticket{cancel_id, future<Res>}>   │
- *   │    └─ cancel(cancel_id) → bool   (per-slot atomic cancelled)   │
- *   │                                                                │
- *   │  LMEngine                                                      │
- *   │    ├─ load(path)   → VoidResult    (resets queue, loads model) │
- *   │    ├─ unload()     → void noexcept (drains queue, frees model) │
- *   │    ├─ chat(req)    → Expected<InferenceTicket>                 │
- *   │    ├─ cancel(id)   → bool                                      │
- *   │    └─ status()     → LMStatus noexcept                         │
- *   └────────────────────────────────────────────────────────────────┘
+ *    - WorkQueue<Req,Res> - generic MPSC queue backed by jthread
+ *          ├─ submit(Req)       → Expected Ticket
+ *          │
+ *          └─ cancel(cancel_id) → bool  (per-slot atomic cancelled)
+ *   -  LMEngine
+ *          ├─ load(path)   → VoidResult    (resets queue, loads model)
+ *          ├─ unload()     → void noexcept (drains queue, frees model)
+ *          ├─ chat(req)    → Expected<InferenceTicket>
+ *          ├─ cancel(id)   → bool
+ *          └─ status()     → LMStatus noexcept
  *
  * Conditional compilation:
  *   - With    SGF_WITH_LM: real llama.cpp backend
@@ -41,7 +37,7 @@
  * @endcode
  */
 
-#include "../dms_monadic.hh"   // pce::dms::Expected<T>, pce::dms::VoidResult
+#include "../dms_monadic.hh"
 
 #include <atomic>
 #include <condition_variable>

@@ -6,9 +6,10 @@
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "peerDependencies": { "react": ">=18", "react-dom": ">=18" },
-  "dependencies": { "@syngrafo/shared": "workspace:*" },
+  "dependencies": { "@syngrafo/shared": "workspace:*", "@syngrafo/ui": "workspace:*", "three": "^0.184.0" },
   "devDependencies": {
     "@saucer-dev/types": "^2.0.1",
+    "@types/three": "^0.184.0",
     "@types/bun": "latest",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -52,7 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cpm-cache
-          key: cpm-macos-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
+          key: cpm-macos-${{ hashFiles('CMakeLists.txt','CMakePresets.json','cmake/fetch_deps.cmake','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-macos-
 
       - name: Cache bun modules
@@ -62,13 +62,9 @@ jobs:
           key: bun-macos-${{ hashFiles('frontend/packages/react-client/bun.lock') }}
           restore-keys: bun-macos-
 
-      - name: Cache ORT download (macOS)
-        uses: actions/cache@v4
-        with:
-          path: |
-            build/_deps/onnxruntime-src
-            build/_deps/onnxruntime-subbuild
-          key: ort-macos-arm64-1.25.1
+      # NLP_WITH_ONNX defaults to OFF on macOS — Apple Vision handles OCR natively,
+      # so the ORT tarball (~230 MB) is never downloaded and no ORT cache is needed.
+      # To opt-in: add -DNLP_WITH_ONNX=ON to the Configure step below.
 
       # ── Optional media deps (macOS — brew is available on the runner) ───────
       - name: Install audio deps (macOS)
@@ -79,8 +75,10 @@ jobs:
         if: inputs.with_video
         run: brew install ffmpeg
 
-      - name: Download NLP models
-        run: python3 scripts/download_models.py download --models embed,vocab
+      # ONNX is OFF on macOS by default, so embed.onnx and vocab.txt (BERT/ONNX)
+      # are not needed.  Apple Vision OCR and the NLP stub paths work without them.
+      # If you re-enable ONNX on macOS, uncomment:
+      #   python3 scripts/download_models.py download --models embed,vocab
 
       - name: Frontend
         working-directory: frontend/packages/react-client
@@ -94,6 +92,7 @@ jobs:
           cmake -B build --preset ci-macos
           -DSGF_WITH_AUDIO=${{ env.WITH_AUDIO }}
           -DSGF_WITH_VIDEO=${{ env.WITH_VIDEO }}
+          -Wno-dev
 
       - name: Build
         run: cmake --build build --parallel $(sysctl -n hw.ncpu)
@@ -165,7 +164,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cpm-cache
-          key: cpm-linux-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
+          key: cpm-linux-${{ hashFiles('CMakeLists.txt','CMakePresets.json','cmake/fetch_deps.cmake','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-linux-
 
       - name: Cache bun modules
@@ -179,6 +178,7 @@ jobs:
       # is only fetched once per version.  On a cache hit CMake finds the
       # ExternalProject stamp and skips the download step entirely.
       - name: Cache ORT download (Linux)
+        # ⚠ Bump the key suffix when bumping SGF_ORT_VERSION in external/nlp/CMakeLists.txt
         uses: actions/cache@v4
         with:
           path: |
@@ -201,6 +201,7 @@ jobs:
           cmake -B build --preset ci-linux
           -DSGF_WITH_AUDIO=${{ env.WITH_AUDIO }}
           -DSGF_WITH_VIDEO=${{ env.WITH_VIDEO }}
+          -Wno-dev
 
       - name: Build
         run: cmake --build build --parallel $(nproc)
@@ -247,7 +248,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/cpm-cache
-          key: cpm-windows-${{ hashFiles('CMakeLists.txt','CMakePresets.json','external/nlp/CMakeLists.txt') }}
+          key: cpm-windows-${{ hashFiles('CMakeLists.txt','CMakePresets.json','cmake/fetch_deps.cmake','external/nlp/CMakeLists.txt') }}
           restore-keys: cpm-windows-
 
       - name: Cache bun modules
@@ -260,6 +261,7 @@ jobs:
       # Cache the ORT FetchContent download (src + stamp) so the ~230 MB zip
       # is only fetched once per version.
       - name: Cache ORT download (Windows)
+        # ⚠ Bump the key suffix when bumping SGF_ORT_VERSION in external/nlp/CMakeLists.txt
         uses: actions/cache@v4
         with:
           path: |
@@ -306,6 +308,7 @@ jobs:
           "-DCMAKE_PREFIX_PATH=$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows"
           "-DSGF_WITH_AUDIO=$env:WITH_AUDIO"
           "-DSGF_WITH_VIDEO=$env:WITH_VIDEO"
+          -Wno-dev
 
       - name: Build
         run: cmake --build build --config Release --parallel

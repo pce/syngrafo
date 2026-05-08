@@ -1,11 +1,11 @@
 /**
  * @file platform_services_stub.cpp
- * @brief No-op stubs for all @c pce::nlp::platform functions and (when no OCR
- *        backend is selected) @c pce::nlp::backend.
+ * @brief No-op stubs for @c pce::nlp::platform functions on platforms that
+ *        have no dedicated implementation (not Apple, not Windows, not UNIX).
  *
- * Compiled on platforms not covered by a dedicated implementation file.
- * @c ocr_addon_tesseract.cpp provides the real OCR backend when
- * @c NLP_WITH_TESSERACT is defined.
+ * This file only covers the platform-services interface (file-manager reveal,
+ * document rectification, EXIF extraction).  OCR backend stubs live in
+ * @c ocr_addon_stub.cpp and are compiled independently by CMakeLists.
  */
 #include "platform_services.hh"
 
@@ -22,16 +22,3 @@ bool reveal_in_file_manager(const std::string& /*path*/) { return false; }
 std::string extract_exif(const std::string& /*input_path*/) { return "{}"; }
 
 } // namespace pce::nlp::platform
-
-// OCR backend stubs — active when neither NLP_APPLE_VISION nor NLP_WITH_TESSERACT is defined.
-#if !defined(NLP_APPLE_VISION) && !defined(NLP_WITH_TESSERACT)
-namespace pce::nlp::backend {
-
-std::string extract_text(const std::string& /*input_path*/) { return ""; }
-
-std::string extract_text_from_pdf(const std::string& input_path) {
-    return extract_text(input_path);
-}
-
-} // namespace pce::nlp::backend
-#endif

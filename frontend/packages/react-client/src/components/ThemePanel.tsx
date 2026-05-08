@@ -13,11 +13,12 @@ import type { ThemePreset, FontPair } from "../store/theme-store";
 import { useSettings } from "../store/settings-store";
 import { useLocale } from "../store/locale-store";
 import { LOCALES, type SupportedLocale } from "../i18n";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import Toggle from "./ui/Toggle";
 import Tooltip from "./ui/Tooltip";
 import { models, type LlmModelInfo, type LlmDownloadProgress } from "../services/dms-service";
 import { dms } from "../services/dms-service";
+import { INPUT_MAPPING_PRESETS, type KeyboardScheme, KEYBOARD_SCHEME_PREF_KEY } from "@syngrafo/shared";
 
 
 const COLOR_SLOTS: Array<{ label: string; var: string }> = [
@@ -356,6 +357,20 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
   const isSaving = isSavingTheme || isSavingSettings;
   const [tab, setTab] = useState<Tab>("appearance");
   const [saveOk, setSaveOk] = useState(false);
+  const [keyboardScheme, setKeyboardScheme] = useState<KeyboardScheme>("macos");
+
+  useEffect(() => {
+    dms.loadPreference(KEYBOARD_SCHEME_PREF_KEY).then(value => {
+      if (value && ["macos", "windows", "vi"].includes(value)) {
+        setKeyboardScheme(value as KeyboardScheme);
+      }
+    });
+  }, []);
+
+  const handleKeyboardSchemeChange = useCallback((scheme: KeyboardScheme) => {
+    setKeyboardScheme(scheme);
+    dms.savePreference(KEYBOARD_SCHEME_PREF_KEY, scheme);
+  }, []);
 
   // Resolve current CSS var values for the colour pickers
   const getComputedColor = (varName: string): string => {
@@ -482,6 +497,47 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
               size="sm"
             />
           </SettingRow>
+        </div>
+      </section>
+
+      {/* Keyboard & Input */}
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
+          Keyboard &amp; Input
+        </h3>
+        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
+          Controls how file selection, navigation and multi-select work in the file browser.
+          Saved immediately — no restart required.
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {INPUT_MAPPING_PRESETS.map(preset => (
+            <button
+              key={preset.scheme}
+              onClick={() => handleKeyboardSchemeChange(preset.scheme)}
+              className={`
+                flex flex-col gap-0.5 p-2.5 rounded-lg border-2 text-left transition-all
+                ${keyboardScheme === preset.scheme
+                  ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/8"
+                  : "border-[var(--theme-border)] hover:border-[var(--theme-primary)]/50"}
+              `}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] font-black uppercase tracking-wider ${
+                  keyboardScheme === preset.scheme
+                    ? "text-[var(--theme-primary)]"
+                    : "text-[var(--theme-text)]"
+                }`}>
+                  {preset.label}
+                </span>
+                {keyboardScheme === preset.scheme && (
+                  <span className="text-[8px] font-black text-[var(--theme-primary)] ml-auto">ACTIVE</span>
+                )}
+              </div>
+              <span className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed">
+                {preset.shortDescription}
+              </span>
+            </button>
+          ))}
         </div>
       </section>
 

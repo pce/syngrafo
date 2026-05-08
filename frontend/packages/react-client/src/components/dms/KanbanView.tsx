@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { dms } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 
 interface KanbanComment {

@@ -3,35 +3,6 @@
 React 19 + Tailwind CSS v4 client for the Syngrafo desktop app.
 Bundled with Bun and embedded as a static webview in the native Saucer binary.
 
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Runtime | [Bun](https://bun.sh) |
-| UI | React 19 |
-| Styling | Tailwind CSS v4 + CSS custom-property theme tokens |
-| Editor | `@syngrafo/editor` (workspace package) |
-| i18n | [LinguiJS](https://lingui.dev) — `en` / `de` / `el` |
-| IPC | Saucer webview bindings (`@saucer-dev/types`) |
-
-## Structure
-
-```
-src/
-  App.tsx               Root component — providers, error boundary, layout
-  Dashboard.tsx         Main view shell
-  frontend.tsx          Browser entry-point (mounts React root)
-  index.ts              Bun static-file server (production mode)
-  index.css             Tailwind entry + all CSS theme variables
-  components/           UI components — DMS, analysis, audio, widgets, header, sidebar
-  hooks/                useNetHealth · useAudioPlaybackWithVisualization · useTheme
-  i18n/                 LinguiJS catalog loader + auto locale detection
-  models/               Document state for NLP analysis view
-  services/             dms-service · nlp-service · netmon-service · markov-service
-  store/                dms-store · settings-store · theme-store · bookmark-store
-  types/                Audio recording types
-  utils/                Shared utilities
-```
 
 ## Quick start
 
@@ -64,12 +35,6 @@ bun run i18n:compile    # compile .po → TypeScript message catalogs
 Supported locales: **en** (English), **de** (German), **el** (Greek).
 Add a new locale by creating a `.po` file and listing it in the LinguiJS config.
 
-## Themes
-
-12 built-in colour presets (Dark, Light, Nord, Dracula, Gruvbox, Tokyo Night, Rosé Pine,
-Catppuccin Mocha/Macchiato, One Dark, Solarized Dark, High Contrast), 5 font pairs,
-adjustable border-radius and density. All preferences are persisted to the DMS SQLite
-preference store so they survive app restarts.
 
 ## IPC bindings
 

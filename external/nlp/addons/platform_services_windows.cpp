@@ -40,11 +40,3 @@ bool reveal_in_file_manager(const std::string& path) {
 }
 
 } // namespace pce::nlp::platform
-
-// OCR backend stubs — active when neither NLP_APPLE_VISION nor NLP_WITH_TESSERACT is defined.
-#if !defined(NLP_APPLE_VISION) && !defined(NLP_WITH_TESSERACT)
-namespace pce::nlp::backend {
-std::string extract_text(const std::string&) { return ""; }
-std::string extract_text_from_pdf(const std::string& p) { return extract_text(p); }
-} // namespace pce::nlp::backend
-#endif

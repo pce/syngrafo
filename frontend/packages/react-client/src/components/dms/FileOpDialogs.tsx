@@ -16,7 +16,7 @@
 
 import React, { useState, useEffect } from "react";
 import { dms }  from "../../services/dms-service";
-import Icon     from "../Icon";
+import { Icon }   from "../Icon";
 
 
 

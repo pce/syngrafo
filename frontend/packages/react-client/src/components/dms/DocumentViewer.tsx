@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useDms } from "../../store/dms-store";
 import { useSettings } from "../../store/settings-store";
 import { dms, isImageFile, isDocFile, is3DFile } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 import { isAudioFile, isVideoFile, isSvgFile, isArchiveFile, isHtmlFile } from "../../services/dms-service";
 import type { GltfMode } from "../../services/dms-service";

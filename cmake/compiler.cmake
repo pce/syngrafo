@@ -18,5 +18,7 @@ set(CMAKE_CXX_EXTENSIONS        OFF)
 # ── Windows: suppress noisy Windows.h macros ─────────────────────────────────
 if(MSVC)
     add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
+    # /bigobj: raise COFF section limit from 65 536 → 4 G so heavily-templated
+    # TUs (main.cc pulling in glaze/saucer/onnx headers) do not hit C1128.
+    add_compile_options(/bigobj)
 endif()
-

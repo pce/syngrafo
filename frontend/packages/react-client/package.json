@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@syngrafo/editor": "workspace:*",
+    "@syngrafo/shared": "workspace:*",
+    "@syngrafo/ui": "workspace:*",
     "@lingui/core": "^6.0.1",
     "@lingui/format-po": "^6.0.1",
     "@lingui/react": "^6.0.1",

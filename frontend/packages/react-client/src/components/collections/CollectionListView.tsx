@@ -16,7 +16,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { CollectionConfig } from "../../services/collection-service";
 import type { IconName } from "../Icon";
 import ConfirmDialog from "./ConfirmDialog";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 interface EditCell {
   id:    number;

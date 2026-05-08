@@ -13,7 +13,7 @@
 import React, { useState, useEffect } from "react";
 import { useDms } from "../../store/dms-store";
 import { dms, type Bookmark, type DiskUsageInfo, type ZoneDiskUsage } from "@/services/dms-service.ts";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 import NetHealthWidget from "../widgets/NetHealthWidget";
 import WelcomeToDayWidget from "../widgets/WelcomeToDayWidget";

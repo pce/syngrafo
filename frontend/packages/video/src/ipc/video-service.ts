@@ -97,6 +97,17 @@ export const videoService = {
   ): Promise<IpcResult<{ dataUrl: string }>> =>
     ipcCall<{ dataUrl: string }>('video_render_frame', projectJson, frame),
 
+  /**
+   * List files in `dirPath` whose extension matches one of `extensions`.
+   * @param dirPath    Absolute directory path to scan.
+   * @param extensions Extension filter without dot, e.g. `['jpg','jpeg','png','webp','gif']`.
+   */
+  listDirectory: (
+    dirPath: string,
+    extensions: string[],
+  ): Promise<IpcResult<{ files: string[] }>> =>
+    ipcCall<{ files: string[] }>('video_list_directory', dirPath, extensions),
+
   selectSavePath: (
     suggestedName: string,
     filterExt: string,

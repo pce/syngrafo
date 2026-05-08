@@ -1,7 +1,7 @@
 import React from "react";
 import { useDms } from "../../store/dms-store";
 import type { SearchResult } from "@/services/dms-service.ts";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import { pathKind, resultScoreLabel, splitAtMatch } from "./search-utils";
 
 /**

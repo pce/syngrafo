@@ -26,7 +26,7 @@ import { MTLLoader }  from "three/examples/jsm/loaders/MTLLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { STLLoader }  from "three/examples/jsm/loaders/STLLoader.js";
 import { PCDLoader }  from "three/examples/jsm/loaders/PCDLoader.js";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 // Format helpers (NOT re-exporting is3DFile — use dms-service.ts)
 export type ModelFormat =

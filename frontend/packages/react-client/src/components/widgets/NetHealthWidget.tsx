@@ -1,5 +1,5 @@
 import React from "react";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 import Widget from "../ui/Widget";
 import { NET_MAX_SCORE } from "../../services/netmon-service";

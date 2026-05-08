@@ -1,6 +1,7 @@
 export * from './types/timeline.ts';
 export * from './types/physics.ts';
 export * from './types/events.ts';
+export * from './types/input-mapping.ts';
 export * from './physics/spring.ts';
 export * from './physics/easings.ts';
 export * from './event-bus/EventBus.ts';
@@ -8,3 +9,4 @@ export * from './event-bus/operators.ts';
 export * from './utils/time.ts';
 export * from './utils/id.ts';
 export * from './ipc.ts';
+export * from './services/file-service.ts';

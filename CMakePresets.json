@@ -19,7 +19,8 @@
       "description": "Debug build with symbols",
       "inherits": "default",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
@@ -73,6 +74,7 @@
     {
       "name": "ci-macos",
       "displayName": "Syngrafo — CI macOS (AppleClang, Release)",
+      "description": "macOS CI: AppleClang, Release. NLP_WITH_ONNX defaults to OFF — Apple Vision handles OCR natively (no 230 MB ORT download, no dylib bundling). Pass -DNLP_WITH_ONNX=ON to enable ONNX embeddings on macOS.",
       "inherits": "default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { EditorShell, type SDocument, createDocument } from "@syngrafo/editor";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 
 export interface EditorPortalProps {
   /** Mounts the editor subtree when true; unmounting releases all resources. */

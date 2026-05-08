@@ -1,81 +1,83 @@
-/**
- * shaderChain.ts
- * Pure helper functions for building and manipulating ShaderChain pipelines.
- *
- * All helpers are intentionally immutable — they return new arrays and never
- * mutate their inputs. This makes them safe to use in React reducers or Zustand
- * stores without additional cloning.
- */
+import type { ShaderNode, ShaderKind, ShaderParams } from '../types/shader.ts';
+import { uid } from '@syngrafo/shared';
 
-import type { ShaderChain, ShaderNode } from '../types/video.ts';
-
-/** Create a Gaussian blur node. `radius` is in pixels. */
-export function makeBlur(radius: number): ShaderNode {
-  return { type: 'blur', radius };
+function make(kind: ShaderKind, label: string, params: ShaderParams = {}): ShaderNode {
+  return {
+    id: uid(),
+    kind,
+    label,
+    enabled: true,
+    focusPoint: { x: 0.5, y: 0.5 },
+    params,
+  };
 }
 
-/**
- * Create a brightness/contrast/saturation node.
- *
- * Conventions (matching common GPU shader conventions):
- *  - brightness: additive offset, 0 = unchanged
- *  - contrast:   multiplicative factor, 0 = unchanged (grey), 1 = full
- *  - saturation: 1 = original, 0 = greyscale, >1 = hyper-saturated
- */
-export function makeBrightnessContrast(
-  brightness = 0,
-  contrast = 0,
-  saturation = 1,
-): ShaderNode {
-  return { type: 'brightness_contrast', brightness, contrast, saturation };
+export function makeKenBurns(params?: Partial<ShaderParams>): ShaderNode {
+  return make('kenburns', 'Ken Burns', {
+    fromScale: 1, toScale: 1.15,
+    fromOffsetX: 0, fromOffsetY: 0,
+    toOffsetX: 0.02, toOffsetY: 0.01,
+    ...params,
+  });
 }
 
-/**
- * Create an opacity node.
- * `value` is clamped to [0, 1]: 0 = fully transparent, 1 = fully opaque.
- */
-export function makeOpacity(value: number): ShaderNode {
-  return { type: 'opacity', value: Math.max(0, Math.min(1, value)) };
+export function makeMirror(axis = 0, params?: Partial<ShaderParams>): ShaderNode {
+  return make('mirror', 'Mirror', { axis, ...params });
 }
 
-/**
- * Create a chroma-key (green/blue-screen) node.
- *
- * @param colorHex  Hex colour to key out (e.g. '#00ff00').
- * @param threshold Distance in colour-space below which a pixel is keyed. Default 0.3.
- * @param softness  Feather range above the threshold for smooth edges. Default 0.05.
- */
-export function makeChromaKey(
-  colorHex: string,
-  threshold = 0.3,
-  softness = 0.05,
-): ShaderNode {
-  return { type: 'chroma_key', colorHex, threshold, softness };
+export function makeFlip(axis = 1, params?: Partial<ShaderParams>): ShaderNode {
+  return make('flip', 'Flip', { axis, ...params });
 }
 
-/** Create a rotation node. `angleDeg` is clockwise degrees. */
-export function makeRotate(angleDeg: number): ShaderNode {
-  return { type: 'rotate', angleDeg };
+export function makeScaleIn(targetScale = 1.2, params?: Partial<ShaderParams>): ShaderNode {
+  return make('scale-in', 'Scale In', { targetScale, intensity: 1, ...params });
 }
 
-/** Returns a new, empty shader chain (no operations applied). */
-export function defaultChain(): ShaderChain {
+export function makeScaleOut(targetScale = 0.8, params?: Partial<ShaderParams>): ShaderNode {
+  return make('scale-out', 'Scale Out', { targetScale, intensity: 1, ...params });
+}
+
+export function makeKaleidoscope(segments = 6, params?: Partial<ShaderParams>): ShaderNode {
+  return make('kaleidoscope', 'Kaleidoscope', { segments, ...params });
+}
+
+export function makeBlackhole(params?: Partial<ShaderParams>): ShaderNode {
+  return make('blackhole', 'Blackhole', { strength: 0.5, radius: 0.3, ...params });
+}
+
+export function makeNoise(params?: Partial<ShaderParams>): ShaderNode {
+  return make('noise', 'Noise', { amplitude: 0.05, frequency: 10, ...params });
+}
+
+export function makeBlur(params?: Partial<ShaderParams>): ShaderNode {
+  return make('blur', 'Blur', { blurStrength: 0.5, ...params });
+}
+
+export function makeDof(params?: Partial<ShaderParams>): ShaderNode {
+  return make('dof', 'Depth of Field', { focalDistance: 0.5, focalRange: 0.3, blurStrength: 0.5, ...params });
+}
+
+export function makeTiltBlur(params?: Partial<ShaderParams>): ShaderNode {
+  return make('tilt-blur', 'Tilt Blur', { tiltAngle: 0, tiltWidth: 0.3, tiltSoftness: 0.5, ...params });
+}
+
+export function makeCinema(params?: Partial<ShaderParams>): ShaderNode {
+  return make('cinema', 'Cinema', { vignetteStr: 0.5, grainAmount: 0.1, chromaShift: 0.02, contrast: 1, saturation: 1, ...params });
+}
+
+export function makeFade(alpha = 1, params?: Partial<ShaderParams>): ShaderNode {
+  return make('fade', 'Fade', { alpha, ...params });
+}
+
+export function defaultChain(): ShaderNode[] {
   return [];
 }
 
-/**
- * Append `node` to the end of `chain`. Returns a new chain.
- * The original chain is not mutated.
- */
-export function addNode(chain: ShaderChain, node: ShaderNode): ShaderChain {
+export function addNode(chain: ShaderNode[], node: ShaderNode): ShaderNode[] {
   return [...chain, node];
 }
 
-/**
- * Remove the node at `index` from `chain`. Returns a new chain.
- * If `index` is out of bounds the original chain is returned unchanged.
- */
-export function removeNode(chain: ShaderChain, index: number): ShaderChain {
+export function removeNode(chain: ShaderNode[], index: number): ShaderNode[] {
   if (index < 0 || index >= chain.length) return chain;
   return [...chain.slice(0, index), ...chain.slice(index + 1)];
 }
@@ -86,7 +88,7 @@ export function removeNode(chain: ShaderChain, index: number): ShaderChain {
  * Returns a new chain; the original is not mutated.
  * If either index is out of bounds, or `from === to`, the original is returned.
  */
-export function moveNode(chain: ShaderChain, from: number, to: number): ShaderChain {
+export function moveNode(chain: ShaderNode[], from: number, to: number): ShaderNode[] {
   if (
     from === to ||
     from < 0 || from >= chain.length ||
@@ -96,33 +98,20 @@ export function moveNode(chain: ShaderChain, from: number, to: number): ShaderCh
   }
 
   const result = [...chain];
-  const spliced = result.splice(from, 1);
-  const node = spliced[0];
-  // splice(from, 1) always removes exactly one element because we've already
-  // checked 0 <= from < chain.length above, so node is never undefined.
+  const [node] = result.splice(from, 1);
   if (node === undefined) return chain;
   result.splice(to, 0, node);
   return result;
 }
 
-/**
- * Serialize a ShaderChain to a compact JSON string.
- * Suitable for storing in `ShaderChainUpdateEvent.chainJson` or persisting
- * inside a `VideoClip.meta` record.
- */
-export function chainToJson(chain: ShaderChain): string {
+export function chainToJson(chain: ShaderNode[]): string {
   return JSON.stringify(chain);
 }
 
-/**
- * Deserialize a ShaderChain from a JSON string produced by `chainToJson`.
- * Falls back to an empty chain if parsing fails or the result is not an array,
- * so callers never need to guard against thrown exceptions.
- */
-export function jsonToChain(json: string): ShaderChain {
+export function jsonToChain(json: string): ShaderNode[] {
   try {
     const parsed: unknown = JSON.parse(json);
-    if (Array.isArray(parsed)) return parsed as ShaderChain;
+    if (Array.isArray(parsed)) return parsed as ShaderNode[];
     return [];
   } catch {
     return [];

@@ -39,7 +39,7 @@ import {
   isVideoFile,
 } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 
 function FileRowIcon({ entry }: { entry: FsEntry }) {

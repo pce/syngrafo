@@ -92,3 +92,13 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(saucer_pdf)
+
+# saucer-pdf compiles wv2.pdf.cpp which includes saucer/win32.utils.hpp
+# (needs CoTaskMemFree → <objbase.h>) and pulls in GDI+ headers
+# (GdiplusHeaders.h, GdiplusFlat.h) that require IStream and PROPID from
+# <objidl.h>.  WIN32_LEAN_AND_MEAN strips both; apply the same force-include
+# used for saucer core and saucer-desktop.
+if(MSVC AND TARGET saucer-pdf)
+    target_compile_options(saucer-pdf PRIVATE "/FI${_saucer_msvc_fix}")
+    message(STATUS "[saucer-pdf] Applied Windows SDK header fix")
+endif()

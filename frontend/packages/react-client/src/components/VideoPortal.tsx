@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import { VideoEditorPage } from "../../../video/src/editor/VideoEditorPage";
 
 export interface VideoPortalProps {

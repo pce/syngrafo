@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 
 function fmtTime(s: number): string {

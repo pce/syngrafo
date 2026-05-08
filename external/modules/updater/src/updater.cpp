@@ -26,6 +26,7 @@
 #ifdef _WIN32
 #  include <shlobj.h>
 #  include <windows.h>
+#  include <shellapi.h>  // ShellExecuteA — not included by <windows.h> when WIN32_LEAN_AND_MEAN is defined
 #elif __APPLE__
 #  include <CoreFoundation/CoreFoundation.h>
 #endif

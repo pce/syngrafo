@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { nlp, type StreamChunk, type HealthStatus, type NLPStreamRequest } from "../services/nlp-service";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 
 interface SidebarProps {

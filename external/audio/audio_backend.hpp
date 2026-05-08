@@ -56,17 +56,18 @@ export_wav(const std::string& csd_text, const std::filesystem::path& output_path
         cs.SetOption("-n");
         cs.SetOption(("-o" + output_path.string()).c_str());
 
-        if (cs.CompileCsdText(csd.c_str()) != 0)
-            return std::unexpected("CSound CompileCsdText failed");
+        // CSound 7: CompileCSD(text, mode=1) replaces CompileCsdText
+        if (cs.CompileCSD(csd.c_str(), 1) != 0)
+            return std::unexpected("CSound CompileCSD failed");
 
         if (cs.Start() != 0)
             return std::unexpected("CSound Start() failed");
 
-        // Perform() blocks until the score is done — correct for offline render.
-        cs.Perform();
-        cs.Cleanup();
+        // PerformKsmps() returns 0 while running, non-zero when score finishes
+        while (!cs.PerformKsmps()) {}
 
         const double duration = cs.GetScoreTime();
+        cs.Reset();  // CSound 7: Cleanup() removed, use Reset()
 
         return ExportResult{
             .output_path  = output_path.string(),
@@ -91,11 +92,12 @@ validate_csd(const std::string& csd_text)
     try {
         Csound cs;
         cs.SetOption("-n");
-        const int rc = cs.CompileCsdText(csd_text.c_str());
+        // CSound 7: CompileCSD(text, mode=1) replaces CompileCsdText
+        const int rc = cs.CompileCSD(csd_text.c_str(), 1);
         if (rc != 0)
             return std::unexpected(
-                "Syntax error (CompileCsdText returned " + std::to_string(rc) + ")");
-        cs.Cleanup();
+                "Syntax error (CompileCSD returned " + std::to_string(rc) + ")");
+        cs.Reset();  // CSound 7: Cleanup() removed
         return true;
     } catch (const std::exception& e) {
         return std::unexpected(std::string("CSound exception: ") + e.what());

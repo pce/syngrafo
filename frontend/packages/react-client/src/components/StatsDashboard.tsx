@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 
 interface EngineStats {
   ram_mb: number;

@@ -25,7 +25,7 @@ import React, {
 import { dms } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
 import { useDms } from "../../store/dms-store";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 
 export interface NotesViewProps {
   /** Absolute path to the .notes folder, e.g. "/home/user/zone/.notes" */

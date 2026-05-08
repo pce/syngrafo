@@ -17,7 +17,7 @@ import ThemePanel from "./ThemePanel";
 import { AudioPortal } from "./AudioPortal";
 import { VideoPortal } from "./VideoPortal";
 import BookmarksView from "./collections/BookmarksView";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import TimelinePage from "./dms/TimelinePage";
 import ZoneDashboard from "./dms/ZoneDashboard";
 import { EditorPortal } from "./EditorPortal";
@@ -394,7 +394,12 @@ const Dashboard: React.FC = () => {
   const handleLeftSelectionChange = useCallback((paths: string[]) => {
     setLeftSelection(paths);
     setActivePanel("left");
-  }, []);
+    // Single-click on one file shows the preview and analysis immediately.
+    // (Double-click also dispatches via onFileOpen
+    if (paths.length === 1 && paths[0]) {
+      dispatch({ type: "SELECT_FILE", path: paths[0] });
+    }
+  }, [dispatch]);
   const handleLeftFocus      = useCallback(() => setActivePanel("left"), []);
   const handleLeftPathChange = useCallback((p: string) => setLeftPath(p), []);
 

@@ -161,6 +161,12 @@ if(APPLE)
     )
 endif()
 
+if(WIN32)
+    target_link_libraries(syngrafo PRIVATE
+        iphlpapi    # GetAdaptersAddresses, GetTcpTable2 (netmon_bindings.hh)
+    )
+endif()
+
 # ─── Platform bundle properties ───────────────────────────────────────────────
 if(APPLE)
     set_target_properties(syngrafo PROPERTIES
@@ -245,3 +251,27 @@ endif()
 
 # ─── Build summary ────────────────────────────────────────────────────────────
 include(cmake/summary.cmake)
+
+# ─── Optional tests (SGF_BUILD_TESTS) ─────────────────────────────────────────
+# Catch2 unit tests + macOS bundle layout check.
+# Enable with:  cmake -DSGF_BUILD_TESTS=ON ...
+# Run with:     ctest --test-dir build -C Release --output-on-failure
+#
+# BUILD_TESTING is forced OFF earlier to suppress nlp_engine's internal tests;
+# we use our own SGF_BUILD_TESTS flag to avoid conflicting with that guard.
+option(SGF_BUILD_TESTS "Build Catch2 unit tests and the macOS bundle layout check" OFF)
+
+if(SGF_BUILD_TESTS)
+    enable_testing()
+
+    FetchContent_Declare(
+        Catch2
+        URL      https://github.com/catchorg/Catch2/archive/refs/tags/v3.8.1.tar.gz
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(Catch2)
+    list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")
+    include(Catch)
+
+    add_subdirectory(tests)
+endif()

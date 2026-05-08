@@ -6,7 +6,7 @@ import type { ImageAnalysis } from "../../services/dms-service";
 import { KIND_LABEL, KIND_ICON } from "../../services/dms-service";
 import type { SentimentData, Keyword, Entity } from "../../services/nlp-service";
 import type { ZoneHistoryItem } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 
 function fmtBytes(b: number): string {
@@ -179,7 +179,7 @@ const AnalysisPanel: React.FC = () => {
   if (!state.selectedPath && !state.fileStats) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 p-6 text-center">
-        <span className="text-2xl opacity-20">🔬</span>
+        <Icon name="microscope" size="lg" className="opacity-20 text-[var(--theme-text-muted)]" />
         <p className="text-xs text-[var(--theme-text-muted)]">
           Select a file to see its info and analysis
         </p>

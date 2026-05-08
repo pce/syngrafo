@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import Icon from "./Icon";
+import { Icon } from "./Icon";
 import AudioTimelinePage from "./audio/AudioTimelinePage";
 
 export interface AudioPortalProps {

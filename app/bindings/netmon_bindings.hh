@@ -1,16 +1,15 @@
 #pragma once
 /**
  * @file bindings/netmon_bindings.hh
- * @brief Exposes `netmon_health` — a zero-allocation snapshot of local network state.
+ * @brief Zero-allocation snapshot of local network state exposed as `netmon_health`.
  *
- * Baseline fingerprints are captured on the first call (app startup).
- * Each subsequent call compares current state against that baseline so the
- * "changed" flags reflect drift from the normal startup state, not from the
- * last poll.
+ * Fingerprints are captured once at startup and used as the baseline for all
+ * subsequent calls, so "changed" flags reflect drift from the normal startup
+ * state rather than from the previous poll.
  *
- * Platform support:
- *   macOS / Linux  — getifaddrs, /etc/resolv.conf mtime, sysctl / /proc/net/route
- *   Windows        — GetAdaptersAddresses, GetTcpTable2
+ * @par Platform
+ * - macOS / Linux: getifaddrs, /etc/resolv.conf mtime, sysctl / /proc/net/route
+ * - Windows: GetAdaptersAddresses, GetTcpTable2
  */
 
 #include <atomic>
@@ -21,7 +20,11 @@
 #include <string_view>
 
 #ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
 #  include <windows.h>
 #  include <iphlpapi.h>
 #  include <vector>
@@ -50,8 +53,6 @@ namespace pce::netmon {
 
 using json = nlohmann::json;
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
 static int64_t now_ms() noexcept {
     using namespace std::chrono;
     return duration_cast<milliseconds>(
@@ -59,14 +60,11 @@ static int64_t now_ms() noexcept {
     ).count();
 }
 
-/** FNV-1a 64-bit step. */
 static constexpr uint64_t fnv_step(uint64_t h, uint64_t v) noexcept {
     return (h ^ v) * 1099511628211ULL;
 }
 
-// ── network fingerprints ──────────────────────────────────────────────────────
-
-/** Hash the current interface list (name + flags + IPv4/IPv6 addresses). */
+/** @brief Hash of the current interface list (name, flags, IPv4/IPv6 addresses). */
 static uint64_t iface_fingerprint() noexcept {
 #if defined(__APPLE__) || defined(__linux__)
     struct ifaddrs* ifa = nullptr;
@@ -123,7 +121,12 @@ static uint64_t iface_fingerprint() noexcept {
 #endif
 }
 
-/** Modification time of the DNS resolver config — proxy for DNS server change. */
+/**
+ * @brief Modification time of the DNS resolver config.
+ *
+ * Used as a lightweight proxy for detecting DNS server changes without
+ * parsing resolver config content.
+ */
 static int64_t dns_mtime() noexcept {
 #if defined(__APPLE__) || defined(__linux__)
     struct stat st{};
@@ -134,10 +137,10 @@ static int64_t dns_mtime() noexcept {
 }
 
 /**
- * Routing-table fingerprint.
- *   macOS  — byte size of the full routing-table dump via sysctl.
- *   Linux  — mtime ^ size of /proc/net/route.
- * Either value changes whenever the routing table changes.
+ * @brief Routing-table fingerprint.
+ *
+ * macOS: byte size of the full routing-table dump via sysctl.\n
+ * Linux: mtime XOR size of /proc/net/route.
  */
 static uint64_t route_fingerprint() noexcept {
 #ifdef __APPLE__
@@ -156,7 +159,7 @@ static uint64_t route_fingerprint() noexcept {
 #endif
 }
 
-/** Count established local TCP sockets. */
+/** @brief Total established TCP socket / PCB count. */
 static uint32_t tcp_count() noexcept {
 #ifdef __APPLE__
     int count = 0;
@@ -168,10 +171,9 @@ static uint32_t tcp_count() noexcept {
     uint32_t n = 0;
     if (std::ifstream f("/proc/net/tcp"); f) {
         std::string line;
-        std::getline(f, line); // skip header
+        std::getline(f, line);
         while (std::getline(f, line)) ++n;
     }
-    // Also count IPv6 TCP
     if (std::ifstream f6("/proc/net/tcp6"); f6) {
         std::string line;
         std::getline(f6, line);
@@ -192,18 +194,13 @@ static uint32_t tcp_count() noexcept {
 #endif
 }
 
-// ── binding registration ──────────────────────────────────────────────────────
-
 /**
- * Exposes `netmon_health` to the WebView.
+ * @brief Registers the `netmon_health` handler on @p wv.
  *
- * Returns `{ ok: true, data: NetSnapshot }` where NetSnapshot mirrors the
- * TypeScript `NetSnapshot` interface in `services/netmon-service.ts`:
- *   interface_changed  — interface list differs from startup baseline
- *   dns_changed        — DNS resolver config mtime differs from startup
- *   route_changed      — routing table fingerprint differs from startup
- *   local_socket_count — current TCP socket/PCB count
- *   timestamp          — Unix epoch milliseconds
+ * Returns `{ ok: true, data: NetSnapshot }` mirroring the TypeScript
+ * `NetSnapshot` type in `services/netmon-service.ts`.
+ *
+ * @param wv The smartview instance to expose the binding on.
  */
 inline void register_netmon_bindings(saucer::smartview& wv) {
     wv.expose("netmon_health", []() -> std::string {
@@ -220,7 +217,6 @@ inline void register_netmon_bindings(saucer::smartview& wv) {
         const uint64_t cur_route  = route_fingerprint();
         const uint32_t sockets    = tcp_count();
 
-        // Capture baseline exactly once (startup state = "normal").
         std::call_once(bl.flag, [&] {
             bl.iface = cur_iface;
             bl.dns   = cur_dns;

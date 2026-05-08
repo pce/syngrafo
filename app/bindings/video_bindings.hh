@@ -11,6 +11,7 @@
 #include <string>
 #include <filesystem>
 #include <vector>
+#include <algorithm>
 #include <cstdint>
 #include <print>
 
@@ -125,6 +126,42 @@ inline void register_video_bindings(saucer::smartview& wv)
                     }},
                 }},
             }.dump();
+        });
+
+    // video_list_directory(dirPath, extensions[]) →
+    //   { ok, data: { files: string[] } }
+    // Returns absolute paths of every regular file in dirPath whose
+    // lowercase extension matches one of the supplied extensions.
+    // An empty extensions list returns all files.
+    wv.expose("video_list_directory",
+        [](string dir_path, std::vector<string> extensions) -> string {
+            namespace fs = std::filesystem;
+            const fs::path root{dir_path};
+            std::error_code ec;
+            if (!fs::is_directory(root, ec))
+                return json{{"ok", false}, {"error", "Not a directory"}}.dump();
+
+            // Normalise extensions to lowercase with leading dot.
+            std::vector<string> exts;
+            exts.reserve(extensions.size());
+            for (auto e : extensions) {
+                std::transform(e.begin(), e.end(), e.begin(), ::tolower);
+                if (!e.empty() && e[0] != '.') e = '.' + e;
+                exts.push_back(std::move(e));
+            }
+
+            json files = json::array();
+            const auto opts = fs::directory_options::skip_permission_denied;
+            for (const auto& entry : fs::directory_iterator(root, opts, ec)) {
+                if (!entry.is_regular_file(ec)) continue;
+                if (!exts.empty()) {
+                    string ext = entry.path().extension().string();
+                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    if (std::find(exts.begin(), exts.end(), ext) == exts.end()) continue;
+                }
+                files.push_back(entry.path().string());
+            }
+            return json{{"ok", true}, {"data", {{"files", files}}}}.dump();
         });
 
     std::print("[video] bindings registered (SGF_WITH_VIDEO={})\n",

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useDms } from "../../store/dms-store";
 import { dms, isImageFile, isDocFile, isAudioFile, isTextFile, isSvgFile } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
-import Icon from "../Icon";
+import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 
 
