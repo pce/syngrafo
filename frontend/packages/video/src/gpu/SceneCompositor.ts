@@ -4,16 +4,20 @@ import { texture, uniform, uv, vec2, vec4, float } from 'three/tsl';
 import { simulateSpring, SPRING_PRESETS } from '@syngrafo/shared';
 import type { SpringConfig } from '@syngrafo/shared';
 import type { VideoProject, VideoClip } from '../types/video.ts';
-import type { KenBurnsOp, FadeInOp, FadeOutOp } from '../types/effect.ts';
-import { applyUVTransform, applyColorTransform } from './tsl/operators.ts';
+import type { KenBurnsOp, FadeInOp, FadeOutOp, StretchMorphOp } from '../types/effect.ts';
+import { applyUVTransform, applyColorTransform, globalTimeU, buildMorphColorNode } from './tsl/operators.ts';
+import type { ShaderNode } from '../types/shader.ts';
 
 interface ClipMesh {
-  mesh:     THREE.Mesh<THREE.PlaneGeometry, MeshBasicNodeMaterial>;
-  opacityU: ReturnType<typeof uniform>;
-  scaleU:   ReturnType<typeof uniform>;
-  offsetU:  ReturnType<typeof uniform>;
-  texUrl:   string | null;
-  chainKey: string;
+  mesh:      THREE.Mesh<THREE.PlaneGeometry, MeshBasicNodeMaterial>;
+  opacityU:  ReturnType<typeof uniform>;
+  scaleU:    ReturnType<typeof uniform>;
+  offsetU:   ReturnType<typeof uniform>;
+  texUrl:    string | null;
+  chainKey:  string;
+  morphTU:   ReturnType<typeof uniform>;   // 0→1 morph progress uniform
+  dstTex:    THREE.Texture | null;         // morph destination texture
+  dstTexUrl: string | null;                // tracks which dst is loaded
 }
 
 export class SceneCompositor {
@@ -53,10 +57,34 @@ export class SceneCompositor {
     const { renderer, scene, camera } = this;
     if (!renderer || !scene || !camera) return;
 
+    // Capture frame in a const so async closures always reference the correct value.
+    const currentFrame = frame;
+
+    // Advance the global time uniform so time-animated shaders evolve frame by frame
+    (globalTimeU as unknown as { value: number }).value = currentFrame / Math.max(1, project.fps);
+
     const { width, height } = project.resolution;
     if (width !== this.w || height !== this.h) this.resize(width, height);
 
+    // set scene background from project settings.
+    scene.background = new THREE.Color(
+      project.settings?.backgroundColor ?? 0x141414,
+    );
+
     for (const cm of this.pool.values()) cm.mesh.visible = false;
+
+    // prune pool entries for clips no longer present in the project.
+    const allClipIds = new Set(
+      project.tracks.flatMap(t => t.clips.map(c => c.id)),
+    );
+    for (const [clipId, cm] of this.pool) {
+      if (!allClipIds.has(clipId)) {
+        cm.mesh.geometry.dispose();
+        (cm.mesh.material as MeshBasicNodeMaterial).dispose();
+        this.scene!.remove(cm.mesh);
+        this.pool.delete(clipId);
+      }
+    }
 
     const activeClips: VideoClip[] = [];
     for (const track of project.tracks) {
@@ -79,6 +107,76 @@ export class SceneCompositor {
         if (cached) this.rebuildColorNode(cm, clip, cached);
       }
 
+      // ── Stretch-Morph operator ─────────────────────────────────────────
+      const morphOp = clip.operators.find(
+        (op): op is StretchMorphOp => op.kind === 'stretch-morph',
+      );
+
+      if (morphOp) {
+        const clipRelFrame  = currentFrame - clip.range.startFrame;
+        const morphStart    = morphOp.startFrame;
+        const morphEnd      = morphOp.startFrame + morphOp.durationFrames - 1;
+        const inMorphWindow = clipRelFrame >= morphStart && clipRelFrame <= morphEnd;
+
+        if (inMorphWindow) {
+          const rawT = morphOp.durationFrames > 1
+            ? (clipRelFrame - morphStart) / (morphOp.durationFrames - 1)
+            : 0;
+          (cm.morphTU as unknown as { value: number }).value = Math.max(0, Math.min(1, rawT));
+
+          const targetUrl = morphOp.targetUrl
+            ?? (morphOp.targetPath ? `file://${morphOp.targetPath}` : null);
+
+          if (targetUrl) {
+            if (cm.dstTexUrl !== targetUrl) {
+              cm.dstTexUrl = targetUrl;
+              const cachedDst = this.texCache.get(targetUrl);
+              if (cachedDst) {
+                cm.dstTex = cachedDst;
+              } else {
+                this.texLoader.loadAsync(targetUrl).then(dst => {
+                  this.texCache.set(targetUrl, dst);
+                  cm.dstTex = dst;
+                  const srcTex = cm.texUrl ? this.texCache.get(cm.texUrl) : null;
+                  if (srcTex) {
+                    this.rebuildColorNode(cm, clip, srcTex, undefined, dst, morphOp);
+                    renderer.render(scene, camera);
+                  }
+                }).catch(() => { /* no dst — degrade gracefully */ });
+              }
+            }
+
+            // If dst texture is loaded, ensure color node is the morph node.
+            if (cm.dstTex) {
+              const expectedKey = `morph:${morphOp.id}:${cm.dstTex.uuid}`;
+              const srcTex = cm.texUrl ? this.texCache.get(cm.texUrl) : null;
+              if (cm.chainKey !== expectedKey && srcTex) {
+                this.rebuildColorNode(cm, clip, srcTex, undefined, cm.dstTex, morphOp);
+              }
+            }
+          }
+        } else {
+          // Outside morph window — reset progress and clear morph node if active.
+          (cm.morphTU as unknown as { value: number }).value = 0;
+          if (cm.dstTex && cm.chainKey.startsWith('morph:')) {
+            const srcTex = cm.texUrl ? this.texCache.get(cm.texUrl) : null;
+            if (srcTex) this.rebuildColorNode(cm, clip, srcTex);
+          }
+        }
+      }
+
+      // solid_color clips have no URL; paint them with a flat colour node.
+      if (clip.source.kind === 'solid_color' || (!clip.source.url && clip.source.color)) {
+        const hex = clip.source.color ?? '#000000';
+        const cr = parseInt(hex.slice(1, 3), 16) / 255;
+        const cg = parseInt(hex.slice(3, 5), 16) / 255;
+        const cb = parseInt(hex.slice(5, 7), 16) / 255;
+        cm.mesh.material.colorNode = vec4(float(cr), float(cg), float(cb), cm.opacityU) as never;
+        cm.mesh.material.needsUpdate = true;
+        this.applyFrameUniforms(cm, clip, currentFrame);
+        continue;
+      }
+
       if (clip.source.url && cm.texUrl !== clip.source.url) {
         const url    = clip.source.url;
         cm.texUrl    = url;
@@ -89,12 +187,15 @@ export class SceneCompositor {
           this.texLoader.loadAsync(url).then((tex) => {
             this.texCache.set(url, tex);
             this.rebuildColorNode(cm, clip, tex);
+            // apply per-frame uniforms after the async load so the
+            // clip shows at the correct opacity/scale instead of staying gray.
+            this.applyFrameUniforms(cm, clip, currentFrame);
             renderer.render(scene, camera);
           }).catch(() => { /* leave placeholder */ });
         }
       }
 
-      this.applyFrameUniforms(cm, clip, frame);
+      this.applyFrameUniforms(cm, clip, currentFrame);
     }
 
     renderer.render(scene, camera);
@@ -116,15 +217,48 @@ export class SceneCompositor {
     mesh.renderOrder = clip.layer;
     this.scene!.add(mesh);
 
-    const cm: ClipMesh = { mesh, opacityU, scaleU, offsetU, texUrl: null, chainKey: '' };
+    const morphTU = uniform(0.0);
+    const cm: ClipMesh = {
+      mesh, opacityU, scaleU, offsetU,
+      texUrl: null, chainKey: '',
+      morphTU, dstTex: null, dstTexUrl: null,
+    };
     this.pool.set(clip.id, cm);
     return cm;
   }
 
-  private rebuildColorNode(cm: ClipMesh, clip: VideoClip, tex: THREE.Texture): void {
+  private rebuildColorNode(
+    cm:       ClipMesh,
+    clip:     VideoClip,
+    tex:      THREE.Texture,
+    chain?:   ShaderNode[],
+    dstTex?:  THREE.Texture,
+    morphOp?: StretchMorphOp,
+  ): void {
+    // If a destination texture + morph operator are provided, use the plasma
+    // morph shader instead of the normal shader chain.
+    if (dstTex && morphOp) {
+      cm.mesh.material.colorNode = buildMorphColorNode(
+        tex, dstTex,
+        uv(),
+        cm.morphTU,
+        cm.opacityU,
+        morphOp.noiseScale,
+        morphOp.noiseSpeed,
+        morphOp.noiseAmp,
+        morphOp.colorDistGate,
+        morphOp.motionBlurSamples,
+      ) as never;
+      cm.mesh.material.needsUpdate = true;
+      cm.chainKey = `morph:${morphOp.id}:${dstTex.uuid}`;
+      return;
+    }
+
+    const effectiveChain = chain ?? clip.shaderChain;
+
     let uvNode = uv().sub(0.5).div(cm.scaleU).add(cm.offsetU).add(0.5) as ReturnType<typeof uv>;
 
-    for (const node of clip.shaderChain) {
+    for (const node of effectiveChain) {
       if (!node.enabled) continue;
       uvNode = applyUVTransform(node, uvNode);
     }
@@ -132,7 +266,7 @@ export class SceneCompositor {
     tex.colorSpace = THREE.SRGBColorSpace;
     let colorNode = texture(tex, uvNode) as ReturnType<typeof vec4>;
 
-    for (const node of clip.shaderChain) {
+    for (const node of effectiveChain) {
       if (!node.enabled) continue;
       colorNode = applyColorTransform(node, colorNode, tex, uvNode);
     }
@@ -140,7 +274,7 @@ export class SceneCompositor {
     colorNode = vec4(colorNode.rgb, colorNode.a.mul(cm.opacityU)) as ReturnType<typeof vec4>;
     cm.mesh.material.colorNode = colorNode as never;
     cm.mesh.material.needsUpdate = true;
-    cm.chainKey = JSON.stringify(clip.shaderChain);
+    cm.chainKey = JSON.stringify(effectiveChain);
   }
 
   private applyFrameUniforms(cm: ClipMesh, clip: VideoClip, frame: number): void {

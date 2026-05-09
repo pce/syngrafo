@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { EditorShell, type SDocument, createDocument } from "@syngrafo/editor";
+import { generateName } from "@syngrafo/shared";
 import { Icon } from "./Icon";
 
 export interface EditorPortalProps {
@@ -34,7 +35,7 @@ interface ContentProps {
 }
 
 function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: ContentProps) {
-  const [doc] = useState<SDocument>(() => docProp ?? createDocument());
+  const [doc] = useState<SDocument>(() => docProp ?? createDocument({ title: generateName() }));
 
   const handleClose = useCallback(() => onClose?.(), [onClose]);
 

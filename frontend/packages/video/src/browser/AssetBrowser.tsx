@@ -77,6 +77,7 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
   const startDir = deriveDir(workingDir);
 
   const [currentPath, setCurrentPath] = useState(startDir);
+  const [pathInput,   setPathInput]   = useState(startDir);
   const [entries,     setEntries]     = useState<FileBrowserEntry[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -84,7 +85,6 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
   const onPathChangeRef = useRef(onPathChange);
   useEffect(() => { onPathChangeRef.current = onPathChange; }, [onPathChange]);
 
-  // ── Directory loading ───────────────────────────────────────────────────────
 
   const loadDir = useCallback(async (path: string) => {
     if (!path) return;
@@ -115,6 +115,7 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
 
         setEntries(all);
         setCurrentPath(path);
+        setPathInput(path);
         onPathChangeRef.current?.(path);
       } else {
         setError(res.error ?? 'Failed to list directory');
@@ -137,6 +138,16 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
   const handleFileOpen  = useCallback((path: string) => onFileSelect(path, inferKind(path)), [onFileSelect]);
   const handleListSubdirs = useCallback((path: string) => fileService.listSubdirs(path), []);
 
+  const handleBrowse = useCallback(async () => {
+    const res = await fileService.selectDirectory();
+    if (res.ok && res.data) void loadDir(res.data);
+  }, [loadDir]);
+
+  const handlePathInputCommit = useCallback(() => {
+    const trimmed = pathInput.trim();
+    if (trimmed) void loadDir(trimmed);
+  }, [pathInput, loadDir]);
+
 
   const displayEntries = useMemo(() => {
     if (!filterKind) return entries;
@@ -153,17 +164,14 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
 
   const toolbarRight = useMemo(() => (
     <button
-      onClick={async () => {
-        const res = await fileService.selectDirectory();
-        if (res.ok && res.data) void loadDir(res.data);
-      }}
-      className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded
-                 bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)]
-                 transition-colors shrink-0"
+      onClick={handleBrowse}
+      title="Change folder"
+      className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
+                 hover:bg-[var(--theme-bg)] transition-colors shrink-0"
     >
-      Browse…
+      <Icon name="folder-open" size={14} />
     </button>
-  ), [loadDir]);
+  ), [handleBrowse]);
 
 
   const renderIcon = useCallback((entry: FileBrowserEntry): React.ReactNode | null => {
@@ -197,22 +205,52 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
   }, []);
 
 
-  const emptyContent = !currentPath ? (
-    <div className="flex flex-col items-center justify-center gap-3 p-6 h-full text-[var(--theme-text-muted)]">
-      <Icon name="folder-open" size={24} />
-      <p className="text-xs text-center leading-relaxed">
-        No folder selected.<br />
-        Click <strong>Browse…</strong> above to pick a media folder.
-      </p>
-    </div>
-  ) : undefined;
+  // No-folder state
+  if (!currentPath) {
+    return (
+      <div className={`flex flex-col h-full ${className ?? ''}`}>
+        <div className="flex items-center gap-1 px-2 py-2 border-b border-[var(--theme-border)] shrink-0">
+          <input
+            type="text"
+            value={pathInput}
+            onChange={e => setPathInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handlePathInputCommit(); }}
+            placeholder="Paste folder path…"
+            className="flex-1 min-w-0 text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-border)]
+                       rounded px-2 py-1 text-[var(--theme-text)] placeholder-[var(--theme-text-muted)]/50
+                       focus:outline-none focus:border-[var(--theme-primary)]"
+          />
+          <button
+            onClick={handlePathInputCommit}
+            title="Go to path"
+            className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]
+                       hover:bg-[var(--theme-bg)] transition-colors shrink-0 border border-[var(--theme-border)]"
+          >
+            <Icon name="chevron-right" size={12} />
+          </button>
+          <button
+            onClick={handleBrowse}
+            title="Browse for folder"
+            className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
+                       hover:bg-[var(--theme-bg)] transition-colors shrink-0 border border-[var(--theme-border)]"
+          >
+            <Icon name="folder-open" size={14} />
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-1.5 opacity-30 pointer-events-none select-none">
+          <Icon name="folder-open" size={20} />
+          <span className="text-[10px] text-[var(--theme-text-muted)]">no media folder</span>
+        </div>
+      </div>
+    );
+  }
 
-
+  // Normal state: folder loaded
   return (
     <div className={`flex flex-col h-full ${className ?? ''}`}>
       <FileBrowser
-        entries={currentPath ? displayEntries : []}
-        currentPath={currentPath || '/'}
+        entries={displayEntries}
+        currentPath={currentPath}
         loading={loading}
         error={error}
         onNavigate={handleNavigate}
@@ -223,7 +261,6 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({
         renderIcon={renderIcon}
         className="flex-1 min-h-0"
       />
-      {emptyContent}
     </div>
   );
 };

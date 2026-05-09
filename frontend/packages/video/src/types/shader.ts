@@ -13,6 +13,14 @@ export type ShaderKind =
   | 'dof'
   | 'tilt-blur'
   | 'cinema'
+  | 'bloom'            // cinematic threshold bloom (additive glow)
+  | 'bokeh-glow'       // threshold-based bokeh particle glow
+  | 'chromatic-warp'   // smooth evolving field + lens chromatic aberration
+  | 'flow-warp'        // Sobel-gradient-driven edge-flow distortion
+  | 'duotone'          // 2-color luminance mapping
+  | 'tritone'          // 3-stop luminance mapping
+  | 'film-grain'       // retro warm-grain look
+  | 'rounded-frame'    // SDF rounded-corner alpha mask
   | 'lut'
   | 'fade'
   | 'custom';
@@ -59,6 +67,17 @@ export interface ShaderParams {
   // fade / generic
   alpha?: number;
   intensity?: number;
+  // duotone / tritone color stops (packed 0xRRGGBB integer)
+  shadowColor?:    number;
+  midtoneColor?:   number;
+  highlightColor?: number;
+  // film-grain extras
+  warmth?:  number;   // 0–1; adds warm orange tint
+  lift?:    number;   // 0–0.2; raises the black point (faded-film look)
+  // rounded-frame
+  cornerRadius?: number;  // 0–0.49 (0 = square, 0.49 ≈ pill/circle)
+  /** Luminance cutoff for bloom / bokeh-glow (0–1). */
+  threshold?: number;
   [key: string]: number | undefined;
 }
 

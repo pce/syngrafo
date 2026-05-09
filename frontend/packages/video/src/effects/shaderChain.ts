@@ -65,6 +65,87 @@ export function makeCinema(params?: Partial<ShaderParams>): ShaderNode {
   return make('cinema', 'Cinema', { vignetteStr: 0.5, grainAmount: 0.1, chromaShift: 0.02, contrast: 1, saturation: 1, ...params });
 }
 
+export function makeBloom(params?: Partial<ShaderParams>): ShaderNode {
+  return make('bloom', 'Bloom', {
+    threshold:  0.70,
+    blurStrength: 0.40,
+    intensity:  1.80,
+    ...params,
+  });
+}
+
+export function makeBokehGlow(params?: Partial<ShaderParams>): ShaderNode {
+  return make('bokeh-glow', 'Bokeh Glow', {
+    threshold: 0.75,
+    radius:    0.35,
+    intensity: 2.20,
+    ...params,
+  });
+}
+
+export function makeChromaticWarp(params?: Partial<ShaderParams>): ShaderNode {
+  return make('chromatic-warp', 'Chromatic Warp', {
+    intensity:  0.30,   // chromatic aberration strength
+    amplitude:  0.008,  // warp field strength
+    frequency:  3.0,    // warp field spatial scale
+    ...params,
+  });
+}
+
+export function makeFlowWarp(params?: Partial<ShaderParams>): ShaderNode {
+  return make('flow-warp', 'Flow Warp', {
+    intensity:    1.0,
+    blurStrength: 0.30,
+    ...params,
+  });
+}
+
+export function makeDuotone(
+  shadowHex    = 0x1a1a3e,  // deep violet
+  highlightHex = 0xf5c842,  // warm gold
+  params?: Partial<ShaderParams>,
+): ShaderNode {
+  return make('duotone', 'Duotone', {
+    shadowColor:    shadowHex,
+    highlightColor: highlightHex,
+    intensity: 1,
+    ...params,
+  });
+}
+
+export function makeTritone(
+  shadowHex    = 0x2d1b4e,   // deep violet
+  midtoneHex   = 0xe07b39,   // amber
+  highlightHex = 0xfff0c8,   // cream
+  params?: Partial<ShaderParams>,
+): ShaderNode {
+  return make('tritone', 'Tritone', {
+    shadowColor:    shadowHex,
+    midtoneColor:   midtoneHex,
+    highlightColor: highlightHex,
+    intensity: 1,
+    ...params,
+  });
+}
+
+export function makeFilmGrain(params?: Partial<ShaderParams>): ShaderNode {
+  return make('film-grain', 'Retro Film', {
+    vignetteStr: 0.8,
+    grainAmount: 0.06,
+    warmth:      0.10,
+    lift:        0.04,
+    saturation:  0.15,  // desaturation amount (0 = no desat, 1 = full desat)
+    ...params,
+  });
+}
+
+export function makeRoundedFrame(params?: Partial<ShaderParams>): ShaderNode {
+  return make('rounded-frame', 'Rounded Frame', {
+    cornerRadius: 0.08,
+    ...params,
+  });
+}
+
 export function makeFade(alpha = 1, params?: Partial<ShaderParams>): ShaderNode {
   return make('fade', 'Fade', { alpha, ...params });
 }

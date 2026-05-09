@@ -77,6 +77,11 @@ export interface VideoClip extends TimelineClip {
   posY: number;
   /** Clockwise rotation in degrees. */
   rotation: number;
+  /**
+   * First frame of the source file to use (0 = beginning).
+   * Used by the backend when trimming or reversing a clip segment.
+   */
+  sourceOffset?: number;
   shaderChain: ShaderNode[];
   effects: VideoEffect[];
   operators: VideoOperator[];

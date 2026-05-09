@@ -43,7 +43,9 @@ export interface UseArrangementReturn {
   /** Sync slot list when global tracks change (add/remove tracks) */
   syncTracks:      (trackIds: string[]) => void;
   /** Jump to a specific section index (for manual navigation) */
-  goToSection:     (idx: number) => void;
+  goToSection:         (idx: number) => void;
+  /** Toggle whether the arrangement loops back to section 0 after the last */
+  setLoopArrangement:  (loop: boolean) => void;
 }
 
 export function useArrangement(): UseArrangementReturn {
@@ -99,7 +101,8 @@ export function useArrangement(): UseArrangementReturn {
       const slotIds = baseSlotsFrom
         ? baseSlotsFrom.trackSlots.map(s => s.trackId)
         : [];
-      const newName = name ?? `BLOCK_${prev.sections.length + 1}`;
+      const n = prev.sections.length + 1;
+      const newName = name ?? `PTN_${n.toString().padStart(2, '0')}`;
       const section = makeSection(newName, slotIds);
       return { ...prev, sections: [...prev.sections, section] };
     });
@@ -212,6 +215,10 @@ export function useArrangement(): UseArrangementReturn {
     repeatCounterRef.current = 0;
   }, []);
 
+  const setLoopArrangement = useCallback((loop: boolean) => {
+    setArrangement(prev => ({ ...prev, loopArrangement: loop }));
+  }, []);
+
   return {
     arrangement,
     activeSectionIdx,
@@ -229,5 +236,6 @@ export function useArrangement(): UseArrangementReturn {
     resolveSlot,
     syncTracks,
     goToSection,
+    setLoopArrangement,
   };
 }

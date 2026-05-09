@@ -28,6 +28,14 @@ const KIND_COLORS: Record<string, string> = {
   cinema: '#ec4899',
   lut: '#14b8a6',
   custom: '#f59e0b',
+  duotone:        '#a855f7',  // purple
+  tritone:        '#ec4899',  // pink
+  'film-grain':   '#f59e0b',  // amber
+  'rounded-frame':'#10b981',  // emerald
+  bloom:            '#fbbf24',   // amber-yellow (glow)
+  'bokeh-glow':     '#f97316',   // orange (warm particle light)
+  'chromatic-warp': '#818cf8',   // indigo (prismatic)
+  'flow-warp':      '#34d399',   // emerald (organic flow)
 };
 
 export const ShaderNode: React.FC<ShaderNodeProps> = ({
@@ -109,29 +117,63 @@ export const ShaderNode: React.FC<ShaderNodeProps> = ({
           )}
 
           {/* Param sliders */}
-          {Object.entries(node.params).map(([key, val]) => val !== undefined && (
-            <div key={key}>
-              <div className="flex justify-between mb-0.5">
-                <label className="text-xs text-[var(--theme-text-muted)] capitalize">
-                  {key.replace(/([A-Z])/g, ' $1')}
-                </label>
-                <span className="text-xs text-[var(--theme-text-muted)] font-mono">
-                  {(val as number).toFixed(2)}
-                </span>
+          {Object.entries(node.params).map(([key, val]) => {
+            if (val === undefined) return null;
+            const isColor = key.toLowerCase().endsWith('color');
+
+            if (isColor) {
+              // Packed 0xRRGGBB → '#rrggbb'
+              const packed = val as number;
+              const hexStr = '#' + (packed >>> 0).toString(16).padStart(6, '0');
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <label className="text-xs text-[var(--theme-text-muted)] capitalize flex-1">
+                    {key.replace(/([A-Z])/g, ' $1').replace('Color', '').trim()}
+                  </label>
+                  <input
+                    type="color"
+                    value={hexStr}
+                    onChange={e => {
+                      const newPacked = parseInt(e.target.value.replace('#', ''), 16);
+                      onChange(node.id, { params: { ...node.params, [key]: newPacked } });
+                    }}
+                    className="w-8 h-6 rounded cursor-pointer border border-[var(--theme-border)] bg-transparent"
+                    title={key}
+                  />
+                </div>
+              );
+            }
+
+            // Numeric slider (existing behavior)
+            const maxVal = key === 'contrast' || key === 'saturation' ? 2
+              : key === 'segments' ? 12
+              : key === 'intensity' ? 3
+              : (key.toLowerCase().endsWith('color') ? 16777215 : 1);
+
+            return (
+              <div key={key}>
+                <div className="flex justify-between mb-0.5">
+                  <label className="text-xs text-[var(--theme-text-muted)] capitalize">
+                    {key.replace(/([A-Z])/g, ' $1')}
+                  </label>
+                  <span className="text-xs text-[var(--theme-text-muted)] font-mono">
+                    {(val as number).toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={maxVal}
+                  step={maxVal > 1 ? 1 : 0.01}
+                  value={val as number}
+                  onChange={e => onChange(node.id, {
+                    params: { ...node.params, [key]: Number(e.target.value) },
+                  })}
+                  className="w-full accent-[var(--theme-primary)]"
+                />
               </div>
-              <input
-                type="range"
-                min={0}
-                max={key === 'contrast' || key === 'saturation' ? 2 : 1}
-                step={0.01}
-                value={val as number}
-                onChange={e => onChange(node.id, {
-                  params: { ...node.params, [key]: Number(e.target.value) },
-                })}
-                className="w-full accent-[var(--theme-primary)]"
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -22,10 +22,11 @@ export enum TrackMode {
 
 /** Synthesizer waveform type */
 export enum InstrumentType {
-  Sine     = "sine",
-  Square   = "square",
-  Sawtooth = "sawtooth",
-  Triangle = "triangle",
+  Sine      = "sine",
+  Square    = "square",
+  Sawtooth  = "sawtooth",
+  Triangle  = "triangle",
+  PatchBlock = "patchBlock",
 }
 
 /** A single note in a sequencer track */
@@ -54,4 +55,6 @@ export interface AudioTrack {
   scaleName?:         string;
   scaleNotes?:        string[];
   loopIndependently?: boolean;
+  /** When instrument is PatchBlock, references a PatchRegistryEntry id */
+  patchId?:           string;
 }

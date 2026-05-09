@@ -11,3 +11,4 @@ export * from './utils/id.ts';
 export * from './ipc.ts';
 export * from './services/file-service.ts';
 export * from './utils/filter.ts';
+export { generateName } from './utils/naming.ts';

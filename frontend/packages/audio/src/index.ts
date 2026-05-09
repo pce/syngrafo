@@ -6,7 +6,15 @@ export type { UseCsoundReturn }     from './csound/useCsound.ts';
 
 export { makeCsd, CSD_HEADER, CSD_FOOTER, SCORE_HEADER, SCORE_FOOTER }
                                     from './csound/csd/base.ts';
+export { makeOfflineCsd }           from './csound/csd/base.ts';
 export * from './csound/csd/instruments.ts';
+export {
+  SEQ_SINE_INSTR, SEQ_SQUARE_INSTR, SEQ_SAW_INSTR, SEQ_TRI_INSTR,
+  SEQ_ALL_INSTRS, SEQ_SINE_TABLE, SEQ_INSTR_NAME,
+}                                   from './csound/csd/sequencerInstruments.ts';
+export { arrangementToScore }       from './csound/csd/arrangementToScore.ts';
+export type { RenderPlan }          from './csound/csd/arrangementToScore.ts';
+export { appendSmplChunk }          from './csound/csd/wavSmpl.ts';
 
 export { AudioBlock }               from './blocks/AudioBlock.tsx';
 export { BlockArranger }            from './blocks/BlockArranger.tsx';

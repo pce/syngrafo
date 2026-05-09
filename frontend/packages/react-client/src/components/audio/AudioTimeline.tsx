@@ -14,12 +14,8 @@
  * - Click again → remove note
  * - Header controls: mute M, solo S, instrument, root note, octave, step count, clear
  * - Transport: Play / Stop, BPM slider + number box
- * - Drag handle on step buttons for future drag-to-resize (prep only)
+ * - Drag handle on step buttons for future drag-to-resize
  *
- * Polyrhythm
- * The global step counter wraps at the longest track's length. Each track
- * uses `step % track.length` so an 8-step bass loop naturally cycles against
- * a 16-step melody.
  */
 
 import React, {
@@ -27,6 +23,7 @@ import React, {
 } from "react";
 import type { AudioTrack, Note } from "@/types/audio";
 import { InstrumentType } from "@/types/audio";
+import { usePatchStore } from "@/store/patch-store";
 
 
 const NOTE_NAMES = [
@@ -90,6 +87,14 @@ interface AudioTimelineProps {
   onNoteRemove:        (trackId: string, noteId: string) => void;
   onClearPattern:      (trackId: string) => void;
   onInstrumentChange:  (trackId: string, instr: InstrumentType) => void;
+  /** Called each time the sequencer wraps back to step 0 */
+  onCycleComplete?:    () => void;
+  /** Per-track mute overrides from the section arranger (key = track id) */
+  sectionMutes?:       Map<string, boolean>;
+  /** Called when a PatchBlock step fires; receives the patchId and note duration */
+  onTriggerPatch?:     (patchId: string, duration: number) => void;
+  /** Called when a PatchBlock track's patch selection changes */
+  onPatchIdChange?:    (trackId: string, patchId: string) => void;
 }
 
 const AudioTimeline: React.FC<AudioTimelineProps> = ({
@@ -104,7 +109,12 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
   onNoteRemove,
   onClearPattern,
   onInstrumentChange,
+  onCycleComplete,
+  sectionMutes,
+  onTriggerPatch,
+  onPatchIdChange,
 }) => {
+  const patchStore = usePatchStore();
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [bpm,         setBpm]         = useState(120);
@@ -116,8 +126,15 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
   const stepRef     = useRef(0);
   const tracksRef   = useRef(tracks);
   const bpmRef      = useRef(bpm);
-  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
-  useEffect(() => { bpmRef.current   = bpm;    }, [bpm]);
+  // Callback refs — keep scheduler closure up-to-date without re-creating the interval
+  const onCycleCompleteRef = useRef(onCycleComplete);
+  const sectionMutesRef    = useRef(sectionMutes);
+  const onTriggerPatchRef  = useRef(onTriggerPatch);
+  useEffect(() => { tracksRef.current          = tracks;          }, [tracks]);
+  useEffect(() => { bpmRef.current             = bpm;             }, [bpm]);
+  useEffect(() => { onCycleCompleteRef.current = onCycleComplete; }, [onCycleComplete]);
+  useEffect(() => { sectionMutesRef.current    = sectionMutes;    }, [sectionMutes]);
+  useEffect(() => { onTriggerPatchRef.current  = onTriggerPatch;  }, [onTriggerPatch]);
 
 
   const tick = useCallback(() => {
@@ -133,18 +150,25 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
       const tracksNow = tracksRef.current;
 
       tracksNow.forEach(track => {
-        if (track.schedulerMuted) return;
+        const slotMuted = sectionMutesRef.current?.get(track.id) ?? false;
+        if (track.schedulerMuted || slotMuted) return;
         const trackStep = step % track.length;
         const note      = track.notes.find(n => n.time === trackStep);
         if (!note) return;
-        const octave = 4 + (track.octaveOffset ?? 0);
-        const freq   = midiToHz(noteToMidi(track.rootNote ?? "C", octave));
-        playNote(ctx, freq, toOscType(track.instrument), t, secPerStep * 0.75);
+        // PatchBlock: delegate to the external patch engine instead of Web Audio
+        if (track.instrument === InstrumentType.PatchBlock && track.patchId) {
+          onTriggerPatchRef.current?.(track.patchId, secPerStep * 0.75);
+        } else {
+          const octave = 4 + (track.octaveOffset ?? 0);
+          const freq   = midiToHz(noteToMidi(track.rootNote ?? "C", octave));
+          playNote(ctx, freq, toOscType(track.instrument), t, secPerStep * 0.75);
+        }
       });
 
       nextBeatRef.current += secPerStep;
       const maxLen = Math.max(...tracksNow.map(t => t.length), 1);
       stepRef.current = (step + 1) % maxLen;
+      if (stepRef.current === 0) onCycleCompleteRef.current?.();
       setCurrentStep(stepRef.current);
     }
   }, []);
@@ -275,15 +299,17 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
               track={track}
               currentStep={currentStep}
               isPlaying={isPlaying}
-              onMute={()      => onTrackMute(track.id)}
-              onSolo={()      => onTrackSolo(track.id)}
-              onOctaveUp={()  => onOctaveChange(track.id,  1)}
-              onOctaveDown={() => onOctaveChange(track.id, -1)}
-              onLength={l     => onTrackLengthChange(track.id, l)}
-              onClear={()     => onClearPattern(track.id)}
-              onInstrument={i => onInstrumentChange(track.id, i)}
-              onRoot={root    => onScaleChange(track.id, root, track.scaleName ?? "major")}
-              onToggle={step  => toggleStep(track, step)}
+              patchEntries={patchStore.patches}
+              onMute={()        => onTrackMute(track.id)}
+              onSolo={()        => onTrackSolo(track.id)}
+              onOctaveUp={()    => onOctaveChange(track.id,  1)}
+              onOctaveDown={()  => onOctaveChange(track.id, -1)}
+              onLength={l       => onTrackLengthChange(track.id, l)}
+              onClear={()       => onClearPattern(track.id)}
+              onInstrument={i   => onInstrumentChange(track.id, i)}
+              onRoot={root      => onScaleChange(track.id, root, track.scaleName ?? "major")}
+              onToggle={step    => toggleStep(track, step)}
+              onPatchChange={pid => onPatchIdChange?.(track.id, pid)}
             />
           ))
         )}
@@ -299,6 +325,7 @@ interface StepTrackProps {
   track:        AudioTrack;
   currentStep:  number;
   isPlaying:    boolean;
+  patchEntries: { id: string; name: string }[];
   onMute:       () => void;
   onSolo:       () => void;
   onOctaveUp:   () => void;
@@ -308,15 +335,18 @@ interface StepTrackProps {
   onInstrument: (i: InstrumentType) => void;
   onRoot:       (root: string) => void;
   onToggle:     (step: number) => void;
+  onPatchChange:(patchId: string) => void;
 }
 
 const StepTrack = memo(function StepTrack({
   track, currentStep, isPlaying,
+  patchEntries,
   onMute, onSolo, onOctaveUp, onOctaveDown,
-  onLength, onClear, onInstrument, onRoot, onToggle,
+  onLength, onClear, onInstrument, onRoot, onToggle, onPatchChange,
 }: StepTrackProps) {
   const octave      = 4 + (track.octaveOffset ?? 0);
   const isMuted     = track.schedulerMuted && !track.solo;
+  const isPatchBlock = track.instrument === InstrumentType.PatchBlock;
 
   return (
     <div className={`flex border-b border-[var(--theme-border)] transition-opacity duration-150 ${
@@ -367,28 +397,46 @@ const StepTrack = memo(function StepTrack({
           ))}
         </select>
 
-        {/* Root note + octave */}
-        <div className="flex items-center gap-1">
+        {/* Patch picker — only when PatchBlock is selected */}
+        {isPatchBlock && (
           <select
-            value={track.rootNote ?? "C"}
-            onChange={e => onRoot(e.target.value)}
-            className="text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-border)]
-                       rounded px-1 py-0.5 text-[var(--theme-text)] flex-1 min-w-0"
+            value={track.patchId ?? ""}
+            onChange={e => onPatchChange(e.target.value)}
+            className="text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-primary)]/60
+                       rounded px-1 py-0.5 text-[var(--theme-primary)] w-full"
+            title="Select which patch this track triggers"
           >
-            {NOTE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+            <option value="" disabled>— pick patch —</option>
+            {patchEntries.map(e => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
           </select>
-          <button onClick={onOctaveDown}
-            className="w-5 h-5 rounded text-[10px] bg-[var(--theme-bg)]
-                       border border-[var(--theme-border)]
-                       text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]">−</button>
-          <span className="text-[10px] text-[var(--theme-text-muted)] tabular-nums w-3 text-center">
-            {octave}
-          </span>
-          <button onClick={onOctaveUp}
-            className="w-5 h-5 rounded text-[10px] bg-[var(--theme-bg)]
-                       border border-[var(--theme-border)]
-                       text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]">+</button>
-        </div>
+        )}
+
+        {/* Root note + octave — hidden for PatchBlock */}
+        {!isPatchBlock && (
+          <div className="flex items-center gap-1">
+            <select
+              value={track.rootNote ?? "C"}
+              onChange={e => onRoot(e.target.value)}
+              className="text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-border)]
+                         rounded px-1 py-0.5 text-[var(--theme-text)] flex-1 min-w-0"
+            >
+              {NOTE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <button onClick={onOctaveDown}
+              className="w-5 h-5 rounded text-[10px] bg-[var(--theme-bg)]
+                         border border-[var(--theme-border)]
+                         text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]">−</button>
+            <span className="text-[10px] text-[var(--theme-text-muted)] tabular-nums w-3 text-center">
+              {octave}
+            </span>
+            <button onClick={onOctaveUp}
+              className="w-5 h-5 rounded text-[10px] bg-[var(--theme-bg)]
+                         border border-[var(--theme-border)]
+                         text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]">+</button>
+          </div>
+        )}
 
         {/* Length + clear */}
         <div className="flex items-center gap-1">

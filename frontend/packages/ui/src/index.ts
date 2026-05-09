@@ -12,3 +12,6 @@ export type {
 
 export { LazyImage } from './components/LazyImage.tsx';
 export type { LazyImageProps } from './components/LazyImage.tsx';
+
+export { ResizablePanel } from './components/ResizablePanel.tsx';
+export type { ResizablePanelProps } from './components/ResizablePanel.tsx';

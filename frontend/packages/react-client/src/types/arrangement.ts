@@ -1,8 +1,8 @@
 /**
- * arrangement.ts — Song-level Section Arranger types.
+ * arrangement.ts — Song-level Pattern Arranger types.
  *
- * A "Block" in the Block Arranger is an ArrangementSection — a named
- * portion of the song (INTRO, LOOP_1, VERSE, …) that:
+ * A "Pattern" in the Pattern Arranger is an ArrangementSection — a named
+ * portion of the song (PTN_01, PTN_02, …) that:
  *   - contains per-track slot overrides (mute/unmute)
  *   - is reference-based by default (no track data copied)
  *   - gets a local track copy only when the user edits its pattern
@@ -31,7 +31,7 @@ export interface SectionTrackSlot {
  */
 export interface ArrangementSection {
   id:          string;
-  name:        string;   // e.g. "INTRO", "LOOP_1"
+  name:        string;   // e.g. "PTN_01", "PTN_02"
   repeatCount: number;   // ≥ 1
   trackSlots:  SectionTrackSlot[];
 }
@@ -52,7 +52,7 @@ export function makeSection(name: string, trackIds: string[]): ArrangementSectio
 }
 
 export function makeArrangement(trackIds: string[]): Arrangement {
-  const firstSection = makeSection('INTRO', trackIds);
+  const firstSection = makeSection('PTN_01', trackIds);
   // Default: one section that loops forever (handled externally)
   return {
     sections:        [firstSection],

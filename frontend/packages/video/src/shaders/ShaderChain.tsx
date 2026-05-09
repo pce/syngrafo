@@ -23,8 +23,40 @@ const NODE_DEFAULTS: Record<string, Partial<ShaderNodeType>> = {
     label: 'Cinema',
     params: { vignetteStr: 0.4, grainAmount: 0.05, chromaShift: 0.02, contrast: 1.1, saturation: 0.9 },
   },
+  duotone: {
+    label: 'Duotone',
+    params: { shadowColor: 0x1a1a3e, highlightColor: 0xf5c842, intensity: 1.0 },
+  },
+  tritone: {
+    label: 'Tritone',
+    params: { shadowColor: 0x2d1b4e, midtoneColor: 0xe07b39, highlightColor: 0xfff0c8, intensity: 1.0 },
+  },
+  'film-grain': {
+    label: 'Retro Film',
+    params: { vignetteStr: 0.8, grainAmount: 0.06, warmth: 0.10, lift: 0.04, saturation: 0.15 },
+  },
+  'rounded-frame': {
+    label: 'Rounded Frame',
+    params: { cornerRadius: 0.08 },
+  },
   lut:    { label: 'LUT',    params: { intensity: 1.0 } },
   custom: { label: 'Custom', params: { intensity: 1.0 } },
+  bloom: {
+    label:  'Bloom',
+    params: { threshold: 0.70, blurStrength: 0.40, intensity: 1.80 },
+  },
+  'bokeh-glow': {
+    label:  'Bokeh Glow',
+    params: { threshold: 0.75, radius: 0.35, intensity: 2.20 },
+  },
+  'chromatic-warp': {
+    label:  'Chromatic Warp',
+    params: { intensity: 0.30, amplitude: 0.008, frequency: 3.0 },
+  },
+  'flow-warp': {
+    label:  'Flow Warp',
+    params: { intensity: 1.0, blurStrength: 0.30 },
+  },
 };
 
 /** Animate the y-positions of nodes using spring physics */

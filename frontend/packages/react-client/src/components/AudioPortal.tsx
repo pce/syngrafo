@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import AudioTimelinePage from "./audio/AudioTimelinePage";
 import { PatchWorkstation } from "./audio/modular/index";
+import { PatchStoreProvider } from "@/store/patch-store";
 
 export interface AudioPortalProps {
   open: boolean;
@@ -12,7 +13,11 @@ export interface AudioPortalProps {
 
 export function AudioPortal({ open, onClose, workingDir }: AudioPortalProps) {
   if (!open) return null;
-  return <AudioPortalContent onClose={onClose} workingDir={workingDir} />;
+  return (
+    <PatchStoreProvider>
+      <AudioPortalContent onClose={onClose} workingDir={workingDir} />
+    </PatchStoreProvider>
+  );
 }
 
 interface ContentProps {

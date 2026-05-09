@@ -11,16 +11,20 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { videoBus, fileService } from '@syngrafo/shared';
+import { videoBus, fileService, generateName, uid, SPRING_PRESETS } from '@syngrafo/shared';
 import { videoStorage }  from '../storage/videoStorage.ts';
 import { videoService }  from '../ipc/video-service.ts';
 import { defaultProject, clipFromSource } from '../types/video.ts';
-import type { VideoProject, VideoClip, VideoClipKind } from '../types/video.ts';
+import type { VideoProject, VideoClip, VideoClipKind, VideoKeyframe } from '../types/video.ts';
 import { VideoTimeline } from '../timeline/VideoTimeline.tsx';
 import { VideoPreview }  from '../preview/VideoPreview.tsx';
-import { Icon }          from '@syngrafo/ui';
+import { Icon, ResizablePanel } from '@syngrafo/ui';
 import { AssetBrowser }  from '../browser/AssetBrowser.tsx';
+import { ClipInspector }  from './ClipInspector.tsx';
 import { SequenceImportDialog } from '../browser/SequenceImportDialog.tsx';
+import type { KenBurnsOp, VideoOperator } from '../types/effect.ts';
+import type { SequenceImportConfig } from '../types/sequence.ts';
+import { getLookPreset } from '../types/look.ts';
 
 export interface VideoEditorPageProps {
   /** If provided, loads an existing project; otherwise creates a new one. */
@@ -55,15 +59,13 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportPath,       setExportPath]       = useState('');
   const [exporting,        setExporting]        = useState(false);
-  const [assetPanelOpen,   setAssetPanelOpen]   = useState(false);
-  const [assetPanelWidth,  setAssetPanelWidth]  = useState(280);
   const [assetFilterKind,  setAssetFilterKind]  = useState<AssetKind | null>(null);
   const [assetCurrentPath, setAssetCurrentPath] = useState('');
   const [showSeqDialog,    setShowSeqDialog]    = useState(false);
   const [seqDialogPath,    setSeqDialogPath]    = useState('');
+  const [inspectorClipId,  setInspectorClipId]  = useState<string | null>(null);
 
   const saveTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resizingRef     = useRef<{ startX: number; startWidth: number } | null>(null);
   /**
    * Tracks clip IDs for which we've already attempted thumbnail URL enrichment.
    */
@@ -82,7 +84,7 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
         }
 
         if (!p) {
-          const template = defaultProject('Untitled Project', 30);
+          const template = defaultProject(generateName(), 30);
           p = await videoStorage.createProject(template);
         }
 
@@ -203,6 +205,15 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     const path = result.data[0];
     const name = path.split('/').pop() ?? path;
 
+    // Pre-fetch a thumbnail data-URL so the compositor can render this clip
+    // immediately without waiting for the lazy enrichment effect (same pattern
+    // as handleAssetSelect).
+    let url: string | undefined;
+    if (kind === 'image' || kind === 'video') {
+      const r = await videoService.getThumbnail(path, 0);
+      if (r.ok && r.data?.dataUrl) url = r.data.dataUrl;
+    }
+
     await videoStorage.addAsset({ name, kind, path });
 
     let track = project.tracks.find(t =>
@@ -223,13 +234,15 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     }
 
     const clip: VideoClip = clipFromSource(
-      { kind, path },
+      { kind, path, url },  // include pre-fetched url so compositor renders immediately
       frame,
       project.settings.defaultImageDurationFrames,
       track.layer,
       track.id,
       name,
     );
+    // Mark as already enriched so the lazy effect skips it.
+    if (url) enrichedClipIds.current.add(clip.id);
 
     tracks = tracks.map(t =>
       t.id === track!.id ? { ...t, clips: [...t.clips, clip] } : t
@@ -311,34 +324,118 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
 
   /**
    * Called by SequenceImportDialog on confirm.
-   * Creates one image clip per file, packed sequentially starting at the
-   * current playhead position.
+   * Creates one image clip per file with transitions, Ken Burns, and look
+   * presets applied according to the user-chosen SequenceImportConfig.
    */
-  const handleSeqConfirm = useCallback(async (files: string[], secPerClip: number) => {
+  const handleSeqConfirm = useCallback(async (
+    files: string[],
+    config: SequenceImportConfig,
+  ) => {
     setShowSeqDialog(false);
     if (!project || files.length === 0) return;
 
-    const durationFrames = Math.max(1, Math.round(secPerClip * project.fps));
+    const fps = project.fps;
+    const W   = project.resolution.width;
+    const H   = project.resolution.height;
+
+    // Duration per clip (frames)
+    const durationFrames = config.mode === 'daumenkino'
+      ? Math.max(1, config.framesPerImage)
+      : Math.max(1, Math.round(config.secPerClip * fps));
+
+    // Transition frames capped to half the clip duration
+    const txFrames = config.transition === 'none'
+      ? 0
+      : Math.min(config.transitionFrames, Math.floor(durationFrames / 2));
+
+    // Look preset shader nodes (each clip gets a fresh copy)
+    const look = getLookPreset(config.lookPresetId);
 
     // Find or create an image track.
     let tracks = [...project.tracks];
     let track  = tracks.find(t => t.kind === 'image' || t.kind === 'video');
     if (!track) {
       track = {
-        id:    crypto.randomUUID(),
+        id:    uid(),
         kind:  'image' as const,
         label: 'Images 1',
-        muted: false, solo: false,
+        muted: false,
+        solo:  false,
         layer: tracks.length,
         clips: [],
       };
       tracks = [...tracks, track];
     }
 
+    const SLIDE_VARIANTS: Array<'slide-left' | 'slide-right' | 'slide-up' | 'slide-down'> = [
+      'slide-left', 'slide-right', 'slide-up', 'slide-down',
+    ];
+
     let startFrame = frame;
-    const newClips: VideoClip[] = files.map(path => {
-      const name = path.split('/').pop() ?? path;
-      const clip = clipFromSource(
+    const newClips: VideoClip[] = files.map((path, i) => {
+      const name   = path.split('/').pop() ?? path;
+      const clipId = uid();
+
+      // -- Operators --
+      const operators: VideoOperator[] = [];
+
+      // Resolve transition for this clip
+      let tx = config.transition as typeof config.transition | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down';
+      if (tx === 'random') {
+        tx = SLIDE_VARIANTS[i % SLIDE_VARIANTS.length]!;
+      }
+
+      if (config.mode !== 'daumenkino') {
+        if (tx === 'fade') {
+          // Fade via opacity operators
+          if (txFrames > 0) {
+            operators.push({ kind: 'fadeIn',  id: uid(), clipId, startFrame: 0,                          durationFrames: txFrames, easing: 'spring' });
+            operators.push({ kind: 'fadeOut', id: uid(), clipId, startFrame: durationFrames - txFrames,  durationFrames: txFrames, easing: 'spring' });
+          }
+        }
+
+        if (config.kenBurns) {
+          // Alternate direction each clip for variety
+          const panDir = i % 2 === 0 ? 1 : -1;
+          const kb: KenBurnsOp = {
+            kind:         'kenburns',
+            id:           uid(),
+            clipId,
+            fromScale:    1.0,
+            toScale:      1.12,
+            fromOffset:   [0, 0] as [number, number],
+            toOffset:     [0.015 * panDir, 0.005] as [number, number],
+            springConfig: SPRING_PRESETS.gentle,
+          };
+          operators.push(kb);
+        }
+      }
+
+      // -- Keyframe-based slide transitions --
+      const keyframes: VideoKeyframe[] = [];
+      if (config.mode !== 'daumenkino' && txFrames > 0) {
+        const absStart = startFrame;
+        // absEnd reserved for exit keyframes in a future iteration
+        // const absEnd = startFrame + durationFrames - 1;
+
+        if (tx === 'slide-left') {
+          keyframes.push({ id: uid(), property: 'posX', frame: absStart,            value:  W, easing: 'spring' });
+          keyframes.push({ id: uid(), property: 'posX', frame: absStart + txFrames, value:  0, easing: 'spring' });
+        } else if (tx === 'slide-right') {
+          keyframes.push({ id: uid(), property: 'posX', frame: absStart,            value: -W, easing: 'spring' });
+          keyframes.push({ id: uid(), property: 'posX', frame: absStart + txFrames, value:  0, easing: 'spring' });
+        } else if (tx === 'slide-up') {
+          keyframes.push({ id: uid(), property: 'posY', frame: absStart,            value: -H, easing: 'spring' });
+          keyframes.push({ id: uid(), property: 'posY', frame: absStart + txFrames, value:  0, easing: 'spring' });
+        } else if (tx === 'slide-down') {
+          keyframes.push({ id: uid(), property: 'posY', frame: absStart,            value:  H, easing: 'spring' });
+          keyframes.push({ id: uid(), property: 'posY', frame: absStart + txFrames, value:  0, easing: 'spring' });
+        }
+      }
+
+      // Build the base clip via clipFromSource, then override its operators/
+      // keyframes with our carefully constructed set.
+      const base = clipFromSource(
         { kind: 'image', path },
         startFrame,
         durationFrames,
@@ -346,6 +443,18 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
         track!.id,
         name,
       );
+
+      // Fix clipId references in operators to match the base clip's id
+      const fixedOps = operators.map(op => ({ ...op, clipId: base.id })) as VideoOperator[];
+
+      const clip: VideoClip = {
+        ...base,
+        id:          base.id,
+        operators:   fixedOps,
+        keyframes,
+        shaderChain: look.makeNodes().map(n => ({ ...n, id: uid() })),
+      };
+
       startFrame += durationFrames;
       return clip;
     });
@@ -365,7 +474,6 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
       t.id === track!.id ? { ...t, clips: [...t.clips, ...newClips] } : t
     );
 
-    // Grow the project timeline if needed.
     const endFrame   = startFrame - 1;
     const newProject = {
       ...project,
@@ -403,34 +511,68 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   }, [project, exportPath]);
 
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizingRef.current = { startX: e.clientX, startWidth: assetPanelWidth };
-
-    const onMove = (me: MouseEvent) => {
-      if (!resizingRef.current) return;
-      // Dragging LEFT widens the panel, dragging RIGHT narrows it.
-      const delta = resizingRef.current.startX - me.clientX;
-      setAssetPanelWidth(
-        Math.max(160, Math.min(600, resizingRef.current.startWidth + delta))
-      );
-    };
-
-    const onUp = () => {
-      resizingRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [assetPanelWidth]);
-
-
   const handleKindFilter = useCallback((kind: AssetKind | null) => {
     setAssetFilterKind(prev => prev === kind ? null : kind);
-    setAssetPanelOpen(true);
   }, []);
+
+  // ── Inspector ────────────────────────────────────────────────────────────
+
+  /** The clip currently open in the inspector (re-derived on every render). */
+  const inspectorClip = (inspectorClipId != null && project)
+    ? project.tracks.flatMap(t => t.clips).find(c => c.id === inspectorClipId) ?? null
+    : null;
+
+  /** Update a single clip within the project and trigger auto-save. */
+  const handleClipChange = useCallback((updatedClip: VideoClip) => {
+    if (!project) return;
+    handleProjectChange({
+      ...project,
+      tracks: project.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => c.id === updatedClip.id ? updatedClip : c),
+      })),
+    });
+  }, [project, handleProjectChange]);
+
+  /**
+   * Reverse a video clip segment via FFmpeg (backend stub).
+   *
+   * For image sequences (multiple image clips in order), reversal is a
+   * frontend-only operation: reverse the clips array on the track.
+   * That requires track-level context; a 'Reverse Track Segment' action
+   * in TrackHeader would be the right place. For now, only video clips
+   * with a single source file are handled here.
+   */
+  const handleReverseClip = useCallback(async (clip: VideoClip) => {
+    if (!project || !clip.source.path) return;
+
+    const fps         = project.fps;
+    const startSec    = (clip.sourceOffset ?? 0) / fps;
+    const durationSec = (clip.range.endFrame - clip.range.startFrame + 1) / fps;
+
+    // Auto-generate output path: /dir/name_reversed.ext
+    const inputPath  = clip.source.path;
+    const lastDot    = inputPath.lastIndexOf('.');
+    const ext        = lastDot >= 0 ? inputPath.slice(lastDot)      : '.mp4';
+    const base       = lastDot >= 0 ? inputPath.slice(0, lastDot)   : inputPath;
+    const outputPath = `${base}_reversed${ext}`;
+
+    const result = await videoService.reverseClip(inputPath, startSec, durationSec, outputPath);
+
+    if (!result.ok || !result.data) {
+      // Show error — reversal is a 🚧 stub until the backend binding is implemented
+      alert(`Reverse not yet available: ${result.error ?? 'backend binding video_reverse_clip not registered'}`);
+      return;
+    }
+
+    // Update the clip to point at the reversed file; clear the cached thumbnail URL
+    const updated: VideoClip = {
+      ...clip,
+      source:       { ...clip.source, path: result.data.outputPath, url: undefined },
+      sourceOffset: 0,
+    };
+    handleClipChange(updated);
+  }, [project, handleClipChange]);
 
 
   if (loading) {
@@ -482,35 +624,21 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
         ) : (
           <button
             onClick={() => setEditingName(true)}
-            className="text-sm font-medium text-[var(--theme-text)] hover:text-[var(--theme-text)]
-                       hover:bg-[var(--theme-bg)] rounded px-2 py-0.5"
+            className="flex items-center gap-1 text-sm font-medium text-[var(--theme-text)]
+                       hover:bg-[var(--theme-bg)] rounded px-2 py-0.5 group"
             title="Click to rename"
           >
             {project.name}
+            <Icon name="edit" size={10} aria-hidden
+                  className="opacity-0 group-hover:opacity-40 transition-opacity" />
           </button>
         )}
 
         <span className="text-xs text-[var(--theme-text-muted)]">
-          {project.resolution.width}×{project.resolution.height} @ {project.fps}fps
+          {project.resolution.width}x{project.resolution.height} @ {project.fps}fps
         </span>
 
         <div className="flex-1" />
-
-        <button
-          onClick={() => setAssetPanelOpen(v => !v)}
-          className={[
-            'flex items-center gap-1 text-xs px-2 py-1 rounded',
-            assetPanelOpen
-              ? 'bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]'
-              : 'bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)]',
-          ].join(' ')}
-          aria-pressed={assetPanelOpen}
-          aria-label="Toggle asset browser"
-        >
-          <Icon name="folder-open" size={14} aria-hidden /> Assets
-        </button>
-
-        <div className="w-px h-5 bg-[var(--theme-border)]" />
 
         <button
           onClick={() => setShowExportDialog(true)}
@@ -535,47 +663,59 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
             <VideoTimeline
               project={project}
               onProjectChange={handleProjectChange}
+              onClipSelect={setInspectorClipId}
             />
           </div>
         </div>
 
-        {assetPanelOpen && (
-          <div
-            className="w-1 flex-shrink-0 cursor-col-resize bg-[var(--theme-border)]
-                       hover:bg-[var(--theme-primary)]/50 transition-colors"
-            onMouseDown={handleResizeMouseDown}
-            aria-hidden
-          />
+        {inspectorClip && (
+          <ResizablePanel
+            label="Inspector"
+            side="right"
+            defaultWidth={260}
+            minWidth={200}
+            maxWidth={400}
+            open={true}
+            onOpenChange={(o) => { if (!o) setInspectorClipId(null); }}
+          >
+            <ClipInspector
+              clip={inspectorClip}
+              project={project}
+              currentFrame={frame}
+              onChange={handleClipChange}
+              onClose={() => setInspectorClipId(null)}
+              onReverse={handleReverseClip}
+            />
+          </ResizablePanel>
         )}
 
-        {assetPanelOpen && (
-          <aside
-            className="flex-shrink-0 flex flex-col border-l border-[var(--theme-border)]
-                       bg-[var(--theme-surface)] overflow-hidden"
-            style={{ width: assetPanelWidth }}
-          >
-            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--theme-border)] shrink-0 flex-wrap gap-y-1">
-              <span className="text-xs font-semibold text-[var(--theme-text)] mr-1 select-none">Assets</span>
-
+        <ResizablePanel
+          label="Assets"
+          side="right"
+          defaultWidth={280}
+          minWidth={180}
+          maxWidth={500}
+          defaultOpen={false}
+          headerExtra={
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={() => setAssetFilterKind(null)}
                 className={[
-                  'text-xs px-2 py-0.5 rounded',
+                  'text-[9px] px-1.5 py-0.5 rounded',
                   assetFilterKind === null
                     ? 'bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]'
-                    : 'bg-[var(--theme-bg)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]',
+                    : 'bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]',
                 ].join(' ')}
                 aria-pressed={assetFilterKind === null}
               >
                 All
               </button>
-
               {(['image', 'video', 'audio'] as const).map(k => (
                 <button
                   key={k}
                   onClick={() => handleKindFilter(k)}
                   className={[
-                    'flex items-center gap-1 text-xs px-2 py-0.5 rounded',
+                    'flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded',
                     assetFilterKind === k
                       ? 'bg-[var(--theme-primary)] text-[var(--theme-primary-fg)]'
                       : 'bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]',
@@ -583,46 +723,30 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
                   aria-pressed={assetFilterKind === k}
                   title={`Filter: ${k}`}
                 >
-                  <Icon name={IMPORT_ICON[k]} size={11} aria-hidden />
-                  {k.charAt(0).toUpperCase() + k.slice(1)}
+                  <Icon name={IMPORT_ICON[k]} size={10} aria-hidden />
                 </button>
               ))}
-
               <button
                 onClick={importImageSequence}
-                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded
-                           bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
+                className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
                 title={assetCurrentPath
                   ? `Import sequence from: ${assetCurrentPath}`
                   : 'Import image sequence from folder'
                 }
               >
-                <Icon name="folder-open" size={11} aria-hidden />
-                Seq{assetCurrentPath ? ' ·' : ''}
-              </button>
-
-              <div className="flex-1" />
-
-              <button
-                onClick={() => setAssetPanelOpen(false)}
-                className="flex items-center justify-center w-5 h-5 rounded
-                           text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]
-                           hover:bg-[var(--theme-bg)]"
-                aria-label="Close asset panel"
-              >
-                <Icon name="x" size={12} aria-hidden />
+                <Icon name="folder-open" size={10} aria-hidden />
               </button>
             </div>
-
-            <AssetBrowser
-              workingDir={workingDir}
-              onFileSelect={handleAssetSelect}
-              filterKind={assetFilterKind}
-              onPathChange={setAssetCurrentPath}
-              className="flex-1 min-h-0"
-            />
-          </aside>
-        )}
+          }
+        >
+          <AssetBrowser
+            workingDir={workingDir}
+            onFileSelect={handleAssetSelect}
+            filterKind={assetFilterKind}
+            onPathChange={setAssetCurrentPath}
+            className="h-full"
+          />
+        </ResizablePanel>
       </div>
 
       {showSeqDialog && seqDialogPath && (

@@ -104,7 +104,34 @@ export class PatchEngine {
     }
   }
 
-  // ── Internal ──────────────────────────────────────────────────────────────
+
+  /**
+   * Fire a Csound score event for the given block's instrument.
+   * Has no effect on JS-only blocks that have an empty orcTemplate.
+   *
+   * The score event format is:
+   *   i "LabelNoSpaces_blockId" 0 <duration>
+   */
+  triggerBlock(blockId: string, duration = 0.5): void {
+    const block = this.patch?.blocks.find(b => b.id === blockId);
+    if (!block) return;
+    const def = BLOCK_REGISTRY[block.kind];
+    if (!def.orcTemplate) return;
+    const instrName = def.label.replace(/\s+/g, '');
+    this.engine?.inputMessage(`i "${instrName}_${blockId}" 0 ${duration}`);
+  }
+
+  /**
+   * Trigger the first Csound-based block found in the patch.
+   * Useful as a "play the main voice" shortcut when the caller
+   * does not need to know which block drives the sound.
+   */
+  triggerAnyInstrument(duration = 0.5): void {
+    if (!this.patch) return;
+    const block = this.patch.blocks.find(b => !!BLOCK_REGISTRY[b.kind].orcTemplate);
+    if (block) this.triggerBlock(block.id, duration);
+  }
+
 
   private findBlock(id: string): BlockInstance | undefined {
     return this.patch?.blocks.find(b => b.id === id);

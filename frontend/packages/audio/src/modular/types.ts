@@ -172,7 +172,9 @@ export interface Patch {
   bpm:    number;
 }
 
-export function makeEmptyPatch(name = 'Untitled Patch'): Patch {
+import { generateName } from '@syngrafo/shared';
+
+export function makeEmptyPatch(name = generateName()): Patch {
   return { id: crypto.randomUUID(), name, blocks: [], cables: [], bpm: 120 };
 }
 

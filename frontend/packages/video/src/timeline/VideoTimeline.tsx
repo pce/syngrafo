@@ -45,11 +45,14 @@ interface DragState {
 export interface VideoTimelineProps {
   project:         VideoProject;
   onProjectChange: (p: VideoProject) => void;
+  /** Called when the user selects (or deselects) a clip. */
+  onClipSelect?:   (clipId: string | null) => void;
 }
 
 export const VideoTimeline: React.FC<VideoTimelineProps> = ({
   project,
   onProjectChange,
+  onClipSelect,
 }) => {
   // state
   const [playheadFrame,   setPlayheadFrame]   = useState(0);
@@ -65,6 +68,7 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
   const scrollRef    = useRef<HTMLDivElement>(null);
   const rafRef       = useRef<number | null>(null);
   const lastTimeRef  = useRef<number | null>(null);
+  const frameAccRef  = useRef(0);  // fractional frame accumulator for smooth playback
   const dragRef      = useRef<DragState | null>(null);
   const playheadRef  = useRef(playheadFrame);
   playheadRef.current = playheadFrame;
@@ -104,15 +108,15 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
       lastTimeRef.current = now;
 
       const deltaFrames = elapsed * fps;
-      const next = playheadRef.current + deltaFrames;
+      frameAccRef.current += deltaFrames;
 
-      if (next >= durationFrames) {
+      if (frameAccRef.current >= durationFrames) {
         setPlayheadFrame(0);
         setIsPlaying(false);
         return;
       }
 
-      const newFrame = Math.floor(next);
+      const newFrame = Math.floor(frameAccRef.current);
       if (newFrame !== playheadRef.current) {
         setPlayheadFrame(newFrame);
         videoBus.emit('playheadMove', { frame: newFrame });
@@ -120,6 +124,9 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
       rafRef.current = requestAnimationFrame(tick);
     };
 
+    // Seed the accumulator from the current playhead so the first tick
+    // doesn't snap back to 0.
+    frameAccRef.current = playheadRef.current;
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -206,7 +213,8 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
     }));
     onProjectChange({ ...project, tracks });
     setSelectedClipId(null);
-  }, [project, onProjectChange]);
+    onClipSelect?.(null);
+  }, [project, onProjectChange, onClipSelect]);
 
   const splitClip = useCallback((clipId: string, frame: number) => {
     const track = project.tracks.find(t => t.clips.some(c => c.id === clipId));
@@ -226,7 +234,8 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
     });
     onProjectChange({ ...project, tracks });
     setSelectedClipId(null);
-  }, [project, onProjectChange]);
+    onClipSelect?.(null);
+  }, [project, onProjectChange, onClipSelect]);
 
   // drag logic
 
@@ -286,7 +295,11 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
     document.addEventListener('mouseup',   onMouseUp);
   }, [project, pixelsPerFrame, updateClip]);
 
-  // asset drop from AssetBrowser
+  /** Handles clip selection: updates local state and propagates to parent. */
+  const handleClipSelect = useCallback((id: string) => {
+    setSelectedClipId(id);
+    onClipSelect?.(id);
+  }, [onClipSelect]);
 
   const handleAssetDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) {
@@ -593,7 +606,7 @@ export const VideoTimeline: React.FC<VideoTimelineProps> = ({
                         playheadFrame >= clip.range.startFrame &&
                         playheadFrame <= clip.range.endFrame
                       }
-                      onSelect={setSelectedClipId}
+                      onSelect={handleClipSelect}
                       onDragStart={handleClipDragStart}
                     />
                   ))}

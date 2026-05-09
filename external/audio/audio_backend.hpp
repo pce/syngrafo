@@ -9,12 +9,32 @@
 #include <string>
 #include <filesystem>
 #include <expected>
+#include <csignal>
 
 #ifdef SGF_WITH_AUDIO
 #  include <csound/csound.hpp>
 #endif
 
 namespace pce::audio {
+
+/// RAII guard that saves and restores SIGINT/SIGTERM around Csound usage.
+/// Csound installs its own handlers on Start() and does NOT restore them in
+/// Reset(), so without this the stale handlers fire when the host app quits.
+struct SignalGuard {
+    using Handler = void(*)(int);
+    Handler saved_sigint;
+    Handler saved_sigterm;
+    SignalGuard()
+        : saved_sigint (std::signal(SIGINT,  SIG_DFL))
+        , saved_sigterm(std::signal(SIGTERM, SIG_DFL)) {}
+    ~SignalGuard() {
+        std::signal(SIGINT,  saved_sigint);
+        std::signal(SIGTERM, saved_sigterm);
+    }
+    // Non-copyable/movable — guard is tied to the scope.
+    SignalGuard(const SignalGuard&)            = delete;
+    SignalGuard& operator=(const SignalGuard&) = delete;
+};
 
 struct ExportResult {
     std::string output_path;
@@ -36,6 +56,10 @@ export_wav(const std::string& csd_text, const std::filesystem::path& output_path
     return std::unexpected("Audio backend not compiled (SGF_WITH_AUDIO=OFF)");
 #else
     try {
+        // RAII guard: saves SIGINT/SIGTERM before Csound installs its own and
+        // restores them on all exit paths (normal return, early return, throw).
+        SignalGuard sig_guard;
+
         Csound cs;
 
         // Inject the output path into the CSD's <CsOptions> block so the
@@ -90,6 +114,9 @@ validate_csd(const std::string& csd_text)
     return std::unexpected("Audio backend not compiled (SGF_WITH_AUDIO=OFF)");
 #else
     try {
+        // RAII guard: same as export_wav — restores handlers on all exit paths.
+        SignalGuard sig_guard;
+
         Csound cs;
         cs.SetOption("-n");
         // CSound 7: CompileCSD(text, mode=1) replaces CompileCsdText
@@ -98,6 +125,7 @@ validate_csd(const std::string& csd_text)
             return std::unexpected(
                 "Syntax error (CompileCSD returned " + std::to_string(rc) + ")");
         cs.Reset();  // CSound 7: Cleanup() removed
+
         return true;
     } catch (const std::exception& e) {
         return std::unexpected(std::string("CSound exception: ") + e.what());

@@ -1,14 +1,12 @@
 /**
  * AudioSampleBrowser
  *
- * Media-file browser for the audio editor.  Mirrors the video package's
- * AssetBrowser pattern:
- *   - Scans a directory with fileService.scanDir (dms_scan_dir binding)
- *   - Filters to audio extensions only (directories always shown)
- *   - Inline ▶/■ play button per row using the Web-Audio hook
- *   - Browse… button opens a native folder picker
- *   - Drag source: sets dataTransfer with SAMPLE_DRAG_TYPE payload
- *   - onSampleSelect(path, name) called on double-click / Enter
+ * Media-file browser for the audio editor.
+ *   - When no folder is loaded: shows a compact path-input + folder-icon browse button.
+ *   - When a folder is loaded: shows the full FileBrowser with an icon-only browse button.
+ *   - Inline ▶/■ play button per row using the Web-Audio hook.
+ *   - Drag source: sets dataTransfer with SAMPLE_DRAG_TYPE payload.
+ *   - onSampleSelect(path, name) called on double-click / Enter.
  */
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
@@ -36,9 +34,7 @@ function deriveDir(p: string | undefined): string {
 
 export interface AudioSampleBrowserProps {
   workingDir?: string;
-  /** Called when the user double-clicks / Enter on an audio file. */
   onSampleSelect?: (path: string, name: string) => void;
-  /** Fires whenever the user navigates to a new directory. */
   onPathChange?: (path: string) => void;
   className?: string;
 }
@@ -55,16 +51,14 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
   const [entries,     setEntries]     = useState<FileBrowserEntry[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
+  const [pathInput,   setPathInput]   = useState(startDir);
 
   const onPathChangeRef = useRef(onPathChange);
   useEffect(() => { onPathChangeRef.current = onPathChange; }, [onPathChange]);
 
-  const {
-    play, stop,
-    currentPlayingId, isPlaying,
-  } = useAudioPlaybackWithVisualization();
+  const { play, stop, currentPlayingId, isPlaying } = useAudioPlaybackWithVisualization();
 
-  // ── Directory loading ───────────────────────────────────────────────────────
+  // ── Directory loading ─────────────────────────────────────────────────────
   const loadDir = useCallback(async (path: string) => {
     if (!path) return;
     setLoading(true);
@@ -75,21 +69,16 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
         const mapped: FileBrowserEntry[] = res.data.entries
           .filter(e => e.kind === 'dir' || AUDIO_EXTS.has(ext(e.name)))
           .map(e => ({
-            name:     e.name,
-            path:     e.path,
-            kind:     e.kind,
-            size:     e.size,
-            modified: e.modified,
-            indexed:  e.indexed,
+            name: e.name, path: e.path, kind: e.kind,
+            size: e.size, modified: e.modified, indexed: e.indexed,
           }));
-
         const parentPath = path.split('/').slice(0, -1).join('/') || '/';
         const all: FileBrowserEntry[] = path === '/'
           ? mapped
           : [{ name: '..', path: parentPath, kind: 'dir' as const }, ...mapped];
-
         setEntries(all);
         setCurrentPath(path);
+        setPathInput(path);
         onPathChangeRef.current?.(path);
       } else {
         setError(res.error ?? 'Failed to list directory');
@@ -106,26 +95,32 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
     if (startDirRef.current) void loadDir(startDirRef.current);
   }, [loadDir]);
 
-  const handleNavigate = useCallback((path: string) => void loadDir(path), [loadDir]);
-
-  const handleFileOpen = useCallback((path: string) => {
+  const handleNavigate  = useCallback((path: string) => void loadDir(path), [loadDir]);
+  const handleFileOpen  = useCallback((path: string) => {
     const name = path.split('/').pop() ?? path;
     onSampleSelect?.(path, name);
   }, [onSampleSelect]);
-
   const handleListSubdirs = useCallback(
-    (path: string) => fileService.listSubdirs(path),
-    [],
+    (path: string) => fileService.listSubdirs(path), [],
   );
 
-  // ── Drag source ─────────────────────────────────────────────────────────────
+  const handleBrowse = useCallback(async () => {
+    const res = await fileService.selectDirectory();
+    if (res.ok && res.data) void loadDir(res.data);
+  }, [loadDir]);
+
+  const handlePathInputCommit = useCallback(() => {
+    const p = pathInput.trim();
+    if (p) void loadDir(p);
+  }, [pathInput, loadDir]);
+
+  // Drag source
   const handleFileDragStart = useCallback((entry: FileBrowserEntry, e: React.DragEvent) => {
     e.dataTransfer.setData(
       SAMPLE_DRAG_TYPE,
       JSON.stringify({ path: entry.path, name: entry.name }),
     );
     e.dataTransfer.effectAllowed = 'copy';
-
     const ghost = document.createElement('div');
     ghost.textContent = `♪ ${entry.name}`;
     Object.assign(ghost.style, {
@@ -141,7 +136,6 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
     requestAnimationFrame(() => document.body.removeChild(ghost));
   }, []);
 
-  // ── Row icon + inline play button ───────────────────────────────────────────
   const renderIcon = useCallback((entry: FileBrowserEntry): React.ReactNode | null => {
     if (entry.kind === 'dir') {
       return <Icon name="folder" size={14} className="text-amber-500/70" />;
@@ -151,18 +145,11 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
       <button
         onClick={async (e) => {
           e.stopPropagation();
-          if (isActive && isPlaying) {
-            stop();
-          } else {
-            try {
-              await play(entry.path, entry.path);
-            } catch { /* ignore */ }
-          }
+          if (isActive && isPlaying) { stop(); }
+          else { try { await play(entry.path, entry.path); } catch { /* ignore */ } }
         }}
         className={`flex items-center justify-center w-4 h-4 rounded transition-colors ${
-          isActive && isPlaying
-            ? 'text-emerald-400'
-            : 'text-indigo-400/70 hover:text-emerald-400'
+          isActive && isPlaying ? 'text-emerald-400' : 'text-indigo-400/70 hover:text-emerald-400'
         }`}
         aria-label={isActive && isPlaying ? 'Stop' : 'Preview'}
         title={isActive && isPlaying ? 'Stop' : 'Preview'}
@@ -175,37 +162,66 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
     );
   }, [currentPlayingId, isPlaying, play, stop]);
 
-  // ── Toolbar ─────────────────────────────────────────────────────────────────
   const toolbarRight = useMemo(() => (
     <button
-      onClick={async () => {
-        const res = await fileService.selectDirectory();
-        if (res.ok && res.data) void loadDir(res.data);
-      }}
-      className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded
-                 bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)]
-                 transition-colors shrink-0"
+      onClick={handleBrowse}
+      title="Change folder"
+      className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
+                 hover:bg-[var(--theme-bg)] transition-colors shrink-0"
     >
-      Browse…
+      <Icon name="folder-open" size={14} />
     </button>
-  ), [loadDir]);
+  ), [handleBrowse]);
 
-  // ── Empty state ─────────────────────────────────────────────────────────────
-  const emptyContent = !currentPath ? (
-    <div className="flex flex-col items-center justify-center gap-3 p-6 h-full text-[var(--theme-text-muted)]">
-      <Icon name="audio" size={24} />
-      <p className="text-xs text-center leading-relaxed">
-        No folder selected.<br />
-        Click <strong>Browse…</strong> to pick a samples folder.
-      </p>
-    </div>
-  ) : undefined;
+  // No-folder state
+  if (!currentPath) {
+    return (
+      <div className={`flex flex-col h-full ${className ?? ''}`}>
+        {/* Path input row */}
+        <div className="flex items-center gap-1 px-2 py-2 border-b border-[var(--theme-border)] shrink-0">
+          <input
+            type="text"
+            value={pathInput}
+            onChange={e => setPathInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handlePathInputCommit(); }}
+            placeholder="Paste folder path…"
+            className="flex-1 min-w-0 text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-border)]
+                       rounded px-2 py-1 text-[var(--theme-text)] placeholder-[var(--theme-text-muted)]/50
+                       focus:outline-none focus:border-[var(--theme-primary)]"
+          />
+          <button
+            onClick={handlePathInputCommit}
+            title="Go to path"
+            className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]
+                       hover:bg-[var(--theme-bg)] transition-colors shrink-0 border border-[var(--theme-border)]"
+          >
+            <Icon name="chevron-right" size={12} />
+          </button>
+          <button
+            onClick={handleBrowse}
+            title="Browse for folder"
+            className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
+                       hover:bg-[var(--theme-bg)] transition-colors shrink-0 border border-[var(--theme-border)]"
+          >
+            <Icon name="folder-open" size={14} />
+          </button>
+        </div>
 
+        {/* Subtle empty hint */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-1.5 opacity-30 pointer-events-none select-none">
+          <Icon name="audio" size={20} />
+          <span className="text-[10px] text-[var(--theme-text-muted)]">no samples folder</span>
+        </div>
+      </div>
+    );
+  }
+
+  // filebrowsing finally, when folder is loaded
   return (
     <div className={`flex flex-col h-full ${className ?? ''}`}>
       <FileBrowser
-        entries={currentPath ? entries : []}
-        currentPath={currentPath || '/'}
+        entries={entries}
+        currentPath={currentPath}
         loading={loading}
         error={error}
         onNavigate={handleNavigate}
@@ -216,7 +232,6 @@ export const AudioSampleBrowser: React.FC<AudioSampleBrowserProps> = ({
         renderIcon={renderIcon}
         className="flex-1 min-h-0"
       />
-      {emptyContent}
     </div>
   );
 };
