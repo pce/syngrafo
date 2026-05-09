@@ -313,9 +313,9 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Package (NSIS + ZIP)
+      - name: Package (WiX MSI + ZIP)
         working-directory: build
-        # NSIS is pre-installed on windows-2025 GitHub Actions runners.
+        # WiX Toolset v3 is pre-installed on windows-2025 GitHub Actions runners.
         run: cpack -C Release
         shell: bash
 
@@ -323,9 +323,9 @@ jobs:
         if: success()
         with:
           name: installer-windows${{ env.MEDIA_LABEL }}-${{ github.sha }}
-          # Upload both the NSIS .exe installer and the portable .zip
+          # Upload both the WiX MSI installer and the portable .zip
           path: |
-            build/Syngrafo-*.exe
+            build/Syngrafo-*.msi
             build/Syngrafo-*.zip
           if-no-files-found: warn
 
@@ -370,5 +370,5 @@ jobs:
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          # Publish every installer CPack produced — DMG, DEB, TGZ, EXE, ZIP
+          # Publish every installer CPack produced — DMG, DEB, TGZ, MSI, ZIP
           files: dist/Syngrafo-*

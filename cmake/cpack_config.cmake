@@ -4,7 +4,7 @@
 #   macOS   → Syngrafo-<ver>-Darwin.dmg           (DragNDrop DMG)
 #   Linux   → Syngrafo-<ver>-Linux.deb            (Debian package)
 #             Syngrafo-<ver>-Linux.tar.gz          (portable tarball)
-#   Windows → Syngrafo-<ver>-Windows.exe          (NSIS installer)
+#   Windows → Syngrafo-<ver>-Windows.msi          (WiX MSI installer)
 #             Syngrafo-<ver>-Windows.zip           (portable ZIP)
 #
 # Usage (from the build directory):
@@ -75,12 +75,14 @@ elseif(WIN32)
         )
     endif()
 
-    set(CPACK_GENERATOR "NSIS;ZIP")
-    set(CPACK_NSIS_DISPLAY_NAME                  "Syngrafo ${PROJECT_VERSION}")
-    set(CPACK_NSIS_PACKAGE_NAME                  "Syngrafo")
-    set(CPACK_NSIS_URL_INFO_ABOUT                "https://github.com/pce/syngrafo")
-    set(CPACK_NSIS_MODIFY_PATH                   ON)
-    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_GENERATOR "WIX;ZIP")
+    # WiX Toolset v3 is pre-installed on windows-2025 GitHub Actions runners.
+    # A GUID is required by WiX as a stable upgrade code — do NOT change it
+    # between releases or Windows Add/Remove Programs will treat each version
+    # as a different product instead of upgrading the existing installation.
+    set(CPACK_WIX_UPGRADE_GUID       "4738B306-08AF-4519-961B-E16ED2303EB7")
+    set(CPACK_WIX_PRODUCT_NAME        "Syngrafo")
+    set(CPACK_WIX_PROGRAM_MENU_FOLDER "Syngrafo")
 endif()
 
 include(CPack)
