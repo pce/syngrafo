@@ -108,6 +108,13 @@ async function selectFiles(): Promise<IpcResult<string[]>> {
   return { ok: true, data: res.data.paths ?? [] };
 }
 
+async function selectSavePath(
+  suggestedName: string,
+  filterExt: string,
+): Promise<IpcResult<{ path: string }>> {
+  return ipcCall<{ path: string }>('dms_select_save_path', suggestedName, filterExt);
+}
+
 async function createDir(path: string): Promise<IpcResult<void>> {
   return ipcCall('dms_create_dir', path);
 }
@@ -163,6 +170,7 @@ export const fileService = {
    */
   selectFiles,
 
+  selectSavePath,
   /** Create a directory (and all parents). */
   createDir,
 

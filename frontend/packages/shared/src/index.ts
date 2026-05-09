@@ -10,3 +10,4 @@ export * from './utils/time.ts';
 export * from './utils/id.ts';
 export * from './ipc.ts';
 export * from './services/file-service.ts';
+export * from './utils/filter.ts';

@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { videoBus } from '@syngrafo/shared';
+import { videoBus, fileService } from '@syngrafo/shared';
 import { videoStorage }  from '../storage/videoStorage.ts';
 import { videoService }  from '../ipc/video-service.ts';
 import { defaultProject, clipFromSource } from '../types/video.ts';
@@ -20,6 +20,7 @@ import { VideoTimeline } from '../timeline/VideoTimeline.tsx';
 import { VideoPreview }  from '../preview/VideoPreview.tsx';
 import { Icon }          from '@syngrafo/ui';
 import { AssetBrowser }  from '../browser/AssetBrowser.tsx';
+import { SequenceImportDialog } from '../browser/SequenceImportDialog.tsx';
 
 export interface VideoEditorPageProps {
   /** If provided, loads an existing project; otherwise creates a new one. */
@@ -58,9 +59,15 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   const [assetPanelWidth,  setAssetPanelWidth]  = useState(280);
   const [assetFilterKind,  setAssetFilterKind]  = useState<AssetKind | null>(null);
   const [assetCurrentPath, setAssetCurrentPath] = useState('');
+  const [showSeqDialog,    setShowSeqDialog]    = useState(false);
+  const [seqDialogPath,    setSeqDialogPath]    = useState('');
 
-  const saveTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resizingRef  = useRef<{ startX: number; startWidth: number } | null>(null);
+  const saveTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizingRef     = useRef<{ startX: number; startWidth: number } | null>(null);
+  /**
+   * Tracks clip IDs for which we've already attempted thumbnail URL enrichment.
+   */
+  const enrichedClipIds = useRef(new Set<string>());
 
 
   useEffect(() => {
@@ -99,6 +106,74 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     return off;
   }, []);
 
+  /**
+   * Lazy thumbnail enrichment.
+   *
+   * The SceneCompositor renders clips using `clip.source.url` (a data-URL or
+   * HTTP URL that Three.js TextureLoader can fetch). Clips added from the
+   * native file system only have `clip.source.path`. This effect detects such
+   * clips and populates `source.url` via `video_get_thumbnail` so they appear
+   * in the preview.
+   *
+   * - Uses `enrichedClipIds` ref to attempt each clip at most once.
+   * - Does NOT persist the enriched URL — it is re-derived on every load
+   *   (thumbnail bytes are small; the IPC round-trip is fast).
+   * - Fails silently when `SGF_WITH_VIDEO=OFF` (clip stays grey).
+   */
+  useEffect(() => {
+    if (!project) return;
+
+    const pending = project.tracks
+      .flatMap(t => t.clips)
+      .filter(
+        c =>
+          c.source.path &&
+          !c.source.url &&
+          (c.kind === 'image' || c.kind === 'video') &&
+          !enrichedClipIds.current.has(c.id),
+      );
+
+    if (pending.length === 0) return;
+
+    // Mark as in-progress before the async work to prevent re-triggering.
+    pending.forEach(c => enrichedClipIds.current.add(c.id));
+
+    let alive = true;
+    void (async () => {
+      const updates = new Map<string, string>(); // clipId → dataUrl
+
+      await Promise.allSettled(
+        pending.map(async clip => {
+          const r = await videoService.getThumbnail(clip.source.path!, 0);
+          if (r.ok && r.data?.dataUrl) updates.set(clip.id, r.data.dataUrl);
+        }),
+      );
+
+      if (!alive || updates.size === 0) return;
+
+      // Use functional updater so we read the latest project state,
+      // not the stale closure value.
+      setProject(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          tracks: prev.tracks.map(t => ({
+            ...t,
+            clips: t.clips.map(c =>
+              updates.has(c.id)
+                ? { ...c, source: { ...c.source, url: updates.get(c.id) } }
+                : c,
+            ),
+          })),
+        };
+      });
+    })();
+
+    return () => { alive = false; };
+  // Re-run when the track/clip list changes (but not on every project mutation).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.tracks]);
+
 
   const handleProjectChange = useCallback((p: VideoProject) => {
     setProject(p);
@@ -122,14 +197,10 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   const importFile = useCallback(async (kind: AssetKind) => {
     if (!project) return;
 
-    const filter = kind === 'image' ? 'image/*'
-                 : kind === 'audio' ? 'audio/*'
-                 : 'video/*';
+    const result = await fileService.selectFiles();
+    if (!result.ok || !result.data || result.data.length === 0) return;
 
-    const result = await videoService.openFileDialog(filter);
-    if (!result.ok || !result.data) return;
-
-    const { path } = result.data;
+    const path = result.data[0];
     const name = path.split('/').pop() ?? path;
 
     await videoStorage.addAsset({ name, kind, path });
@@ -172,6 +243,17 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
 
     const name = path.split('/').pop() ?? path;
 
+    // Pre-fetch a thumbnail data-URL so the compositor can render this clip
+    // immediately without waiting for the lazy enrichment effect.
+    let url: string | undefined;
+    if (kind === 'image' || kind === 'video') {
+      const r = await videoService.getThumbnail(path, 0);
+      if (r.ok && r.data?.dataUrl) {
+        url = r.data.dataUrl;
+        enrichedClipIds.current.add('_pre_' + path); // won't match clip ID but harmless
+      }
+    }
+
     await videoStorage.addAsset({ name, kind, path });
 
     let track = project.tracks.find(t =>
@@ -192,13 +274,15 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     }
 
     const clip: VideoClip = clipFromSource(
-      { kind, path },
+      { kind, path, url },  // include pre-fetched url so compositor renders it right away
       frame,
       project.settings.defaultImageDurationFrames,
       track.layer,
       track.id,
       name,
     );
+    // Mark this clip as already enriched so the lazy effect skips it.
+    enrichedClipIds.current.add(clip.id);
 
     tracks = tracks.map(t =>
       t.id === track!.id ? { ...t, clips: [...t.clips, clip] } : t
@@ -206,19 +290,90 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     handleProjectChange({ ...project, tracks });
   }, [project, frame, handleProjectChange]);
 
+  /**
+   * Open the SequenceImportDialog.
+   * Uses the current AssetBrowser path if one has been navigated to,
+   * otherwise falls back to a native folder-picker (dms_select_directory).
+   */
   const importImageSequence = useCallback(async () => {
     if (!project) return;
-    const result = await videoService.openFolderDialog();
-    if (!result.ok || !result.data) return;
 
-    const seqResult = await videoService.importImageSequence(result.data.path, project.fps);
-    if (!seqResult.ok) {
-      console.warn('[VideoEditor] Image sequence import failed:', seqResult.error);
-      return;
+    let folderPath = assetCurrentPath;
+    if (!folderPath) {
+      const res = await fileService.selectDirectory();
+      if (!res.ok || !res.data) return;
+      folderPath = res.data;
     }
-    const refreshed = await videoStorage.getProject(project.id);
-    if (refreshed) handleProjectChange(refreshed);
-  }, [project, handleProjectChange]);
+
+    setSeqDialogPath(folderPath);
+    setShowSeqDialog(true);
+  }, [project, assetCurrentPath]);
+
+  /**
+   * Called by SequenceImportDialog on confirm.
+   * Creates one image clip per file, packed sequentially starting at the
+   * current playhead position.
+   */
+  const handleSeqConfirm = useCallback(async (files: string[], secPerClip: number) => {
+    setShowSeqDialog(false);
+    if (!project || files.length === 0) return;
+
+    const durationFrames = Math.max(1, Math.round(secPerClip * project.fps));
+
+    // Find or create an image track.
+    let tracks = [...project.tracks];
+    let track  = tracks.find(t => t.kind === 'image' || t.kind === 'video');
+    if (!track) {
+      track = {
+        id:    crypto.randomUUID(),
+        kind:  'image' as const,
+        label: 'Images 1',
+        muted: false, solo: false,
+        layer: tracks.length,
+        clips: [],
+      };
+      tracks = [...tracks, track];
+    }
+
+    let startFrame = frame;
+    const newClips: VideoClip[] = files.map(path => {
+      const name = path.split('/').pop() ?? path;
+      const clip = clipFromSource(
+        { kind: 'image', path },
+        startFrame,
+        durationFrames,
+        track!.layer,
+        track!.id,
+        name,
+      );
+      startFrame += durationFrames;
+      return clip;
+    });
+
+    // Register assets (best-effort, non-blocking).
+    void Promise.all(
+      files.map(path =>
+        videoStorage.addAsset({
+          name: path.split('/').pop() ?? path,
+          kind: 'image' as const,
+          path,
+        })
+      )
+    );
+
+    tracks = tracks.map(t =>
+      t.id === track!.id ? { ...t, clips: [...t.clips, ...newClips] } : t
+    );
+
+    // Grow the project timeline if needed.
+    const endFrame   = startFrame - 1;
+    const newProject = {
+      ...project,
+      tracks,
+      durationFrames: Math.max(project.durationFrames, endFrame + 1),
+    };
+    handleProjectChange(newProject);
+  }, [project, frame, handleProjectChange]);
 
 
   useEffect(() => {
@@ -437,9 +592,13 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
                 onClick={importImageSequence}
                 className="flex items-center gap-1 text-xs px-2 py-0.5 rounded
                            bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
-                title="Import image sequence from folder"
+                title={assetCurrentPath
+                  ? `Import sequence from: ${assetCurrentPath}`
+                  : 'Import image sequence from folder'
+                }
               >
-                <Icon name="folder-open" size={11} aria-hidden /> Seq
+                <Icon name="folder-open" size={11} aria-hidden />
+                Seq{assetCurrentPath ? ' ·' : ''}
               </button>
 
               <div className="flex-1" />
@@ -466,6 +625,15 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
         )}
       </div>
 
+      {showSeqDialog && seqDialogPath && (
+        <SequenceImportDialog
+          folderPath={seqDialogPath}
+          fps={project.fps}
+          onConfirm={handleSeqConfirm}
+          onCancel={() => setShowSeqDialog(false)}
+        />
+      )}
+
       {showExportDialog && (
         <div className="fixed inset-0 bg-[var(--theme-bg)]/70 flex items-center justify-center z-50">
           <div className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-lg p-6 w-96 shadow-2xl">
@@ -485,7 +653,7 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
                   const name = (project?.name ?? 'output')
                     .replace(/[/\\:*?"<>|]/g, '_') + '.mp4';
                   const suggested = workingDir ? workingDir + '/' + name : name;
-                  const res = await videoService.selectSavePath(suggested, 'mp4');
+                  const res = await fileService.selectSavePath(suggested, 'mp4');
                   if (res.ok && res.data?.path) setExportPath(res.data.path);
                 }}
                 className="px-3 py-2 rounded bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)]

@@ -1,116 +1,123 @@
+/**
+ * @file ipc/video-service.ts
+ * TypeScript facade over the C++ video IPC bindings.
+ *
+ * Note, instead of vido_open_file|folder_dialog, use:
+ *     - dms_select_directory / dms_select_files
+ * exposed via `fileService` in @syngrafo/shared.
+ */
+
 import { ipcCall } from '@syngrafo/shared';
 export type { IpcResult } from '@syngrafo/shared';
 
-/** Returned by `exportVideo` on success. */
+
+/** Full media metadata returned by `video_get_media_info`. */
+export interface VideoMediaInfo {
+  width:           number;
+  height:          number;
+  fps:             number;
+  duration_sec:    number;
+  duration_frames: number;
+  codec:           string;
+  has_audio:       boolean;
+}
+
+export interface VideoDecodedFrame {
+  dataUrl:      string;  // data:image/jpeg;base64,…
+  width:        number;
+  height:       number;
+  frameNumber:  number;
+  timestampSec: number;
+}
+
+export interface VideoImportClipResult {
+  resolvedPath: string;
+  info: VideoMediaInfo;
+}
+
+export interface VideoListDirResult {
+  files: string[];
+}
+
+
 export interface VideoExportResult {
-  outputPath: string;
+  outputPath:  string;
   durationSec: number;
-  frameCount: number;
+  frameCount:  number;
 }
 
-/** Returned by `getVideoInfo` on success. */
-export interface VideoFileInfo {
-  width: number;
-  height: number;
-  fps: number;
-  durationSec: number;
-  /** Codec identifier, e.g. 'h264', 'vp9', 'hevc'. */
-  codec: string;
-}
-
-export interface ImageSequenceImportResult {
-  trackId: string;
-  clipCount: number;
-}
 
 export const videoService = {
+
   /**
-   * Export a full project to a video file on disk.
+   * Retrieve full metadata for a media file (dimensions, fps, duration, codec).
+   * Calls `video_get_media_info`.
+   */
+  getMediaInfo: (
+    filePath: string,
+  ) => ipcCall<VideoMediaInfo>('video_get_media_info', filePath),
+
+  /**
+   * Decode a specific frame from a video file and return it as a JPEG data-URL.
+   * Calls `video_decode_frame`.
+   */
+  decodeFrame: (
+    filePath:    string,
+    frameNumber: number,
+    fps:         number,
+  ) => ipcCall<VideoDecodedFrame>('video_decode_frame', filePath, frameNumber, fps),
+
+  /**
+   * Grab a thumbnail frame at `atSec` seconds.
+   * The backend derives the frame index from atSec × fps internally.
+   * Calls `video_get_thumbnail`.
+   */
+  getThumbnail: (
+    filePath: string,
+    atSec:    number,
+  ) => ipcCall<VideoDecodedFrame>('video_get_thumbnail', filePath, atSec),
+
+  /**
+   * Validate and import a single clip file; returns its resolved path and all
+   * metadata in one round-trip.
+   * Calls `video_import_clip`.
+   */
+  importClip: (
+    absPath: string,
+  ) => ipcCall<VideoImportClipResult>('video_import_clip', absPath),
+
+  /**
+   * List files in `dirPath` whose extension (case-insensitive, without dot)
+   * matches one of `extensions`.
+   * Calls `video_list_directory` — registered in video_bindings.hh.
    *
-   * The backend reads `projectJson`, renders every track/clip through its
-   * shader chain, and encodes the result to `outputPath`.
-   *
-   * @param projectJson Serialized `VideoProject` (use `JSON.stringify(project)`).
-   * @param outputPath  Absolute destination path for the output file.
+   * @example
+   * videoService.listDirectory('/home/user/images', ['jpg','jpeg','png','webp'])
+   */
+  listDirectory: (
+    dirPath:    string,
+    extensions: string[],
+  ) => ipcCall<VideoListDirResult>('video_list_directory', dirPath, extensions),
+
+  // ── Not yet implemented in C++ — stubs that will resolve {ok:false} ──────
+  // Keep these here so callers compile; implement the backend when ready.
+
+  /**
+   * Export a full project to a video file.
+   * 🚧 NOT YET REGISTERED — requires backend FFmpeg encoder pipeline.
+   * Will return `{ ok: false, error: 'IPC not available' }` until implemented.
    */
   exportVideo: (
     projectJson: string,
-    outputPath: string,
-  ): Promise<IpcResult<VideoExportResult>> =>
-    ipcCall<VideoExportResult>('video_export', projectJson, outputPath),
+    outputPath:  string,
+  ) => ipcCall<VideoExportResult>('video_export', projectJson, outputPath),
 
   /**
-   * Retrieve metadata (dimensions, fps, duration, codec) for a video file.
-   *
-   * @param filePath Absolute path to the source video file.
-   */
-  getVideoInfo: (
-    filePath: string,
-  ): Promise<IpcResult<VideoFileInfo>> =>
-    ipcCall<VideoFileInfo>('video_get_info', filePath),
-
-  /**
-   * Import a folder of sequentially named images as a set of clips.
-   *
-   * The backend walks `folderPath`, sorts the images by filename, and creates
-   * one clip per frame at the given `fps`.
-   *
-   * @param folderPath Absolute path to the folder containing image files.
-   * @param fps        Desired playback framerate for the imported sequence.
-   */
-  importImageSequence: (
-    folderPath: string,
-    fps: number,
-  ): Promise<IpcResult<ImageSequenceImportResult>> =>
-    ipcCall<ImageSequenceImportResult>('video_import_image_sequence', folderPath, fps),
-
-  /**
-   * Open a native OS file-picker dialog.
-   *
-   * @param filter Optional MIME type or extension hint (e.g. 'video/*', '*.mp4').
-   *               Pass `undefined` to show all files.
-   */
-  openFileDialog: (
-    filter?: string,
-  ): Promise<IpcResult<{ path: string }>> =>
-    ipcCall<{ path: string }>('video_open_file_dialog', filter),
-
-  /**
-   * Open a native OS folder-picker dialog.
-   * Returns the selected folder path, or an error if the dialog was cancelled.
-   */
-  openFolderDialog: (): Promise<IpcResult<{ path: string }>> =>
-    ipcCall<{ path: string }>('video_open_folder_dialog'),
-
-  /**
-   * Render a single frame and return it as a data URL for preview purposes.
-   *
-   * This is intentionally a synchronous-style render (one frame at a time)
-   * suitable for scrubbing previews. For full exports use `exportVideo`.
-   *
-   * @param projectJson Serialized `VideoProject`.
-   * @param frame       Absolute frame number to render.
+   * Render a single frame for preview.
+   * 🚧 NOT YET REGISTERED — requires backend GPU compositor.
    */
   renderFrame: (
     projectJson: string,
-    frame: number,
-  ): Promise<IpcResult<{ dataUrl: string }>> =>
-    ipcCall<{ dataUrl: string }>('video_render_frame', projectJson, frame),
-
-  /**
-   * List files in `dirPath` whose extension matches one of `extensions`.
-   * @param dirPath    Absolute directory path to scan.
-   * @param extensions Extension filter without dot, e.g. `['jpg','jpeg','png','webp','gif']`.
-   */
-  listDirectory: (
-    dirPath: string,
-    extensions: string[],
-  ): Promise<IpcResult<{ files: string[] }>> =>
-    ipcCall<{ files: string[] }>('video_list_directory', dirPath, extensions),
-
-  selectSavePath: (
-    suggestedName: string,
-    filterExt: string,
-  ): Promise<IpcResult<{ path: string }>> =>
-    ipcCall<{ path: string }>('dms_select_save_path', suggestedName, filterExt),
+    frame:       number,
+  ) => ipcCall<{ dataUrl: string }>('video_render_frame', projectJson, frame),
 };
