@@ -892,13 +892,25 @@ if (typeof window.__lm_error === 'undefined')
     saucer::systray::NativeSystray tray;
     tray.set_tooltip("Syngrafo");
 
-    // Raw pointer — safe as long as `window` lives (it does, until co_return).
+    // Provide an explicit icon so the tray slot is always visible.
+    {
+        const std::string icons = data_dir() + "/icons";
+#if defined(_WIN32)
+        const std::string icon_path = icons + "/syngrafo.ico";
+#else
+        const std::string icon_path = icons + "/syngrafo.png";
+#endif
+        if (fs::exists(icon_path))
+            tray.set_icon(icon_path);
+    }
+
+    /// Raw pointer: safe as long as `window` lives, until co_return
     auto* win_raw = (*window).get();
 
-    // Flag that lets the close handler distinguish "hide to tray" from "quit".
+
     auto quit_requested = std::make_shared<bool>(false);
 
-    // Callback: left-click / double-click on the tray icon → restore window.
+
     tray.set_on_activate([win_raw, &tray] {
         win_raw->show();
         tray.hide();

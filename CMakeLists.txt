@@ -94,7 +94,38 @@ include(cmake/frontend.cmake)
 # ─── SQLite / SQLCipher detection ─────────────────────────────────────────────
 include(cmake/sqlite.cmake)
 
-# ─── Main executable ──────────────────────────────────────────────────────────
+#  Tray icon generation
+# Run gen_icon.py at configure time so syngrafo.png / syngrafo.ico are always
+# present in data/icons/ before the build copies or bundles data/.
+# Uses only Python stdlib (math, struct, zlib) — no Pillow required.
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_FOUND)
+    set(_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data/icons")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_icon.py"
+                "${_ICON_DIR}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE   _icon_result
+        OUTPUT_VARIABLE   _icon_output
+        ERROR_VARIABLE    _icon_error
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(_icon_result EQUAL 0)
+        message(STATUS "${_icon_output}")
+    else()
+        message(WARNING "[syngrafo] Icon generation failed: ${_icon_error}")
+    endif()
+    unset(_ICON_DIR)
+    unset(_icon_result)
+    unset(_icon_output)
+    unset(_icon_error)
+else()
+    message(WARNING "[syngrafo] Python3 not found — tray icon not generated. "
+                    "Run: python3 scripts/gen_icon.py data/icons")
+endif()
+
+#  Main executable
 add_executable(syngrafo app/main.cc)
 
 # Platform image decoder

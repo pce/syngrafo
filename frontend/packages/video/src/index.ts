@@ -60,8 +60,10 @@ export { videoService } from './ipc/video-service.ts';
 export type {
   IpcResult,
   VideoExportResult,
-  VideoFileInfo,
-  ImageSequenceImportResult,
+  VideoMediaInfo,
+  VideoDecodedFrame,
+  VideoImportClipResult,
+  VideoListDirResult,
 } from './ipc/video-service.ts';
 
 export { SceneCompositor } from './gpu/SceneCompositor.ts';
@@ -93,3 +95,6 @@ export type { FileBrowserEntry, FileBrowserViewMode, FileBrowserProps } from '@s
 
 export { AssetBrowser }            from './browser/AssetBrowser.tsx';
 export type { AssetBrowserProps }  from './browser/AssetBrowser.tsx';
+
+export { SequenceImportDialog }           from './browser/SequenceImportDialog.tsx';
+export type { SequenceImportDialogProps } from './browser/SequenceImportDialog.tsx';

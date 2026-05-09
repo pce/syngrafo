@@ -76,13 +76,26 @@ elseif(WIN32)
     endif()
 
     set(CPACK_GENERATOR "WIX;ZIP")
-    # WiX Toolset v3 is pre-installed on windows-2025 GitHub Actions runners.
-    # A GUID is required by WiX as a stable upgrade code — do NOT change it
-    # between releases or Windows Add/Remove Programs will treat each version
-    # as a different product instead of upgrading the existing installation.
+    # A stable GUID is required by WiX as upgrade code — do NOT change it
+    # between releases or Add/Remove Programs treats each version as a new product.
     set(CPACK_WIX_UPGRADE_GUID       "4738B306-08AF-4519-961B-E16ED2303EB7")
     set(CPACK_WIX_PRODUCT_NAME        "Syngrafo")
     set(CPACK_WIX_PROGRAM_MENU_FOLDER "Syngrafo")
+
+    #  Restrict CPack to application-owned install components
+    # FetchContent / CPM dependencies (coco, ereignis, flagpp, saucer, simdutf,
+    # …) register *_Development install rules for their headers and cmake config
+    # files. When CPack stages ALL components for WiX, those files are either
+    # absent from the binary output tree or land in empty directories.
+    # WiX 3's light.exe refuses to compress an empty/missing directory entry
+    # and exits with "Problem compressing the directory".
+    #
+    # By whitelisting only the two components we actually own:
+    #   Runtime     — onnxruntime.dll (added by the ORT post-build copy command)
+    #   Unspecified — syngrafo.exe + data/ (targets installed without COMPONENT)
+    # we keep the MSI lean and avoid triggering the WiX bug.
+    set(CPACK_COMPONENTS_ALL "Runtime;Unspecified")
+
 endif()
 
 include(CPack)

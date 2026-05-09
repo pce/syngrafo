@@ -80,3 +80,25 @@ instr GrainInstr
             outs a1, a1
 endin
 `.trim();
+
+/**
+ * Sample player — plays a WAV/OGG file from Csound's virtual FS.
+ *
+ * Before triggering, write the file bytes and set channels:
+ *   engine.writeFile('/samples/kick.wav', bytes)
+ *   engine.setStringChannel('sampler_file', '/samples/kick.wav')
+ *   engine.setChannel('sampler_amp', 0.8)
+ *   engine.inputMessage('i "SamplerInstr" 0 2')
+ */
+export const SAMPLER_INSTR = `
+instr SamplerInstr
+  Sfile  chnget "sampler_file"
+  iamp   chnget "sampler_amp"
+  iamp   = (iamp <= 0 ? 0.7 : iamp)
+  if strlen(Sfile) == 0 goto skip
+  a1, a2 diskin2 Sfile, 1, 0, 0
+  kenv   linsegr 0, 0.005, iamp, p3 - 0.015, iamp, 0.01, 0
+         outs a1 * kenv, a2 * kenv
+  skip:
+endin
+`.trim();

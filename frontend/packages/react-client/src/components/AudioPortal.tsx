@@ -1,7 +1,8 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import AudioTimelinePage from "./audio/AudioTimelinePage";
+import { PatchWorkstation } from "./audio/modular/index";
 
 export interface AudioPortalProps {
   open: boolean;
@@ -21,6 +22,7 @@ interface ContentProps {
 
 function AudioPortalContent({ onClose, workingDir }: ContentProps) {
   const handleClose = useCallback(() => onClose?.(), [onClose]);
+  const [activeTab, setActiveTab] = useState<"sequencer" | "patcher">("sequencer");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -51,6 +53,23 @@ function AudioPortalContent({ onClose, workingDir }: ContentProps) {
         <span className="text-sm font-semibold text-[var(--theme-text)] flex-1 truncate">
           Csound Audio Editor
         </span>
+        {/* Tab switcher */}
+        <div className="flex rounded border border-[var(--theme-border)] overflow-hidden text-[9px] mx-2">
+          {(["sequencer", "patcher"] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={
+                activeTab === tab
+                  ? "px-3 py-1 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] font-semibold uppercase tracking-wider"
+                  : "px-3 py-1 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] uppercase tracking-wider"
+              }
+            >
+              {tab === "sequencer" ? "\u23F1 Seq" : "\u2B21 Patch"}
+            </button>
+          ))}
+        </div>
+
         <span className="text-[9px] text-[var(--theme-text-muted)] hidden sm:block select-none">
           Esc to close
         </span>
@@ -63,7 +82,10 @@ function AudioPortalContent({ onClose, workingDir }: ContentProps) {
         </button>
       </header>
 
-      <AudioTimelinePage workingDir={workingDir} />
+      {activeTab === "sequencer"
+        ? <AudioTimelinePage workingDir={workingDir} />
+        : <PatchWorkstation />
+      }
     </div>,
     window.document.body,
   );
