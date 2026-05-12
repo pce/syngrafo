@@ -49,7 +49,7 @@ if(NOT TARGET nlp_engine)
     )
 endif()
 
-# ─── Version ─────────────────────────────────────────────────────────────────
+# Version
 # Single source of truth — bump VERSION to cut a new release.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" SYNGRAFO_VERSION)
 string(STRIP "${SYNGRAFO_VERSION}" SYNGRAFO_VERSION)
@@ -166,7 +166,7 @@ saucer_embed("${FRONTEND_DIST}" DESTINATION "${FRONTEND_EMBEDDED_DIR}" TARGET sy
 # syngrafo_frontend to finish writing files to dist/.
 add_dependencies(saucer_embedded_pre syngrafo_frontend)
 
-# ─── Link libraries ───────────────────────────────────────────────────────────
+# Link libraries
 target_link_libraries(syngrafo PRIVATE
     saucer::embedded          # compile-time embedded asset API
     nlp_engine                # NLP core + ONNX
@@ -217,18 +217,31 @@ if(APPLE)
     include(cmake/bundle_apple.cmake)
 endif()
 
-# Windows: deploy onnxruntime.dll next to the executable
-# NLP_ORT_DLL_PATH is exported by external/nlp/CMakeLists.txt as a CACHE INTERNAL
-# variable when WIN32 and ONNX are enabled. The DLL must be in the same directory
-# as syngrafo.exe at runtime; the copy is also included in the CPack installer.
-if(WIN32 AND DEFINED NLP_ORT_DLL_PATH AND EXISTS "${NLP_ORT_DLL_PATH}")
-    add_custom_command(TARGET syngrafo POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${NLP_ORT_DLL_PATH}"
-            "$<TARGET_FILE_DIR:syngrafo>"
-        COMMENT "[syngrafo] Deploying onnxruntime.dll"
+# Windows: Deploy runtime DLLs to the WiX MSI / CPack
+if(WIN32)
+    # 1. Handle ONNX Runtime (if built manually or via your custom module)
+    if(DEFINED NLP_ORT_DLL_PATH AND EXISTS "${NLP_ORT_DLL_PATH}")
+        add_custom_command(TARGET syngrafo POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${NLP_ORT_DLL_PATH}"
+                "$<TARGET_FILE_DIR:syngrafo>"
+            COMMENT "[syngrafo] Deploying onnxruntime.dll"
+        )
+    endif()
+
+    # 2. Tell CPack/WiX to securely detect and package all runtime DLLs
+    # (like libcurl, zlib, libssl, onnxruntime) required by the executable.
+    install(TARGETS syngrafo
+            DESTINATION "."
+            COMPONENT Runtime)
+
+    install(RUNTIME_DEPENDENCIES
+            EXECUTABLES $<TARGET_FILE:syngrafo>
+            DESTINATION "."
+            COMPONENT Runtime
+            PRE_INCLUDE_REGEXES "^libcurl\\.dll$" "^onnxruntime\\.dll$" "^zlib.*\\.dll$" "^libcrypto.*\\.dll$" "^libssl.*\\.dll$"
+            POST_EXCLUDE_REGEXES "^[A-Za-z]:\\\\Windows\\\\.*" "^[Cc]:\\\\windows\\\\.*" "^[Aa][Pp][Ii]-[Mm][Ss]-.*" "^[Ee][Xx][Tt]-[Mm][Ss]-.*"
     )
-    install(FILES "${NLP_ORT_DLL_PATH}" DESTINATION "." COMPONENT Runtime)
 endif()
 
 # CPack installer configuration

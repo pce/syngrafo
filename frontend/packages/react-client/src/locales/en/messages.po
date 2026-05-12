@@ -13,7 +13,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-# ── Navigation ────────────────────────────────────────────────────────────────
+# Navigation
 msgid "Explorer"
 msgstr "Explorer"
 
@@ -26,7 +26,7 @@ msgstr "Settings"
 msgid "About"
 msgstr "About"
 
-# ── FileBrowser ───────────────────────────────────────────────────────────────
+# FileBrowser
 msgid "Name"
 msgstr "Name"
 
@@ -60,7 +60,7 @@ msgstr "Loading…"
 msgid "Empty folder"
 msgstr "Empty folder"
 
-# ── DocumentViewer ────────────────────────────────────────────────────────────
+# DocumentViewer
 msgid "Run OCR"
 msgstr "Run OCR"
 
@@ -70,7 +70,7 @@ msgstr "Running OCR…"
 msgid "No document selected"
 msgstr "No document selected"
 
-# ── AnalysisPanel ─────────────────────────────────────────────────────────────
+# AnalysisPanel
 msgid "Keywords"
 msgstr "Keywords"
 
@@ -92,10 +92,67 @@ msgstr "Positive"
 msgid "Negative"
 msgstr "Negative"
 
-# ── OCR / processing ──────────────────────────────────────────────────────────
+# OCR / processing
 msgid "Indexing…"
 msgstr "Indexing…"
 
 msgid "No results"
 msgstr "No results"
 
+# PatchWorkstation
+msgid "Patcher"
+msgstr "Patcher"
+
+msgid "Browse patches in the left panel"
+msgstr "Browse patches in the left panel"
+
+msgid "No patch"
+msgstr "No patch"
+
+msgid "+ PatternBlock"
+msgstr "+ PatternBlock"
+
+msgid "Patterns"
+msgstr "Patterns"
+
+msgid "Patches"
+msgstr "Patches"
+
+msgid "Matrix"
+msgstr "Matrix"
+
+msgid "XY Pads"
+msgstr "XY Pads"
+
+msgid "Stop"
+msgstr "Stop"
+
+msgid "Compile+Play"
+msgstr "Compile+Play"
+
+msgid "Default Patch"
+msgstr "Default Patch"
+
+msgid "Click + PatternBlock to start patching"
+msgstr "Click + PatternBlock to start patching"
+
+msgid "Add a PatchBlock track in the Sequencer and pick this patch."
+msgstr "Add a PatchBlock track in the Sequencer and pick this patch."
+
+msgid "Click to load · double-click to rename"
+msgstr "Click to load · double-click to rename"
+
+msgid "Delete patch"
+msgstr "Delete patch"
+
+msgid "patches"
+msgstr "patches"
+
+msgid "New patch name…"
+msgstr "New patch name…"
+
+msgid "+ New Patch"
+msgstr "+ New Patch"
+
+msgid "Add an XY Pad block to see it here"
+msgstr "Add an XY Pad block to see it here"

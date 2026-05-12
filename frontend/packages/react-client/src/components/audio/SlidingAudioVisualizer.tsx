@@ -14,6 +14,7 @@
  */
 
 import React, { useRef, useEffect } from "react";
+import { useLingui } from "@lingui/react";
 import type { PlaybackVisualizationData } from "@/hooks/useAudioPlaybackWithVisualization";
 
 
@@ -45,6 +46,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
   height = 80,
   className = "",
 }) => {
+  const { _ } = useLingui();
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const rafRef     = useRef<number | null>(null);
 
@@ -82,7 +84,6 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
     // Reusable data buffer — allocated once, mutated in place each frame
     const freqData = new Uint8Array(analyserNode ? analyserNode.frequencyBinCount : NUM_BARS);
 
-    // Fade transition state
     let fadeState:    FadeState = isPlaying ? "active" : "idle";
     let fadeProgress: number   = isPlaying ? 1 : 0;
     const FADE_IN_SPEED  = 0.03;
@@ -135,7 +136,6 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
       ctx.fillStyle = themeBg;
       ctx.fillRect(0, 0, W, H);
 
-      // Subtle horizontal grid
       ctx.strokeStyle = "rgba(128,128,128,0.07)";
       ctx.lineWidth   = 1;
       for (let g = 1; g < 4; g++) {
@@ -158,7 +158,6 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
 
         const x = i * barW;
 
-        // Opacity: full at center, fading toward edges
         const dist  = Math.abs(i / NUM_BARS - 0.5) * 2;  // 0 = center, 1 = edge
         const alpha = Math.max(0.2, 1 - dist * 0.7);
 
@@ -182,7 +181,6 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
         ctx.fill();
       }
 
-      // Playhead (center vertical line + dot)
       const cx = W / 2;
       const lineAlpha = isPlaying ? 0.85 : fadeProgress * 0.3;
       ctx.strokeStyle = `rgba(255,255,255,${lineAlpha})`;
@@ -192,13 +190,11 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
       ctx.lineTo(cx, BAR_AREA_H - 2);
       ctx.stroke();
 
-      // Dot
       ctx.fillStyle = isPlaying ? "#4ade80" : `rgba(255,255,255,${lineAlpha})`;
       ctx.beginPath();
       ctx.arc(cx, 6, 3, 0, Math.PI * 2);
       ctx.fill();
 
-      // Progress strip
       const progress = vizRef.current?.progress ?? 0;
       const stripY   = H - 8;
 
@@ -227,7 +223,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
     };
   }, [analyserNode, isPlaying, width, height]);
 
-  //  Time labels (React render, driven by 10 fps visualizationData)
+  // Time labels: React render driven by 10 fps visualizationData update
   const currentTime = visualizationData?.currentTime ?? 0;
   const duration    = visualizationData?.duration    ?? 0;
   const hasTime     = duration > 0;
@@ -239,7 +235,6 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
         <canvas ref={canvasRef} />
       </div>
 
-      {/* Time labels + playing indicator */}
       <div className="flex justify-between items-center px-0.5 text-xs font-mono text-[var(--theme-text-muted)]"
            style={{ width }}>
         <span style={{ opacity: labelAlpha }}>{fmt(currentTime)}</span>
@@ -249,7 +244,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
               <span className="text-green-400 text-[10px] font-semibold tracking-wider">
-                PLAYING
+                {_("PLAYING")}
               </span>
             </>
           ) : (

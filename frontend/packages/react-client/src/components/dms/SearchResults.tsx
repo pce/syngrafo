@@ -1,15 +1,10 @@
 import React from "react";
+import { useLingui } from "@lingui/react";
 import { useDms } from "../../store/dms-store";
 import type { SearchResult } from "@/services/dms-service.ts";
 import { Icon } from "../Icon";
 import { pathKind, resultScoreLabel, splitAtMatch } from "./search-utils";
 
-/**
- * Renders a text snippet with the first occurrence of `query` highlighted.
- *
- * @param text  - Full snippet string to display.
- * @param query - The active search term.
- */
 function SnippetText({ text, query }: { text: string; query: string }) {
   if (!text) return null;
   const parts = splitAtMatch(text, query);
@@ -27,6 +22,7 @@ function SnippetText({ text, query }: { text: string; query: string }) {
 
 const SearchResults: React.FC = () => {
   const { state, dispatch } = useDms();
+  const { _ } = useLingui();
 
   if (!state.searching && state.searchResults.length === 0 && !state.searchQuery) {
     return null;
@@ -67,7 +63,6 @@ const SearchResults: React.FC = () => {
 
   return (
     <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl z-50 flex flex-col max-h-[70vh] overflow-hidden">
-      {/** Search results header: query string, hit count, scope badge. */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/50">
         <div className="flex items-center gap-2">
           <Icon name="search" size="xs" className="text-[var(--theme-text-muted)]" />
@@ -96,18 +91,17 @@ const SearchResults: React.FC = () => {
         </button>
       </div>
 
-      {/** Scrollable results list. */}
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
         {state.searching ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <span className="w-6 h-6 border-2 border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)] rounded-full animate-spin" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">Searching Index…</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{_("Searching Index…")}</span>
           </div>
         ) : state.searchResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--theme-text-muted)]">
             <Icon name="block" size="lg" className="opacity-20" />
-            <p className="text-sm font-medium">No matches found</p>
-            <p className="text-xs">Try a simpler keyword or check your index status.</p>
+            <p className="text-sm font-medium">{_("No matches found")}</p>
+            <p className="text-xs">{_("Try a simpler keyword or check your index status.")}</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -190,4 +184,3 @@ const SearchResults: React.FC = () => {
 };
 
 export default SearchResults;
-

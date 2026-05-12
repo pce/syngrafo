@@ -4,7 +4,6 @@
  * Canvas-based FFT spectrum with a logarithmic frequency axis.
  *
  *   - Logarithmic x-axis (Math.log1p scale)
- *   - Canvas 2D rendering
  *   - Responsive resize handler
  *   - Rainbow HSL coloring
  *   - Accepts AnalyserNode directly
@@ -31,7 +30,6 @@ const SpectrumAnalyzer: React.FC<SpectrumAnalyzerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef    = useRef<number | null>(null);
 
-  // Resize helper
   const resizeCanvas = (canvas: HTMLCanvasElement) => {
     const parent = canvas.parentElement;
     if (!parent) return;
@@ -64,7 +62,6 @@ const SpectrumAnalyzer: React.FC<SpectrumAnalyzerProps> = ({
       const H = canvas.height / dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Background
       ctx.fillStyle = themeBg;
       ctx.fillRect(0, 0, W, H);
 
@@ -94,7 +91,6 @@ const SpectrumAnalyzer: React.FC<SpectrumAnalyzerProps> = ({
         const xNorm = Math.log1p(i) / Math.log1p(binCount);
         const x     = xNorm * W;
 
-        // Rainbow hue across the frequency range
         const hue   = (i / binCount) * 300; // 0° (red) → 300° (magenta)
         const lit   = 35 + (value / 255) * 30;
         ctx.fillStyle = `hsl(${hue}, 90%, ${lit}%)`;
@@ -104,10 +100,8 @@ const SpectrumAnalyzer: React.FC<SpectrumAnalyzerProps> = ({
       rafRef.current = requestAnimationFrame(drawFrame);
     };
 
-    // Kick off the loop
     rafRef.current = requestAnimationFrame(drawFrame);
 
-    // Resize listener
     const handleResize = () => {
       resizeCanvas(canvas);
     };

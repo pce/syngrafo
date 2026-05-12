@@ -1,4 +1,5 @@
 import React from "react";
+import { useLingui } from "@lingui/react";
 import { Icon } from "../Icon";
 import Dropdown from "../ui/Dropdown";
 
@@ -18,10 +19,11 @@ const SystemDropdown: React.FC<SystemDropdownProps> = ({
   setTheme,
   availableThemes,
 }) => {
+  const { _ } = useLingui();
   return (
     <Dropdown
-      label="System"
-      subLabel="Settings"
+      label={_("System")}
+      subLabel={_("Settings")}
       icon="settings"
       variant="ghost"
     >
@@ -33,7 +35,7 @@ const SystemDropdown: React.FC<SystemDropdownProps> = ({
           className="text-[9px] font-black uppercase tracking-widest"
           style={{ color: "var(--theme-text-muted)" }}
         >
-          Theme
+          {_("Theme")}
         </span>
       </div>
       <div className="px-2 space-y-1">

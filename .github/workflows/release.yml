@@ -286,7 +286,9 @@ jobs:
       # Tesseract is NOT installed here: the ONNX OCR backend (ocr_addon_onnx.cpp)
       # auto-activates when no Tesseract target is found and NLP_WITH_ONNX=ON (default).
       - name: Install system deps (Windows)
-        run: vcpkg install curl:x64-windows
+        run: |
+          vcpkg install curl:x64-windows
+          vcpkg install onnxruntime:x64-windows
 
       # ── Optional media deps (Windows — vcpkg) ───────────────────────────────
       - name: Install audio deps (Windows)
@@ -312,6 +314,13 @@ jobs:
 
       - name: Build
         run: cmake --build build --config Release --parallel
+
+      - name: Smoke Test (Check DLL dependencies)
+        shell: pwsh
+        run: |
+          # Fails immediately if any required DLL (libcurl.dll, onnxruntime.dll, etc.) is missing.
+          $env:PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin;" + $env:PATH
+          ./build/Release/syngrafo.exe --help
 
       - name: Package (WiX MSI + ZIP)
         working-directory: build

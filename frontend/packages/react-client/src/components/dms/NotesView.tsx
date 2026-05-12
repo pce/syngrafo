@@ -21,6 +21,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useLingui } from "@lingui/react";
 
 import { dms } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
@@ -243,6 +244,7 @@ function fmtDate(ms: number | undefined): string {
 
 const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const { state: storeState, dispatch: storeDispatch } = useDms();
+  const { _ } = useLingui();
 
   const [rootNotes,    setRootNotes]    = useState<FsEntry[]>([]);
   const [collections,  setCollections]  = useState<CollectionGroup[]>([]);
@@ -498,11 +500,11 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
           <button
             onClick={() => void deleteNote(note.path)}
             className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0"
-          >Yes</button>
+          >{_("Yes")}</button>
           <button
             onClick={() => setConfirmDeleteNote(null)}
             className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0"
-          >No</button>
+          >{_("No")}</button>
         </div>
       );
     }
@@ -531,7 +533,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); setConfirmDeleteNote(note.path); }}
-          title="Delete note"
+          title={_("Delete note")}
           className={[
             "shrink-0 w-5 h-5 flex items-center justify-center rounded transition-all",
             isSelected
@@ -551,27 +553,25 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--theme-bg)]">
 
-      {/* Left pane */}
       <div
         className="flex flex-col shrink-0 border-r border-[var(--theme-border)] bg-[var(--theme-surface)]"
         style={{ width: 240 }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--theme-border)] shrink-0">
           <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">
-            Notes
+            {_("Notes")}
           </span>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingCollection(true); setNewCollectionName(""); }}
-              title="New collection"
+              title={_("New collection")}
               className="w-6 h-6 flex items-center justify-center rounded transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 active:scale-95"
             >
               <Icon name="folder" size="xs" />
             </button>
             <button
               onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingNote(true); setNewNoteTitle(""); setNewNoteCollection(""); }}
-              title="New note"
+              title={_("New note")}
               className="w-6 h-6 flex items-center justify-center rounded transition-colors text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 active:scale-95"
             >
               <Icon name="plus" size="xs" />
@@ -579,12 +579,11 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
           </div>
         </div>
 
-        {/* Inline new-collection form */}
         {creatingCollection && (
           <div className="px-2 pt-2 pb-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)] shrink-0">
             <div className="flex items-center gap-1 mb-1">
               <Icon name="folder" size="xs" className="text-[var(--theme-text-muted)] shrink-0" />
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">New Collection</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">{_("New Collection")}</span>
             </div>
             <input
               autoFocus type="text" value={newCollectionName}
@@ -593,23 +592,22 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                 if (e.key === "Enter")  void createCollection();
                 if (e.key === "Escape") { setCreatingCollection(false); setNewCollectionName(""); }
               }}
-              placeholder="Collection name…"
+              placeholder={_("Collection name…")}
               className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
             />
             <div className="flex gap-1 mt-1.5">
               <button onClick={() => void createCollection()} disabled={!newCollectionName.trim()}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 disabled:opacity-40 transition-opacity">
-                Create
+                {_("Create")}
               </button>
               <button onClick={() => { setCreatingCollection(false); setNewCollectionName(""); }}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors">
-                Cancel
+                {_("Cancel")}
               </button>
             </div>
           </div>
         )}
 
-        {/* Inline new-note form */}
         {creatingNote && (
           <div className="px-2 pt-2 pb-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)] shrink-0">
             <input
@@ -619,7 +617,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                 if (e.key === "Enter")  void commitNewNote();
                 if (e.key === "Escape") { setCreatingNote(false); setNewNoteTitle(""); }
               }}
-              placeholder="Note title…"
+              placeholder={_("Note title…")}
               className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-1.5"
             />
             {allCollectionNames.length > 0 && (
@@ -628,7 +626,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                 onChange={(e) => setNewNoteCollection(e.target.value)}
                 className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-1.5"
               >
-                <option value="">(root — no collection)</option>
+                <option value="">{_("(root — no collection)")}</option>
                 {allCollectionNames.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
@@ -637,17 +635,16 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
             <div className="flex gap-1">
               <button onClick={() => void commitNewNote()} disabled={!newNoteTitle.trim()}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 disabled:opacity-40 transition-opacity">
-                Create
+                {_("Create")}
               </button>
               <button onClick={() => { setCreatingNote(false); setNewNoteTitle(""); }}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors">
-                Cancel
+                {_("Cancel")}
               </button>
             </div>
           </div>
         )}
 
-        {/* List body */}
         <div className="flex-1 overflow-y-auto">
           {listLoading ? (
             <div className="flex items-center justify-center py-10">
@@ -658,17 +655,15 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
             <div className="flex flex-col items-center justify-center py-10 px-4 gap-2 text-center">
               <Icon name="file" size="md" className="opacity-20 text-[var(--theme-text)]" />
               <p className="text-[10px] leading-relaxed text-[var(--theme-text-muted)]">
-                No notes yet.<br />Press&nbsp;＋&nbsp;to create one.
+                {_("No notes yet.")}<br />{_("Press ＋ to create one.")}
               </p>
             </div>
 
           ) : (
             <>
-              {/* Root notes */}
-              {rootNotes.map((note) => renderNoteRow(note, false))}
+                {rootNotes.map((note) => renderNoteRow(note, false))}
 
-              {/* Collection groups */}
-              {collections.map((group) => {
+                {collections.map((group) => {
                 const isCollapsed  = collapsedCols.has(group.name);
                 const isDeletingCol = confirmDeleteCol === group.name;
                 return (
@@ -679,9 +674,9 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                           Delete &ldquo;{group.name}&rdquo; ({group.notes.length})?
                         </span>
                         <button onClick={() => void deleteCollection(group)}
-                          className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">Yes</button>
+                          className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">{_("Yes")}</button>
                         <button onClick={() => setConfirmDeleteCol(null)}
-                          className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">No</button>
+                          className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">{_("No")}</button>
                       </div>
                     ) : (
                       <div
@@ -698,7 +693,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setConfirmDeleteCol(group.name); }}
-                          title="Delete collection"
+                          title={_("Delete collection")}
                           className="shrink-0 w-4 h-4 flex items-center justify-center rounded transition-all text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-red-500/10 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
                         >
                           <Icon name="trash" size="xs" />
@@ -707,7 +702,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                     )}
                     {!isCollapsed && (
                       group.notes.length === 0
-                        ? <div className="pl-6 pr-3 py-2 text-[10px] text-[var(--theme-text-muted)] italic">Empty collection</div>
+                        ? <div className="pl-6 pr-3 py-2 text-[10px] text-[var(--theme-text-muted)] italic">{_("Empty collection")}</div>
                         : group.notes.map((note) => renderNoteRow(note, true))
                     )}
                   </div>
@@ -718,7 +713,6 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
         </div>
       </div>
 
-      {/* Right pane — editor + preview */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
         {selectedPath == null ? (
           <div
@@ -730,7 +724,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               setNewNoteCollection("");
             }}
             className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8 cursor-pointer select-none group hover:bg-[var(--theme-primary)]/[0.03] transition-colors"
-            title="Click to create a new note"
+            title={_("Click to create a new note")}
           >
             <Icon
               name="edit"
@@ -738,13 +732,12 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               className="opacity-20 group-hover:opacity-40 transition-opacity text-[var(--theme-text)]"
             />
             <p className="text-sm text-[var(--theme-text-muted)] group-hover:text-[var(--theme-primary)] transition-colors">
-              Click anywhere to create a new note
+              {_("Click anywhere to create a new note")}
             </p>
           </div>
         ) : (
           <>
             <div className="flex flex-1 min-h-0 overflow-hidden">
-              {/* Textarea */}
               <div className="flex flex-col flex-1 min-w-0 border-r border-[var(--theme-border)]">
                 <div className="shrink-0 px-3 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] flex items-center gap-2">
                   <span className="flex-1 text-xs font-semibold truncate text-[var(--theme-text)]">
@@ -756,15 +749,14 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                   value={content}
                   onChange={handleContentChange}
                   spellCheck={false}
-                  placeholder={"Start writing…\n\nSupports **markdown**, `inline code`,\n```ascii\n┌─────┐\n│ art │\n└─────┘\n```\nand ![image](path)"}
+                  placeholder={_("Start writing…\n\nSupports **markdown**, `inline code`,\n```ascii\n┌─────┐\n│ art │\n└─────┘\n```\nand ![image](path)")}
                   className="flex-1 w-full resize-none outline-none font-mono text-sm leading-relaxed p-4 bg-[var(--theme-bg)] text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)]"
                 />
               </div>
 
-              {/* Preview */}
               <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
                 <div className="shrink-0 px-3 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">Preview</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">{_("Preview")}</span>
                 </div>
                 <div
                   className="flex-1 overflow-y-auto p-4 text-sm text-[var(--theme-text)] leading-relaxed"
@@ -773,24 +765,23 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               </div>
             </div>
 
-            {/* Status bar */}
             <div
               className="shrink-0 flex items-center justify-end gap-2 px-4 py-1 border-t border-[var(--theme-border)] bg-[var(--theme-surface)]"
               style={{ minHeight: 28 }}
             >
               {saveStatus === "saving" && (
                 <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-muted)]">
-                  <span className="w-2.5 h-2.5 rounded-full border border-[var(--theme-primary)]/40 border-t-[var(--theme-primary)] animate-spin" />
-                  Saving…
-                </span>
+                    <span className="w-2.5 h-2.5 rounded-full border border-[var(--theme-primary)]/40 border-t-[var(--theme-primary)] animate-spin" />
+                    {_("Saving…")}
+                  </span>
               )}
               {saveStatus === "saved" && (
                 <span className="flex items-center gap-1 text-[10px] text-green-500 font-medium">
-                  <Icon name="check" size="xs" />Saved
-                </span>
+                    <Icon name="check" size="xs" />{_("Saved")}
+                  </span>
               )}
               {saveStatus === "error" && (
-                <span className="text-[10px] font-medium text-red-500">Save failed</span>
+                <span className="text-[10px] font-medium text-red-500">{_("Save failed")}</span>
               )}
               {saveStatus === "idle" && (
                 <span className="text-[10px] opacity-0 select-none" aria-hidden>&nbsp;</span>

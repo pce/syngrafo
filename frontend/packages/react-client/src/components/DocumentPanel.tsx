@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useLingui } from "@lingui/react";
 import { nlp, type StreamChunk, type NLPStreamRequest } from "../services/nlp-service";
 import { markov } from "../services/markov-service";
 import { DocumentModel, type DocumentState } from "../models/document";
@@ -121,7 +122,7 @@ const DocumentPanel = ({
   onAnalysisResultsRef,
   isGenerating,
 }: DocumentPanelProps) => {
-  // Initialize document state using the model helper
+  const { _ } = useLingui();
   const [doc, setDoc] = useState<DocumentState>(() =>
     DocumentModel.createInitialState("Analysis Workspace", content),
   );
@@ -148,8 +149,6 @@ const DocumentPanel = ({
     externalOutputContent !== undefined
       ? externalOutputContent
       : internalOutputContent;
-
-  // Sync tab on content changes
   useEffect(() => {
     if (externalOutputContent) {
       setActiveTab("output");
@@ -170,7 +169,6 @@ const DocumentPanel = ({
   const setOutputContent = onOutputChange || setInternalOutputContent;
   const streamCleanupRef = useRef<(() => void) | null>(null);
 
-  // Derived stats using the model logic
   const stats = DocumentModel.getStats(doc);
 
   const handleContentChange = (newContent: string) => {
@@ -192,7 +190,6 @@ const DocumentPanel = ({
     const textToProcess = selectedText || doc.content;
     if (!textToProcess.trim()) return;
 
-    // Switch to results tab to show streaming analysis
     setActiveTab("analysis");
     setIsProcessing(true);
     setResults("");
@@ -303,7 +300,6 @@ const DocumentPanel = ({
     };
   }, [onAnalysisResultsRef]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (streamCleanupRef.current) {
@@ -312,10 +308,8 @@ const DocumentPanel = ({
     };
   }, []);
 
-  // Listen for Markov generation updates from the Header
   useEffect(() => {
     if (isGenerating) {
-      // Switch to Output tab when generation starts
       setActiveTab("output");
     }
   }, [isGenerating]);
@@ -374,7 +368,7 @@ const DocumentPanel = ({
                   <input
                     autoFocus
                     type="text"
-                    placeholder="Search..."
+                    placeholder={_("Search...")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="bg-transparent border-none text-[10px] font-bold  tracking-widest focus:ring-0 p-0 w-full"
@@ -405,10 +399,10 @@ const DocumentPanel = ({
                 style={{ color: "var(--theme-text-muted)" }}
               >
                 {activeTab === "editor"
-                  ? "Source Editor"
+                  ? _("Source Editor")
                   : activeTab === "output"
-                    ? "Native Markov Output"
-                    : "Linguistic Analysis"}
+                    ? _("Native Markov Output")
+                    : _("Linguistic Analysis")}
               </div>
             </div>
           </div>
@@ -416,14 +410,14 @@ const DocumentPanel = ({
             <button
               onClick={handleLoad}
               className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
-              title="Load saved work"
+              title={_("Load saved work")}
             >
               <Icon name="import" size="sm" className="text-slate-500" />
             </button>
             <button
               onClick={handleSave}
               className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
-              title="Save locally"
+              title={_("Save locally")}
             >
               <Icon name="copy" size="sm" className="text-slate-500" />
             </button>
@@ -452,7 +446,7 @@ const DocumentPanel = ({
             }
             onClick={() => setActiveTab("editor")}
           >
-            Input Source
+            {_("Input Source")}
           </button>
           <button
             className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
@@ -470,7 +464,7 @@ const DocumentPanel = ({
             }
             onClick={() => setActiveTab("output")}
           >
-            Markov Output
+            {_("Markov Output")}
           </button>
           <button
             className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
@@ -488,7 +482,7 @@ const DocumentPanel = ({
             }
             onClick={() => setActiveTab("analysis")}
           >
-            Analysis View
+            {_("Analysis View")}
           </button>
         </div>
 
@@ -510,7 +504,7 @@ const DocumentPanel = ({
                   onSelect={handleSelection}
                   className="w-full h-full p-6 bg-transparent border-none text-lg leading-relaxed focus:outline-none focus:ring-0 resize-none font-serif placeholder:text-slate-300 dark:placeholder:text-slate-700 overflow-y-auto scrollbar-thin relative z-10"
                   style={{ color: "var(--theme-text)" }}
-                  placeholder="Start typing your document for C++ linguistic processing..."
+                  placeholder={_("Start typing your document for C++ linguistic processing...")}
                   spellCheck="false"
                 />
               </div>
@@ -523,8 +517,8 @@ const DocumentPanel = ({
                   style={{ color: "var(--theme-text-muted)" }}
                 >
                   <div className="flex gap-4 items-center">
-                    <span>{stats.wordCount} WORDS</span>
-                    <span>{stats.charCount} CHARS</span>
+                    <span>{stats.wordCount} {_("WORDS")}</span>
+                    <span>{stats.charCount} {_("CHARS")}</span>
                     {selectedText && (
                       <span
                         className="lowercase opacity-80 italic"
@@ -545,13 +539,13 @@ const DocumentPanel = ({
                       style={{ color: "var(--theme-danger)" }}
                     >
                       <Icon name="search" size="xs" />
-                      {highlights.length} DUPLICATES FOUND
+                      {highlights.length} {_("DUPLICATES FOUND")}
                     </span>
                   ) : (
                     <span
                       style={{ color: "var(--theme-text-muted)", opacity: 0.5 }}
                     >
-                      0 DUPLICATES
+                      {_("0 DUPLICATES")}
                     </span>
                   )}
                 </div>
@@ -560,7 +554,7 @@ const DocumentPanel = ({
                     onClick={handleClear}
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
                   >
-                    Clear
+                    {_("Clear")}
                   </button>
                   <button
                     onClick={handleProcessText}
@@ -581,7 +575,7 @@ const DocumentPanel = ({
                         : {}
                     }
                   >
-                    Analyze Source
+                    {_("Analyze Source")}
                   </button>
                 </div>
               </div>
@@ -593,7 +587,7 @@ const DocumentPanel = ({
               {isGenerating && (
                 <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-indigo-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg">
                   <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                  Streaming from C++
+                  {_("Streaming from C++")}
                 </div>
               )}
               <div className="relative group overflow-hidden rounded-xl border border-transparent focus-within:border-indigo-500/30 transition-colors bg-slate-50/30 dark:bg-slate-900/30 shadow-inner h-80">
@@ -618,7 +612,7 @@ const DocumentPanel = ({
                       highlighter.scrollTop = target.scrollTop;
                     }
                   }}
-                  placeholder="Markov generation output will appear here..."
+                  placeholder={_("Markov generation output will appear here...")}
                 />
               </div>
               <div
@@ -629,10 +623,7 @@ const DocumentPanel = ({
                   className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  <span>
-                    {(outputContent || "").split(/\s+/).filter(Boolean).length}{" "}
-                    GEN. WORDS
-                  </span>
+                  <span>{(outputContent || "").split(/\s+/).filter(Boolean).length} {_("GEN. WORDS")}</span>
                   <button
                     onClick={async () => {
                       const text = outputContent || "";
@@ -704,7 +695,7 @@ const DocumentPanel = ({
                     }}
                   >
                     <Icon name="search" size="xs" />
-                    <span>{outputDuplicates} DUPS</span>
+                    <span>{outputDuplicates} {_("DUPS")}</span>
                   </button>
                 </div>
                 <div className="flex gap-2">
@@ -712,13 +703,13 @@ const DocumentPanel = ({
                     onClick={() => setOutputContent("")}
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
                   >
-                    Reset
+                    {_("Reset")}
                   </button>
                   <button
                     onClick={() => handleContentChange(outputContent)}
                     className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
                   >
-                    Use as Input
+                    {_("Use as Input")}
                   </button>
                 </div>
               </div>
@@ -737,7 +728,7 @@ const DocumentPanel = ({
                     className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
                     style={{ color: "var(--theme-text-muted)" }}
                   >
-                    Engine Insight
+                    {_("Engine Insight")}
                   </span>
                 </div>
                 <button
@@ -745,7 +736,7 @@ const DocumentPanel = ({
                   className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 transition-colors"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  Clear Results
+                  {_("Clear Results")}
                 </button>
               </div>
               <div

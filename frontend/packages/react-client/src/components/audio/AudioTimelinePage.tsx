@@ -17,6 +17,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useLingui } from "@lingui/react";
 import AudioTimeline from "./AudioTimeline";
 import { AudioSampleBrowser, SAMPLE_DRAG_TYPE } from "./AudioSampleBrowser";
 import { CsdEditor } from "./CsdEditor";
@@ -42,11 +43,10 @@ interface AudioTimelinePageProps {
 const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
   const [tracks, setTracks] = useState<AudioTrack[]>(EMPTY_TRACKS);
   const [renderDialogOpen, setRenderDialogOpen] = useState(false);
+  const { _ } = useLingui();
 
-  // Csound engine (for loading samples)
   const csound = useCsound();
 
-  // Shared patch store for PatchBlock instrument tracks
   const patchStore = usePatchStore();
 
   const arr = useArrangement();
@@ -184,17 +184,14 @@ const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, instrument } : t));
   }, []);
 
-  /** Fired by AudioTimeline when a PatchBlock step fires */
   const handleTriggerPatch = useCallback((patchId: string, duration: number) => {
     patchStore.triggerPatch(patchId, undefined, duration);
   }, [patchStore]);
 
-  /** Fired when the user picks a patch for a PatchBlock track */
   const handlePatchIdChange = useCallback((trackId: string, patchId: string) => {
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, patchId } : t));
   }, []);
 
-  // Sync schedulerMuted on mount
   useEffect(() => {
     setTracks(prev => {
       const anySoloed = prev.some(t => t.solo);
@@ -206,11 +203,10 @@ const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
   return (
     <div className="h-full flex flex-col bg-[var(--theme-bg)] overflow-hidden">
 
-      {/*  Page header  */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--theme-border)]
                       bg-[var(--theme-surface)] shrink-0">
         <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
-          Studio
+          {_("Studio")}
         </span>
         <span className="text-[10px] text-[var(--theme-text-muted)] opacity-50">
           {tracks.length} track{tracks.length !== 1 ? "s" : ""}
@@ -233,23 +229,20 @@ const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
 
         <div className="flex-1" />
 
-        {/* Offline render button */}
         <button
           onClick={() => setRenderDialogOpen(true)}
           className="text-[10px] px-2 py-1 rounded border border-[var(--theme-border)]
                      text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
                      hover:border-[var(--theme-primary)] transition-colors font-semibold"
-          title="Offline render to WAV"
+          title={_("Offline render to WAV")}
         >
-          ⬇ WAV
+          {_("⬇ WAV")}
         </button>
       </div>
 
-      {/* ── Four-panel body ───────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* Far-left: Pattern Arranger */}
-        <ResizablePanel label="Patterns" side="left" defaultWidth={190} minWidth={150} maxWidth={320}>
+        <ResizablePanel label={_("Patterns")} side="left" defaultWidth={190} minWidth={150} maxWidth={320}>
           <SectionArranger
             sections={arr.arrangement.sections}
             activeSectionIdx={arr.activeSectionIdx}
@@ -267,8 +260,7 @@ const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
           />
         </ResizablePanel>
 
-        {/* Left: Sample browser */}
-        <ResizablePanel label="Samples" side="left" defaultWidth={220} minWidth={160} maxWidth={400}>
+        <ResizablePanel label={_("Samples")} side="left" defaultWidth={220} minWidth={160} maxWidth={400}>
           <AudioSampleBrowser
             workingDir={workingDir}
             onSampleSelect={handleSampleDrop}
@@ -276,7 +268,6 @@ const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
           />
         </ResizablePanel>
 
-        {/* Center: Step sequencer */}
         <main
           className="flex-1 min-w-0 overflow-hidden"
           onDragOver={e => {
@@ -315,8 +306,7 @@ const AudioTimelinePage = ({ workingDir }: AudioTimelinePageProps) => {
           />
         </main>
 
-        {/* Right: CSD editor */}
-        <ResizablePanel label="CSD" side="right" defaultWidth={280} minWidth={180} maxWidth={600} defaultOpen={false}>
+        <ResizablePanel label={_("CSD")} side="right" defaultWidth={280} minWidth={180} maxWidth={600} defaultOpen={false}>
           <CsdEditor className="h-full" />
         </ResizablePanel>
       </div>

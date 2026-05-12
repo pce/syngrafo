@@ -13,6 +13,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { useLingui } from "@lingui/react";
 import { Icon } from "../Icon";
 
 
@@ -36,6 +37,7 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
   // Guard: never call setState after unmount (stops WebKit from throwing
   // "Attempted to assign to readonly property" on the media element).
   const mountedRef   = useRef(true);
+  const { _ } = useLingui();
 
   const [playing,     setPlaying]     = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -174,12 +176,12 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     if (!mountedRef.current) return;
     const code = (e.currentTarget.error?.code ?? 0);
     const msgs: Record<number, string> = {
-      1: "Playback aborted", 2: "Network error",
-      3: "Decode error",     4: "Format not supported",
+      1: _("Playback aborted"), 2: _("Network error"),
+      3: _("Decode error"),     4: _("Format not supported"),
     };
-    setError(msgs[code] ?? "Playback failed");
+    setError(msgs[code] ?? _("Playback failed"));
     setPlaying(false); setStalled(false);
-  }, []);
+  }, [_]);
 
   const retry = useCallback(() => {
     const v = videoRef.current;
@@ -219,7 +221,7 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
       onMouseMove={scheduleHide}
       onMouseEnter={scheduleHide}
     >
-      {/* ── Video element — NEVER keyed, src swapped via DOM ref ──────────── */}
+      {/* NEVER keyed: src is swapped via DOM ref to avoid decoder/A-V desyncs. */}
       <video
         ref={videoRef}
         preload="auto"
@@ -241,29 +243,26 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
         onClick={togglePlay}
       />
 
-      {/* ── Buffering spinner ─────────────────────────────────────────────── */}
       {stalled && !error && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <span className="w-12 h-12 border-2 border-white/20 border-t-white rounded-full animate-spin" />
         </div>
       )}
 
-      {/* ── Error overlay ─────────────────────────────────────────────────── */}
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 text-white p-6">
           <Icon name="warning" size="lg" className="opacity-50" />
           <p className="text-sm font-bold">{error}</p>
-          <p className="text-[10px] opacity-60">The format may not be supported by the system WebView.</p>
+          <p className="text-[10px] opacity-60">{_("The format may not be supported by the system WebView.")}</p>
           <button
             onClick={retry}
             className="mt-1 text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition-colors"
           >
-            Retry
+            {_("Retry")}
           </button>
         </div>
       )}
 
-      {/* ── Play/pause click area ─────────────────────────────────────────── */}
       {!error && !playing && !stalled && (
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
@@ -277,7 +276,6 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
         </div>
       )}
 
-      {/* ── Controls bar ──────────────────────────────────────────────────── */}
       {!error && (
         <div
           className="absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 px-3 pt-6 pb-2.5"
@@ -288,38 +286,32 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
             pointerEvents: showControls ? "auto" : "none",
           }}
         >
-          {/* ── Seek bar ──────────────────────────────────────────────────── */}
           <div className="relative h-5 flex items-center group/seek">
-            {/* Track */}
             <div className="w-full h-1 rounded-full bg-white/20 overflow-hidden relative">
-              {/* Buffered */}
               <div
                 className="absolute inset-y-0 left-0 bg-white/35 rounded-full pointer-events-none"
                 style={{ width: `${buffered * 100}%` }}
               />
-              {/* Played */}
               <div
                 className="absolute inset-y-0 left-0 bg-white rounded-full pointer-events-none"
                 style={{ width: `${Math.min((currentTime / Math.max(duration, 0.001)) * 100, 100)}%` }}
               />
             </div>
-            {/* Range input (transparent overlay for interaction) */}
+            {/* Transparent range overlay for seek interaction */}
             <input
               type="range" min="0" max="10000" step="1"
               value={Math.round(progress)}
               onChange={seek}
               className="absolute inset-0 w-full opacity-0 cursor-pointer"
-              aria-label="Seek"
+              aria-label={_("Seek")}
             />
           </div>
 
-          {/* ── Button row ────────────────────────────────────────────────── */}
           <div className="flex items-center gap-2 text-white select-none">
-            {/* Play / Pause */}
             <button
               onClick={togglePlay}
               className="p-1 hover:opacity-80 shrink-0"
-              aria-label={playing ? "Pause" : "Play"}
+              aria-label={playing ? _("Pause") : _("Play")}
             >
               {playing ? (
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -333,8 +325,7 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
               )}
             </button>
 
-            {/* Volume */}
-            <button onClick={toggleMute} className="p-1 hover:opacity-80 shrink-0" aria-label="Toggle mute">
+            <button onClick={toggleMute} className="p-1 hover:opacity-80 shrink-0" aria-label={_("Toggle mute")}>
               {muted || volume === 0 ? (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -358,20 +349,18 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
               value={muted ? 0 : Math.round(volume * 100)}
               onChange={changeVolume}
               className="w-14 h-1 accent-white cursor-pointer shrink-0"
-              aria-label="Volume"
+              aria-label={_("Volume")}
             />
 
-            {/* Time */}
             <span className="text-[10px] font-mono ml-1 tabular-nums whitespace-nowrap">
               {fmtTime(currentTime)}
               <span className="opacity-40"> / {fmtTime(duration)}</span>
             </span>
 
-            {/* Fullscreen — pushed right */}
             <button
               onClick={toggleFullscreen}
               className="ml-auto p-1 hover:opacity-80 shrink-0"
-              aria-label="Fullscreen"
+              aria-label={_("Fullscreen")}
             >
               {isFullscreen ? (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

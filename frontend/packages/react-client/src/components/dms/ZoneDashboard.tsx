@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useLingui } from "@lingui/react";
 import { useDms } from "../../store/dms-store";
 import { dms, type Bookmark, type DiskUsageInfo, type ZoneDiskUsage } from "@/services/dms-service.ts";
 import { Icon } from "../Icon";
@@ -23,56 +24,58 @@ import { useNetHealth } from "../../hooks/useNetHealth";
 const IC = (n: string) => n as IconName;
 
 
-// ZoneInfoWidget
 const ZoneInfoWidget: React.FC<{
   zone: { name: string; description: string; taxonomy_domain: string; in_path: string; out_path: string };
   onEdit: () => void;
-}> = ({ zone, onEdit }) => (
-  <Widget title="Zone" icon={<Icon name={IC("layers")} size="xs" />}>
-    <div className="flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-black text-[var(--theme-text)] truncate">{zone.name}</p>
-          {zone.taxonomy_domain && zone.taxonomy_domain !== "General" && (
-            <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] opacity-70">
-              {zone.taxonomy_domain}
-            </span>
-          )}
+}> = ({ zone, onEdit }) => {
+  const { _ } = useLingui();
+  return (
+    <Widget title={_("Zone")} icon={<Icon name={IC("layers")} size="xs" />}>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-[var(--theme-text)] truncate">{zone.name}</p>
+            {zone.taxonomy_domain && zone.taxonomy_domain !== "General" && (
+              <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] opacity-70">
+                {zone.taxonomy_domain}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onEdit}
+            className="shrink-0 p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] transition-colors"
+            title={_("Edit Zone")}
+          >
+            <Icon name="edit" size="xs" />
+          </button>
         </div>
-        <button
-          onClick={onEdit}
-          className="shrink-0 p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] transition-colors"
-          title="Edit Zone"
-        >
-          <Icon name="edit" size="xs" />
-        </button>
+        {zone.description && (
+          <p className="text-[11px] text-[var(--theme-text-muted)] leading-relaxed line-clamp-3">
+            {zone.description}
+          </p>
+        )}
+        <div className="mt-1 flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5 text-[9px] text-[var(--theme-text-muted)] font-mono truncate">
+            <Icon name="folder" size="xs" />
+            <span className="truncate">{zone.in_path}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] text-[var(--theme-text-muted)] font-mono truncate">
+            <Icon name="database" size="xs" />
+            <span className="truncate">{zone.out_path}</span>
+          </div>
+        </div>
       </div>
-      {zone.description && (
-        <p className="text-[11px] text-[var(--theme-text-muted)] leading-relaxed line-clamp-3">
-          {zone.description}
-        </p>
-      )}
-      <div className="mt-1 flex flex-col gap-0.5">
-        <div className="flex items-center gap-1.5 text-[9px] text-[var(--theme-text-muted)] font-mono truncate">
-          <Icon name="folder" size="xs" />
-          <span className="truncate">{zone.in_path}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-[9px] text-[var(--theme-text-muted)] font-mono truncate">
-          <Icon name="database" size="xs" />
-          <span className="truncate">{zone.out_path}</span>
-        </div>
-      </div>
-    </div>
-  </Widget>
-);
+    </Widget>
+  );
+};
 
-// BookmarksWidget
 const BookmarksWidget: React.FC<{
   bookmarks: Bookmark[];
   zoneName: string;
   onNavigate: (path: string, isDir: boolean) => void;
   onManage: () => void;
 }> = ({ bookmarks, zoneName, onNavigate, onManage }) => {
+  const { _ } = useLingui();
   const handleGoTo = async (bm: Bookmark) => {
     const res = await dms.bookmark.resolve(zoneName, bm.target);
     if (res.ok && res.data?.abs_path)
@@ -81,16 +84,16 @@ const BookmarksWidget: React.FC<{
 
   return (
     <Widget
-      title="Bookmarks"
+      title={_("Bookmarks")}
       icon={<Icon name="bookmark" size="xs" />}
       className="col-span-2"
     >
       {bookmarks.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-4 text-center">
           <Icon name="bookmark" size="md" className="text-[var(--theme-text-muted)] opacity-30" />
-          <p className="text-[11px] text-[var(--theme-text-muted)]">No bookmarks yet.</p>
+          <p className="text-[11px] text-[var(--theme-text-muted)]">{_("No bookmarks yet.")}</p>
           <button onClick={onManage} className="text-[10px] font-bold text-[var(--theme-primary)] hover:underline">
-            Manage Bookmarks →
+            {_("Manage Bookmarks →")}
           </button>
         </div>
       ) : (
@@ -136,17 +139,18 @@ const BookmarksWidget: React.FC<{
 
 interface StatsData { total: number; indexed: number; lastIndexed?: number }
 
-/** Pure render — data fetching is owned by ZoneDashboard. */
-const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => (
-    <Widget title="Overview" icon={<Icon name={IC("trending-up")} size="xs" />}>
+const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => {
+  const { _ } = useLingui();
+  return (
+    <Widget title={_("Overview")} icon={<Icon name={IC("trending-up")} size="xs" />}>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-0.5">
           <span className="text-2xl font-black text-[var(--theme-text)]">{data?.total ?? "–"}</span>
-          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">Docs indexed</span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">{_("Docs indexed")}</span>
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-2xl font-black text-[var(--theme-text)]">{data?.indexed ?? "–"}</span>
-          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">Searchable</span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">{_("Searchable")}</span>
         </div>
         {data?.lastIndexed && data.lastIndexed > 0 && (
           <div className="col-span-2 flex items-center gap-1.5 mt-1">
@@ -158,13 +162,11 @@ const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => (
         )}
       </div>
     </Widget>
-);
+  );
+};
 
-/**
- * Zone color palette — stores brand / project styleguide colors per zone.
- * Persisted to localStorage keyed by zone name (future: zone DB).
- */
 const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
+  const { _ } = useLingui();
   const storageKey = `zone_palette_${zoneName}`;
 
   const [colors, setColors] = useState<string[]>(() => {
@@ -190,16 +192,15 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
 
   return (
     <Widget
-      title="Color Palette"
+      title={_("Color Palette")}
       icon={<Icon name={IC("color-swatch")} size="xs" />}
       className="col-span-2"
     >
       <div className="flex flex-col gap-3">
         <p className="text-[10px] text-[var(--theme-text-muted)] leading-relaxed">
-          Brand / project styleguide colours saved to this Zone.
+          {_("Brand / project styleguide colours saved to this Zone.")}
         </p>
 
-        {/* Colour swatches */}
         <div className="flex flex-wrap gap-2 items-center">
           {colors.map((c) => (
             <div key={c} className="relative group">
@@ -211,14 +212,13 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
               <button
                 onClick={() => removeColor(c)}
                 className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[var(--theme-danger)] text-white text-[8px] hidden group-hover:flex items-center justify-center leading-none"
-                title="Remove"
+                title={_("Remove")}
               >
                 ×
               </button>
             </div>
           ))}
 
-          {/* Add colour button */}
           {picker ? (
             <div className="flex items-center gap-1.5">
               <input
@@ -231,27 +231,26 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
                 onClick={addColor}
                 className="px-2 py-1 text-[9px] font-black rounded-lg bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 transition-opacity"
               >
-                Add
+                {_("Add")}
               </button>
               <button
                 onClick={() => setPicker(false)}
                 className="px-2 py-1 text-[9px] font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors"
               >
-                Cancel
+                {_("Cancel")}
               </button>
             </div>
           ) : (
             <button
               onClick={() => setPicker(true)}
               className="w-9 h-9 rounded-xl border-2 border-dashed border-[var(--theme-border)] hover:border-[var(--theme-primary)]/60 flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
-              title="Add colour"
+              title={_("Add colour")}
             >
               <Icon name="plus" size="xs" />
             </button>
           )}
         </div>
 
-        {/* Hex values */}
         {colors.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {colors.map((c) => (
@@ -268,7 +267,6 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
 };
 
 
-/** Format bytes → human-readable string (no library, no rounding surprises). */
 function humanSize(bytes: number): string {
   if (bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
@@ -277,7 +275,6 @@ function humanSize(bytes: number): string {
   return `${i === 0 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
 }
 
-/** SVG donut ring — pure CSS, no chart library. */
 const Donut: React.FC<{
   ratio: number;       // 0.0 – 1.0
   size?: number;       // viewBox size (default 80)
@@ -292,10 +289,8 @@ const Donut: React.FC<{
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      {/* background track */}
       <circle cx={cx} cy={cx} r={r} fill="none"
         stroke={bg} strokeWidth={stroke} />
-      {/* used arc */}
       <circle cx={cx} cy={cx} r={r} fill="none"
         stroke={color} strokeWidth={stroke}
         strokeDasharray={`${used} ${circ}`}
@@ -305,8 +300,8 @@ const Donut: React.FC<{
   );
 };
 
-/** Disk-usage row for one path (in_path or out_path). */
 const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label, info }) => {
+  const { _ } = useLingui();
   const pct = Math.round(info.usedRatio * 100);
   // Color gradient: green → amber → red by usage
   const color =
@@ -325,7 +320,6 @@ const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label,
           <span className="text-[10px] font-black tabular-nums"
             style={{ color }}>{pct}%</span>
         </div>
-        {/* bar */}
         <div className="h-1 rounded-full overflow-hidden bg-[var(--theme-border)]">
           <div
             className="h-full rounded-full transition-[width] duration-500"
@@ -334,10 +328,10 @@ const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label,
         </div>
         <div className="flex justify-between mt-1">
           <span className="text-[9px] text-[var(--theme-text-muted)] font-mono">
-            {humanSize(info.used)} used
+            {humanSize(info.used)} {_("used")}
           </span>
           <span className="text-[9px] text-[var(--theme-text-muted)] font-mono">
-            {humanSize(info.available)} free
+            {humanSize(info.available)} {_("free")}
           </span>
         </div>
         <p className="text-[8px] text-[var(--theme-text-muted)] font-mono truncate mt-0.5 opacity-60">
@@ -354,18 +348,19 @@ interface DiskUsageState {
   error:   string | null;
 }
 
-/** Pure render — data fetching is owned by ZoneDashboard. */
-const DiskUsageWidget: React.FC<DiskUsageState> = ({ data, loading, error }) => (
-    <Widget title="Disk Usage" icon={<Icon name={IC("database")} size="xs" />}>
+const DiskUsageWidget: React.FC<DiskUsageState> = ({ data, loading, error }) => {
+  const { _ } = useLingui();
+  return (
+    <Widget title={_("Disk Usage")} icon={<Icon name={IC("database")} size="xs" />}>
       {loading ? (
-        <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">Loading…</p>
+        <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">{_("Loading…")}</p>
       ) : error ? (
         <p className="text-[10px] text-[var(--theme-danger,#ef4444)]">{error}</p>
       ) : data ? (
         <div className="flex flex-col gap-4">
-          <DiskUsageRow label="Input path" info={data.in_path} />
+          <DiskUsageRow label={_("Input path")} info={data.in_path} />
           {data.out_path && (
-            <DiskUsageRow label="Workspace" info={data.out_path} />
+            <DiskUsageRow label={_("Workspace")} info={data.out_path} />
           )}
           <p className="text-[8px] text-[var(--theme-text-muted)] opacity-50 leading-tight">
             Volume capacity: {humanSize(data.in_path.capacity)}
@@ -373,9 +368,9 @@ const DiskUsageWidget: React.FC<DiskUsageState> = ({ data, loading, error }) => 
         </div>
       ) : null}
     </Widget>
-);
+  );
+};
 
-//  ZoneModeBadge
 const ZONE_MODE_LABELS: Record<string, { label: string; icon: string }> = {
   "general":              { label: "General",               icon: "layers"  },
   "document-management":  { label: "Document Management",   icon: "document" },
@@ -387,30 +382,31 @@ const ZONE_MODE_LABELS: Record<string, { label: string; icon: string }> = {
 };
 
 const ZoneModeBadge: React.FC<{ mode: string }> = ({ mode }) => {
+  const { _ } = useLingui();
   const meta = ZONE_MODE_LABELS[mode] ?? ZONE_MODE_LABELS["general"];
   if (!meta) return null;
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest"
       style={{ background: "var(--theme-border)", color: "var(--theme-text-muted)" }}>
       <Icon name={IC(meta.icon)} size="xs" />
-      {meta.label}
+      {_(meta.label)}
     </span>
   );
 };
 
-// QuickActionsWidget
 const QuickActionsWidget: React.FC<{
   onManageBookmarks: () => void;
   onEditZone: () => void;
   onTheme: () => void;
 }> = ({ onManageBookmarks, onEditZone, onTheme }) => {
+  const { _ } = useLingui();
   const actions = [
-    { icon: "bookmark" as const, label: "Bookmarks",  action: onManageBookmarks  },
-    { icon: "edit"     as const, label: "Edit Zone",   action: onEditZone        },
-    { icon: "sparkles" as const, label: "Theme",       action: onTheme           },
+    { icon: "bookmark" as const, label: _("Bookmarks"),  action: onManageBookmarks  },
+    { icon: "edit"     as const, label: _("Edit Zone"),   action: onEditZone        },
+    { icon: "sparkles" as const, label: _("Theme"),       action: onTheme           },
   ];
   return (
-    <Widget title="Quick Actions" icon={<Icon name={IC("star")} size="xs" />}>
+    <Widget title={_("Quick Actions")} icon={<Icon name={IC("star")} size="xs" />}>
       <div className="flex flex-col gap-1">
         {actions.map(({ icon, label, action }) => (
           <button
@@ -444,6 +440,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
   onClose,
 }) => {
   const { state } = useDms();
+  const { _ } = useLingui();
   const zone = state.zone;
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
@@ -494,7 +491,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1">
             <h1 className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-0.5">
-              Zone Dashboard
+              {_("Zone Dashboard")}
             </h1>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xl font-black text-[var(--theme-text)]">{zone.name}</span>
@@ -504,7 +501,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              title="Close dashboard"
+              title={_("Close dashboard")}
               className="p-1.5 rounded-lg hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
             >
               <Icon name="close" size="xs" />
@@ -512,15 +509,12 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
           )}
         </div>
 
-        {/* Widget grid — responsive 3-col layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-auto">
 
-          {/* [ col 0-1 ] Date & Time — spans 2 cols */}
           <div className="sm:col-span-2 lg:col-span-2">
             <WelcomeToDayWidget zoneName={zone.name} />
           </div>
 
-          {/* [ col 2 ] Zone Info */}
           <div className="sm:col-span-2 lg:col-span-1">
             <ZoneInfoWidget
               zone={zone}
@@ -528,7 +522,6 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
             />
           </div>
 
-          {/* Bookmarks — spans 2 */}
           <div className="sm:col-span-2 lg:col-span-2">
             <BookmarksWidget
               bookmarks={bookmarks}
@@ -538,7 +531,6 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
             />
           </div>
 
-          {/* Quick actions */}
           <div className="sm:col-span-2 lg:col-span-1">
             <QuickActionsWidget
               onManageBookmarks={onManageBookmarks}
@@ -547,22 +539,18 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
             />
           </div>
 
-          {/* Stats */}
           <div className="sm:col-span-1 lg:col-span-1">
             <StatsWidget data={statsData} />
           </div>
 
-          {/* Disk Usage */}
           <div className="sm:col-span-1 lg:col-span-2">
             <DiskUsageWidget data={diskData} loading={diskLoading} error={diskError} />
           </div>
 
-          {/* Color Palette */}
           <div className="sm:col-span-2 lg:col-span-2">
             <ColorPaletteWidget zoneName={zone.name} />
           </div>
 
-          {/* Net Health — fills last col */}
           <div className="sm:col-span-2 lg:col-span-1">
             <NetHealthWidget {...netHealth} />
           </div>

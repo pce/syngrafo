@@ -12,7 +12,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-# ── Navigation ────────────────────────────────────────────────────────────────
+# Navigation
 msgid "Explorer"
 msgstr "Explorer"
 
@@ -25,7 +25,7 @@ msgstr "Einstellungen"
 msgid "About"
 msgstr "Über"
 
-# ── FileBrowser ───────────────────────────────────────────────────────────────
+# FileBrowser
 msgid "Name"
 msgstr "Name"
 
@@ -98,3 +98,60 @@ msgstr "Wird indiziert…"
 msgid "No results"
 msgstr "Keine Ergebnisse"
 
+# PatchWorkstation
+msgid "Patcher"
+msgstr "Patcher"
+
+msgid "Browse patches in the left panel"
+msgstr "Patches im linken Panel anzeigen"
+
+msgid "No patch"
+msgstr "Kein Patch"
+
+msgid "+ PatternBlock"
+msgstr "+ PatternBlock"
+
+msgid "Patterns"
+msgstr "Muster"
+
+msgid "Patches"
+msgstr "Patches"
+
+msgid "Matrix"
+msgstr "Matrix"
+
+msgid "XY Pads"
+msgstr "XY-Pads"
+
+msgid "Stop"
+msgstr "Stopp"
+
+msgid "Compile+Play"
+msgstr "Kompilieren+Spielen"
+
+msgid "Default Patch"
+msgstr "Standard-Patch"
+
+msgid "Click + PatternBlock to start patching"
+msgstr "Klicke + PatternBlock zum Patchen"
+
+msgid "Add a PatchBlock track in the Sequencer and pick this patch."
+msgstr "PatchBlock-Spur im Sequencer hinzufügen und diesen Patch auswählen."
+
+msgid "Click to load · double-click to rename"
+msgstr "Klicken zum Laden · Doppelklick zum Umbenennen"
+
+msgid "Delete patch"
+msgstr "Patch löschen"
+
+msgid "patches"
+msgstr "Patches"
+
+msgid "New patch name…"
+msgstr "Neuer Patch-Name…"
+
+msgid "+ New Patch"
+msgstr "+ Neuer Patch"
+
+msgid "Add an XY Pad block to see it here"
+msgstr "XY-Pad-Block hinzufügen um ihn hier zu sehen"

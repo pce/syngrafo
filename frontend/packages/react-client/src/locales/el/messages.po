@@ -12,7 +12,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-# ── Navigation ────────────────────────────────────────────────────────────────
+# Navigation
 msgid "Explorer"
 msgstr "Εξερευνητής"
 
@@ -25,7 +25,7 @@ msgstr "Ρυθμίσεις"
 msgid "About"
 msgstr "Σχετικά"
 
-# ── FileBrowser ───────────────────────────────────────────────────────────────
+# FileBrowser
 msgid "Name"
 msgstr "Όνομα"
 
@@ -59,7 +59,7 @@ msgstr "Φόρτωση…"
 msgid "Empty folder"
 msgstr "Κενός φάκελος"
 
-# ── DocumentViewer ────────────────────────────────────────────────────────────
+# DocumentViewer
 msgid "Run OCR"
 msgstr "Εκτέλεση OCR"
 
@@ -69,7 +69,7 @@ msgstr "Εκτέλεση OCR…"
 msgid "No document selected"
 msgstr "Δεν έχει επιλεγεί έγγραφο"
 
-# ── AnalysisPanel ─────────────────────────────────────────────────────────────
+# AnalysisPanel
 msgid "Keywords"
 msgstr "Λέξεις-κλειδιά"
 
@@ -91,10 +91,67 @@ msgstr "Θετικό"
 msgid "Negative"
 msgstr "Αρνητικό"
 
-# ── OCR / processing ──────────────────────────────────────────────────────────
+# OCR / processing
 msgid "Indexing…"
 msgstr "Ευρετηρίαση…"
 
 msgid "No results"
 msgstr "Δεν υπάρχουν αποτελέσματα"
 
+# PatchWorkstation
+msgid "Patcher"
+msgstr "Patcher"
+
+msgid "Browse patches in the left panel"
+msgstr "Προβολή patches στον αριστερό πίνακα"
+
+msgid "No patch"
+msgstr "Κανένα patch"
+
+msgid "+ PatternBlock"
+msgstr "+ PatternBlock"
+
+msgid "Patterns"
+msgstr "Μοτίβα"
+
+msgid "Patches"
+msgstr "Patches"
+
+msgid "Matrix"
+msgstr "Μήτρα"
+
+msgid "XY Pads"
+msgstr "XY Pads"
+
+msgid "Stop"
+msgstr "Διακοπή"
+
+msgid "Compile+Play"
+msgstr "Μεταγλώττιση+Αναπαραγωγή"
+
+msgid "Default Patch"
+msgstr "Προεπιλεγμένο Patch"
+
+msgid "Click + PatternBlock to start patching"
+msgstr "Κλικ + PatternBlock για να ξεκινήσετε"
+
+msgid "Add a PatchBlock track in the Sequencer and pick this patch."
+msgstr "Προσθέστε κανάλι PatchBlock στον Sequencer και επιλέξτε αυτό το patch."
+
+msgid "Click to load · double-click to rename"
+msgstr "Κλικ για φόρτωση · διπλό κλικ για μετονομασία"
+
+msgid "Delete patch"
+msgstr "Διαγραφή patch"
+
+msgid "patches"
+msgstr "patches"
+
+msgid "New patch name…"
+msgstr "Νέο όνομα patch…"
+
+msgid "+ New Patch"
+msgstr "+ Νέο Patch"
+
+msgid "Add an XY Pad block to see it here"
+msgstr "Προσθέστε μπλοκ XY Pad για να το δείτε εδώ"

@@ -1,13 +1,5 @@
-/**
- * ThemePanel.tsx — Slide-over panel for customising the app theme.
- *
- * Tabs:
- *  • Presets   — grid of built-in colour themes
- *  • Colors    — colour pickers for each slot
- *  • Appearance — radius + density pickers
- */
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useLingui } from "@lingui/react";
 import { useTheme, THEME_PRESETS, FONT_PAIRS } from "../store/theme-store";
 import type { ThemePreset, FontPair } from "../store/theme-store";
 import { useSettings } from "../store/settings-store";
@@ -53,7 +45,7 @@ const PresetCard: React.FC<{
 }> = ({ preset, active, onSelect }) => (
   <button
     onClick={onSelect}
-    title={preset.name}
+  title={preset.name}
     className={`
       group relative flex flex-col gap-1.5 p-2.5 rounded-xl border-2 transition-all text-left
       ${active
@@ -62,20 +54,17 @@ const PresetCard: React.FC<{
     `}
     style={{ background: preset.bg }}
   >
-    {/* Colour row */}
     <div className="flex gap-1">
       {[preset.surface, preset.text, preset.primary, preset.danger].map((c, i) => (
         <span key={i} className="flex-1 h-2 rounded-full" style={{ background: c }} />
       ))}
     </div>
-    {/* Name */}
     <span
       className="text-[10px] font-bold uppercase tracking-wider truncate"
       style={{ color: preset.text }}
     >
       {preset.name}
     </span>
-    {/* Active tick */}
     {active && (
       <span
         className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black"
@@ -107,8 +96,6 @@ const SVG_SIZE_OPTIONS: Array<{ bytes: number; label: string }> = [
   { bytes: 104_857_600,    label: "100 MB"  },
   { bytes: 209_715_200,    label: "200 MB"  },
 ];
-
-// A single compact row: label + help tooltip on the left, control on the right.
 
 const SettingRow: React.FC<{
   label: string;
@@ -152,6 +139,7 @@ function fmt_bytes(bytes: number): string {
 
 
 const ModelsTab: React.FC = () => {
+  const { _ } = useLingui();
   const [catalog, setCatalog] = useState<LlmModelInfo[]>([]);
   const [modelsDir, setModelsDirState] = useState<string>("");
   const [dirInput, setDirInput] = useState<string>("");
@@ -164,7 +152,6 @@ const ModelsTab: React.FC = () => {
     Record<string, boolean> & { ocrEngine?: string };
   const ocrLabel = nlp.ocrEngine === "tesseract" ? "Tesseract" : "Apple Vision";
 
-  // Load catalog + current dir on mount
   useEffect(() => {
     const isConnected = typeof window.saucer?.call === "function";
     if (!isConnected) return;
@@ -173,7 +160,6 @@ const ModelsTab: React.FC = () => {
     models.getModelsDir().then((dir: string) => { setModelsDirState(dir); setDirInput(dir); }).catch(() => {});
   }, []);
 
-  // Poll progress for all active downloads
   const pollProgress = useCallback(async () => {
     for (const [modelId, downloadId] of Object.entries(activeDownloads)) {
       try {
@@ -228,10 +214,9 @@ const ModelsTab: React.FC = () => {
   return (
     <div className="p-3 flex flex-col gap-5">
 
-      {/* ── NLP / ONNX Models ──────────────────────────────────────────── */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          NLP Engine — ONNX Models
+          {_("NLP Engine — ONNX Models")}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
           Managed by <code className="font-mono">scripts/download_models.py</code> — placed in&nbsp;
@@ -249,7 +234,7 @@ const ModelsTab: React.FC = () => {
                   <p className="text-[9px] text-[var(--theme-text-muted)] font-mono truncate">{displayModel}</p>
                 </div>
                 <span className={`text-[9px] font-bold shrink-0 ${active ? "text-emerald-400" : "text-[var(--theme-text-muted)]"}`}>
-                  {active ? "loaded" : size}
+                  {active ? _("loaded") : size}
                 </span>
               </div>
             );
@@ -257,22 +242,21 @@ const ModelsTab: React.FC = () => {
         </div>
       </section>
 
-      {/* ── LLM Model Storage Path ─────────────────────────────────────── */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          LLM Model Storage
+          {_("LLM Model Storage")}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
-          Where GGUF model files are stored. Changes take effect on next launch.
+          {_("Where GGUF model files are stored. Changes take effect on next launch.")}
         </p>
         <div className="flex gap-1.5 items-stretch">
           <input
             type="text" value={dirInput} onChange={(e) => setDirInput(e.target.value)}
-            placeholder={modelsDir || "e.g. ~/Library/Application Support/Syngrafo/models"}
+            placeholder={modelsDir || _("e.g. ~/Library/Application Support/Syngrafo/models")}
             className="flex-1 text-[10px] font-mono px-2 py-1.5 min-w-0 focus:outline-none"
             style={{ background: "var(--theme-bg)", color: "var(--theme-text)", border: "1px solid var(--theme-border)", borderRadius: "var(--theme-radius-sm, 4px)" }}
           />
-          <button onClick={handlePickDir} title="Browse…"
+          <button onClick={handlePickDir} title={_("Browse…")}
             className="shrink-0 px-2 py-1 text-[10px] font-bold border border-[var(--theme-border)] hover:bg-[var(--theme-bg)] transition-colors"
             style={{ borderRadius: "var(--theme-radius-sm, 4px)", color: "var(--theme-text-muted)" }}>
             <Icon name="folder-open" size="xs" />
@@ -280,16 +264,15 @@ const ModelsTab: React.FC = () => {
           <button onClick={handleSaveDir} disabled={!dirInput.trim() || dirInput === modelsDir}
             className="shrink-0 px-2.5 py-1 text-[10px] font-bold bg-[var(--theme-primary)]/80 text-[var(--theme-bg)] disabled:opacity-40 hover:opacity-90 transition-all"
             style={{ borderRadius: "var(--theme-radius-sm, 4px)" }}>
-            {dirSaved ? "✓" : "Save"}
+            {dirSaved ? "✓" : _("Save")}
           </button>
         </div>
-        {dirSaved && <p className="text-[9px] text-amber-400 mt-1">⚠ Restart required for the new path to take effect.</p>}
+        {dirSaved && <p className="text-[9px] text-amber-400 mt-1">{_("⚠ Restart required for the new path to take effect.")}</p>}
       </section>
 
-      {/* ── LLM Catalog ──────────────────────────────────────────────────── */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          LLM Catalog
+          {_("LLM Catalog")}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
           GGUF models downloaded on demand via libcurl.
@@ -299,7 +282,7 @@ const ModelsTab: React.FC = () => {
           <p className="text-[10px] text-[var(--theme-text-muted)] italic">
             {typeof window.saucer?.call === "function"
               ? "No models in catalog — check data/llm_catalog.json."
-              : "Not connected to native host."}
+              : _("Not connected to native host.")}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -331,13 +314,13 @@ const ModelsTab: React.FC = () => {
                   )}
                   <div className="flex gap-1.5 mt-0.5">
                     {m.downloaded ? (
-                      <button onClick={() => handleDelete(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">Delete</button>
+                      <button onClick={() => handleDelete(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">{_("Delete")}</button>
                     ) : isDownloading ? (
-                      <button onClick={() => handleCancel(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-colors">Cancel</button>
+                      <button onClick={() => handleCancel(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-colors">{_("Cancel")}</button>
                     ) : (
-                      <button onClick={() => handleDownload(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-[var(--theme-primary)]/60 text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 transition-colors">↓ Download</button>
+                      <button onClick={() => handleDownload(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-[var(--theme-primary)]/60 text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 transition-colors">{_("↓ Download")}</button>
                     )}
-                    {m.downloaded && <span className="text-[9px] text-emerald-400 font-bold self-center ml-1">✓ Ready</span>}
+                    {m.downloaded && <span className="text-[9px] text-emerald-400 font-bold self-center ml-1">{_("✓ Ready")}</span>}
                   </div>
                 </div>
               );
@@ -351,6 +334,7 @@ const ModelsTab: React.FC = () => {
 
 
 const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
+  const { _ } = useLingui();
   const { theme, setTheme, saveTheme, isSaving: isSavingTheme } = useTheme();
   const { settings, setSetting, saveSettings, isSaving: isSavingSettings } = useSettings();
   const { locale, setLocale } = useLocale();
@@ -404,13 +388,12 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
   const ColorsTab = () => (
     <div className="p-3 flex flex-col gap-5">
 
-      {/* ── Custom colour slots ───────────────────────────────────────────── */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Custom Colours
+          {_("Custom Colours")}
         </h3>
         <p className="text-[10px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
-          Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides.
+          {_("Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides.")}
         </p>
         {COLOR_SLOTS.map(({ label, var: varName }) => {
           const current = getComputedColor(varName);
@@ -443,10 +426,10 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Language */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          Language
+          {_("Language")}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
-          UI language. All catalogs are pre-loaded — switching is instant.
+          {_("UI language. All catalogs are pre-loaded — switching is instant.")}
         </p>
         <div className="grid grid-cols-3 gap-1.5">
           {(Object.entries(LOCALES) as [SupportedLocale, string][]).map(([code, label]) => (
@@ -474,12 +457,12 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Application behaviour */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Application
+          {_("Application")}
         </h3>
         <div className="flex flex-col divide-y divide-[var(--theme-border)]">
           <SettingRow
-            label="Close to Systray"
-            help="Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully."
+            label={_("Close to Systray")}
+            help={_("Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully.")}
           >
             <Toggle
               checked={settings.closeToSystray}
@@ -488,8 +471,8 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             />
           </SettingRow>
           <SettingRow
-            label="Auto-Update"
-            help="Check for updates on startup and offer to install them automatically."
+            label={_("Auto-Update")}
+            help={_("Check for updates on startup and offer to install them automatically.")}
           >
             <Toggle
               checked={settings.autoUpdate}
@@ -503,11 +486,10 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Keyboard & Input */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          Keyboard &amp; Input
+          {_("Keyboard & Input")}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
-          Controls how file selection, navigation and multi-select work in the file browser.
-          Saved immediately — no restart required.
+          {_("Controls how file selection, navigation and multi-select work in the file browser. Saved immediately — no restart required.")}
         </p>
         <div className="flex flex-col gap-1.5">
           {INPUT_MAPPING_PRESETS.map(preset => (
@@ -544,12 +526,12 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Display */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Display
+          {_("Display")}
         </h3>
         <div className="flex flex-col divide-y divide-[var(--theme-border)]">
           <SettingRow
-            label="SVG Inline Preview Limit"
-            help="Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB."
+            label={_("SVG Inline Preview Limit")}
+            help={_("Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB.")}
           >
             <select
               value={settings.svgPreviewMaxBytes}
@@ -580,7 +562,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* ── Theme Presets ─────────────────────────────────────────────────── */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Theme Presets
+          {_("Theme Presets")}
         </h3>
         <div className="grid grid-cols-2 gap-2">
           {THEME_PRESETS.map((p) => (
@@ -594,13 +576,11 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
       </section>
 
-      {/* Divider */}
       <div className="h-px bg-[var(--theme-border)]" />
 
-      {/* Radius */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Corner Radius
+          {_("Corner Radius")}
         </h3>
         <div className="grid grid-cols-5 gap-1.5">
           {RADIUS_OPTIONS.map(({ id, label, preview }) => (
@@ -629,10 +609,9 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
       </section>
 
-      {/* Density */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Density / Font Size
+          {_("Density / Font Size")}
         </h3>
         <div className="grid grid-cols-3 gap-2">
           {DENSITY_OPTIONS.map(({ id, label, icon }) => (
@@ -655,13 +634,11 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
       </section>
 
-      {/* Divider */}
       <div className="h-px bg-[var(--theme-border)]" />
 
-      {/* Typography */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Typography
+          {_("Typography")}
         </h3>
         <div className="flex flex-col gap-1.5">
           {FONT_PAIRS.map((pair) => (
@@ -702,20 +679,19 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
         {theme.density === "compact" && (
           <p className="mt-2 text-[9px] text-[var(--theme-text-muted)] opacity-60">
-            Compact mode removes all corner rounding.
+            {_("Compact mode removes all corner rounding.")}
           </p>
         )}
         {theme.radius === "none" && theme.density !== "compact" && (
           <p className="mt-2 text-[9px] text-[var(--theme-text-muted)] opacity-60">
-            Radius: None — all rounded corners are suppressed.
+            {_("Radius: None — all rounded corners are suppressed.")}
           </p>
         )}
       </section>
 
-      {/* Preview swatch */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          Live Preview
+          {_("Live Preview")}
         </h3>
         <div
           className="rounded-xl border border-[var(--theme-border)] overflow-hidden"
@@ -731,15 +707,15 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             <div className="h-2 bg-[var(--theme-text-muted)]/20 w-1/2" style={{ borderRadius: "var(--theme-radius-sm)" }} />
             <div className="flex gap-2 mt-1">
               <span className="text-[10px] px-2 py-0.5 font-bold text-[var(--theme-bg)] bg-[var(--theme-primary)]" style={{ borderRadius: "var(--theme-radius-sm)" }}>
-                Primary
+                {_("Primary")}
               </span>
               <span className="text-[10px] px-2 py-0.5 font-bold text-white bg-[var(--theme-danger)]" style={{ borderRadius: "var(--theme-radius-sm)" }}>
-                Danger
+                {_("Danger")}
               </span>
             </div>
             <div className="flex items-baseline gap-2 mt-1 pt-1.5 border-t border-[var(--theme-border)]">
               <span className="text-[11px] text-[var(--theme-text)]" style={{ fontFamily: "var(--theme-font-sans)" }}>
-                The quick brown fox
+                {_("The quick brown fox")}
               </span>
               <span className="text-[10px] text-[var(--theme-text-muted)]" style={{ fontFamily: "var(--theme-font-mono)" }}>
                 const x = 42;
@@ -768,8 +744,8 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--theme-border)] shrink-0">
           <div>
-            <h2 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-widest">Theme & Settings</h2>
-              <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">Theme · Radius · Density · Colour Overrides · Config · Models</p>
+            <h2 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-widest">{_("Theme & Settings")}</h2>
+                <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">{_("Theme · Radius · Density · Colour Overrides · Config · Models")}</p>
           </div>
           <button
             onClick={onClose}
@@ -815,11 +791,11 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             {isSaving ? (
               <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : saveOk ? (
-              <>✓ Saved</>
+              <>{_("✓ Saved")}</>
             ) : (
               <>
                 <Icon name="download" size="xs" />
-                Save to DB
+                {_("Save to DB")}
               </>
             )}
           </button>
@@ -827,7 +803,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             onClick={onClose}
             className="px-4 py-2 rounded-lg border border-[var(--theme-border)] text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors"
           >
-            Close
+            {_("Close")}
           </button>
         </div>
       </div>

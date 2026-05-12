@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
+import { useLingui } from "@lingui/react";
 import type { ArrangementSection } from '../../types/arrangement';
 import type { AudioTrack } from '../../types/audio';
 
@@ -47,6 +48,7 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { _ } = useLingui();
 
   const startEdit = useCallback((section: ArrangementSection) => {
     setEditingId(section.id);
@@ -63,14 +65,13 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-[var(--theme-surface)] border-r border-[var(--theme-border)] overflow-hidden select-none" style={{ minWidth: 180, maxWidth: 220 }}>
-      {/* Header */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--theme-border)] shrink-0">
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] flex-1">
-          Patterns
+          {_("Patterns")}
         </span>
         <button
           onClick={() => onToggleLoop(!loopArrangement)}
-          title={loopArrangement ? 'Loop: ON' : 'Loop: OFF'}
+          title={loopArrangement ? _("Loop: ON") : _("Loop: OFF")}
           className={`text-[9px] px-1.5 py-0.5 rounded border font-semibold transition-colors ${
             loopArrangement
               ? 'border-[var(--theme-primary)] bg-[var(--theme-primary)]/20 text-[var(--theme-primary)]'
@@ -81,18 +82,17 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
         </button>
         <button
           onClick={() => onAddSection()}
-          title="Add section"
+          title={_("Add section")}
           className="text-[9px] px-1.5 py-0.5 rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:border-[var(--theme-primary)] transition-colors"
         >
           +
         </button>
       </div>
 
-      {/* Section list */}
       <div className="flex-1 overflow-y-auto">
         {sections.length === 0 && (
           <p className="text-[10px] text-[var(--theme-text-muted)] text-center mt-6 px-2">
-            No patterns yet.<br />Click <strong>+</strong> to add one.
+            {_("No patterns yet.")}<br />{_("Click")} <strong>+</strong> {_("to add one.")}
           </p>
         )}
         {sections.map((section, idx) => {
@@ -106,12 +106,10 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                   : 'hover:bg-[var(--theme-bg)]/50'
               }`}
             >
-              {/* Section row */}
               <div className="flex items-center gap-1 px-2 py-1">
-                {/* Active indicator / jump button */}
                 <button
                   onClick={() => !isPlaying && onGoToSection(idx)}
-                  title={isPlaying ? 'Cannot jump while playing' : `Jump to ${section.name}`}
+                  title={isPlaying ? _("Cannot jump while playing") : `${_("Jump to")} ${section.name}`}
                   disabled={isPlaying}
                   className={`w-4 h-4 rounded-full shrink-0 border transition-colors ${
                     isActive
@@ -120,7 +118,6 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                   }`}
                 />
 
-                {/* Name (editable) */}
                 {editingId === section.id ? (
                   <input
                     ref={inputRef}
@@ -135,7 +132,7 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                 ) : (
                   <span
                     onDoubleClick={() => startEdit(section)}
-                    title="Double-click to rename"
+                    title={_("Double-click to rename")}
                     className={`flex-1 text-[10px] font-semibold truncate cursor-default ${
                       isActive ? 'text-[var(--theme-primary)]' : 'text-[var(--theme-text)]'
                     }`}
@@ -145,12 +142,11 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                   </span>
                 )}
 
-                {/* Repeat count */}
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
                     onClick={() => onRepeatCount(section.id, section.repeatCount - 1)}
                     className="w-4 h-4 flex items-center justify-center text-[10px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] leading-none"
-                    title="Fewer repeats"
+                    title={_("Fewer repeats")}
                   >−</button>
                   <span className="text-[9px] tabular-nums text-[var(--theme-text-muted)] w-4 text-center">
                     {section.repeatCount}×
@@ -158,23 +154,22 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                   <button
                     onClick={() => onRepeatCount(section.id, section.repeatCount + 1)}
                     className="w-4 h-4 flex items-center justify-center text-[10px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] leading-none"
-                    title="More repeats"
+                    title={_("More repeats")}
                   >+</button>
                 </div>
 
-                {/* Move / remove */}
                 <div className="flex flex-col shrink-0">
                   <button
                     onClick={() => onMoveSection(section.id, 'up')}
                     disabled={idx === 0}
                     className="text-[8px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] disabled:opacity-30 leading-none"
-                    title="Move up"
+                    title={_("Move up")}
                   >▲</button>
                   <button
                     onClick={() => onMoveSection(section.id, 'down')}
                     disabled={idx === sections.length - 1}
                     className="text-[8px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] disabled:opacity-30 leading-none"
-                    title="Move down"
+                    title={_("Move down")}
                   >▼</button>
                 </div>
 
@@ -182,11 +177,10 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                   onClick={() => onRemoveSection(section.id)}
                   disabled={sections.length <= 1}
                   className="text-[10px] text-[var(--theme-text-muted)] hover:text-red-400 disabled:opacity-30 shrink-0"
-                  title="Remove section"
+                  title={_("Remove section")}
                 >×</button>
               </div>
 
-              {/* Track slot mutes */}
               {globalTracks.length > 0 && (
                 <div className="flex flex-wrap gap-1 px-2 pb-1.5">
                   {globalTracks.map(track => {
@@ -197,7 +191,7 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
                       <button
                         key={track.id}
                         onClick={() => onToggleSlotMute(section.id, track.id)}
-                        title={`${muted ? 'Unmute' : 'Mute'} "${track.name}"${hasCopy ? ' (local copy)' : ''}`}
+                        title={`${muted ? _("Unmute") : _("Mute")} "${track.name}"${hasCopy ? ` (${_("local copy")})` : ''}`}
                         className={`text-[8px] px-1 py-0.5 rounded transition-colors leading-none ${
                           muted
                             ? 'bg-[var(--theme-text-muted)]/20 text-[var(--theme-text-muted)] line-through'
@@ -216,10 +210,9 @@ export const SectionArranger: React.FC<SectionArrangerProps> = ({
         })}
       </div>
 
-      {/* Footer: loop toggle info */}
       <div className="px-2 py-1 border-t border-[var(--theme-border)] shrink-0">
         <span className="text-[9px] text-[var(--theme-text-muted)]">
-          {loopArrangement ? 'Loops from start after last block' : 'Stops after last block'}
+          {loopArrangement ? _("Loops from start after last block") : _("Stops after last block")}
         </span>
       </div>
     </div>

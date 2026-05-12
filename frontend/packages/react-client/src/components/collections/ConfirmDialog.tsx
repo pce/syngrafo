@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect } from "react";
+import { useLingui } from "@lingui/react";
 import { Icon } from "../Icon";
 
 interface ConfirmDialogProps {
@@ -20,11 +21,14 @@ interface ConfirmDialogProps {
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title,
   message,
-  confirmLabel = "Delete",
+  confirmLabel,
   onConfirm,
   onCancel,
 }) => {
-  // Close on Escape
+  const { _ } = useLingui();
+  const resolvedLabel = confirmLabel ?? _("Delete");
+
+  // Dismiss on Escape so callers don't have to wire keyboard handling themselves.
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
     window.addEventListener("keydown", h);
@@ -34,8 +38,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-sm mx-4 bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--theme-border)]">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--theme-border)]">
           <h2 className="flex-1 text-sm font-black text-[var(--theme-text)]">{title}</h2>
           <button
             onClick={onCancel}
@@ -44,11 +47,9 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <Icon name="close" size="xs" />
           </button>
         </div>
-        {/* Body */}
         <div className="px-4 py-4 text-xs text-[var(--theme-text-muted)] leading-relaxed">
           {message}
         </div>
-        {/* Footer */}
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--theme-border)]">
           <button
             onClick={onCancel}
@@ -56,7 +57,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                        bg-[var(--theme-bg)] hover:bg-[var(--theme-surface)]
                        text-[var(--theme-text)] transition-colors"
           >
-            Cancel
+            {_("Cancel")}
           </button>
           <button
             onClick={onConfirm}
@@ -64,7 +65,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                        bg-[var(--theme-danger)] hover:opacity-90
                        text-white transition-colors"
           >
-            {confirmLabel}
+            {resolvedLabel}
           </button>
         </div>
       </div>
@@ -73,4 +74,3 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export default ConfirmDialog;
-

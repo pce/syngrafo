@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useLingui } from "@lingui/react";
 import { Icon } from "../Icon";
 import {
   CopyMoveDialog,
@@ -82,9 +83,9 @@ const CommandBar: React.FC<CommandBarProps> = ({
   activePanel,
   onRefresh,
 }) => {
+  const { _ } = useLingui();
   const [activeOp, setActiveOp] = useState<ActiveOp>(null);
 
-  // Derive active / target context
   const active = activePanel === "left" ? leftPanel : rightPanel;
   const target = activePanel === "left" ? rightPanel : leftPanel;
 
@@ -121,7 +122,6 @@ const CommandBar: React.FC<CommandBarProps> = ({
 
   return (
     <>
-      {/* ── Operation dialogs ─────────────────────────────────────────── */}
       {activeOp === "copy" && (
         <CopyMoveDialog
           op="copy"
@@ -169,26 +169,23 @@ const CommandBar: React.FC<CommandBarProps> = ({
         />
       )}
 
-      {/* ── Bar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-t border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0 overflow-x-auto">
 
-        {/* Selection indicator */}
         <div className="flex items-center gap-1 min-w-[90px] shrink-0">
           {hasSelection ? (
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-primary)] shrink-0" />
               <span className="text-[9px] font-bold text-[var(--theme-text)]">
-                {count} selected
+                {count}{" "}{_("selected")}
               </span>
             </>
           ) : (
-            <span className="text-[9px] text-[var(--theme-text-muted)]">No selection</span>
+            <span className="text-[9px] text-[var(--theme-text-muted)]">{_("No selection")}</span>
           )}
         </div>
 
         <div className="h-4 w-px bg-[var(--theme-border)] shrink-0" />
 
-        {/* Path preview */}
         <span className="text-[9px] font-mono text-[var(--theme-text-muted)] truncate max-w-[150px] hidden md:block">
           {active.path
             ? active.path.split("/").slice(-2).join("/")
@@ -203,23 +200,22 @@ const CommandBar: React.FC<CommandBarProps> = ({
 
         <div className="flex-1" />
 
-        {/* ── Commands ────────────────────────────────────────────────── */}
         <CmdBtn
-          label="Copy"
+          label={_("Copy")}
           shortcut="F5"
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-blue-500/10 hover:border-blue-400/30 hover:text-blue-500"
           onClick={() => setActiveOp("copy")}
         />
         <CmdBtn
-          label="Move"
+          label={_("Move")}
           shortcut="F6"
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-amber-500/10 hover:border-amber-400/30 hover:text-amber-500"
           onClick={() => setActiveOp("move")}
         />
         <CmdBtn
-          label="Delete"
+          label={_("Delete")}
           shortcut="F8"
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-rose-500/10 hover:border-rose-400/30 hover:text-rose-500"
@@ -229,19 +225,19 @@ const CommandBar: React.FC<CommandBarProps> = ({
         <div className="h-4 w-px bg-[var(--theme-border)] shrink-0" />
 
         <CmdBtn
-          label="Share"
+          label={_("Share")}
           disabled={!hasSelection || count > 1}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-violet-500/10 hover:border-violet-400/30 hover:text-violet-500"
           onClick={() => setActiveOp("share")}
         />
         <CmdBtn
-          label="Compress"
+          label={_("Compress")}
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-emerald-500/10 hover:border-emerald-400/30 hover:text-emerald-500"
           onClick={() => setActiveOp("compress")}
         />
         <CmdBtn
-          label="Archive"
+          label={_("Archive")}
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-cyan-500/10 hover:border-cyan-400/30 hover:text-cyan-500"
           onClick={() => setActiveOp("archive")}

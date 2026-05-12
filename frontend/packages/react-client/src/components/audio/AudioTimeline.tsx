@@ -24,6 +24,7 @@ import React, {
 import type { AudioTrack, Note } from "@/types/audio";
 import { InstrumentType } from "@/types/audio";
 import { usePatchStore } from "@/store/patch-store";
+import { useLingui } from "@lingui/react";
 
 
 const NOTE_NAMES = [
@@ -115,6 +116,7 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
   onPatchIdChange,
 }) => {
   const patchStore = usePatchStore();
+  const { _ } = useLingui();
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [bpm,         setBpm]         = useState(120);
@@ -193,7 +195,6 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
     setIsPlaying(false);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => () => {
     if (timerRef.current !== null) clearInterval(timerRef.current);
   }, []);
@@ -222,7 +223,6 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
   return (
     <div className="flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] select-none overflow-hidden">
 
-      {/*  Transport  */}
       <div className="flex items-center gap-3 px-3 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] flex-shrink-0 flex-wrap gap-y-1.5">
 
         <button
@@ -233,11 +233,11 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
               : "bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)]"
           }`}
         >
-          {isPlaying ? "⏹ Stop" : "▶ Play"}
+          {isPlaying ? _("⏹ Stop") : _("▶ Play")}
         </button>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--theme-text-muted)]">BPM</span>
+          <span className="text-xs text-[var(--theme-text-muted)]">{_("BPM")}</span>
           <input
             type="range" min={40} max={220} step={1} value={bpm}
             onChange={e => setBpm(Number(e.target.value))}
@@ -268,11 +268,10 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
                      bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)]
                      text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
         >
-          + Track
+          {_("+ Track")}
         </button>
       </div>
 
-      {/*  Track list  */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3
@@ -283,13 +282,13 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
               <circle cx="6" cy="18" r="3" />
               <circle cx="18" cy="16" r="3" />
             </svg>
-            <p className="text-sm">No tracks yet.</p>
+            <p className="text-sm">{_("No tracks yet.")}</p>
             <button
               onClick={onAddTrack}
               className="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-90
                          text-[var(--theme-primary-fg)] text-xs font-semibold rounded-lg"
             >
-              Add Track
+              {_("Add Track")}
             </button>
           </div>
         ) : (
@@ -347,16 +346,15 @@ const StepTrack = memo(function StepTrack({
   const octave      = 4 + (track.octaveOffset ?? 0);
   const isMuted     = track.schedulerMuted && !track.solo;
   const isPatchBlock = track.instrument === InstrumentType.PatchBlock;
+  const { _ } = useLingui();
 
   return (
     <div className={`flex border-b border-[var(--theme-border)] transition-opacity duration-150 ${
       isMuted ? "opacity-35" : "opacity-100"
     }`}>
 
-      {/*  Track header  */}
       <div className="flex flex-col gap-1 px-2 py-2 bg-[var(--theme-surface)] border-r border-[var(--theme-border)] w-44 shrink-0">
 
-        {/* Name row */}
         <div className="flex items-center gap-1.5">
           <span
             className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white/10"
@@ -367,7 +365,7 @@ const StepTrack = memo(function StepTrack({
           </span>
           <button
             onClick={onMute}
-            title={track.mute ? "Unmute" : "Mute"}
+            title={track.mute ? _("Unmute") : _("Mute")}
             className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
               track.mute
                 ? "bg-yellow-500/20 text-yellow-400"
@@ -376,7 +374,7 @@ const StepTrack = memo(function StepTrack({
           >M</button>
           <button
             onClick={onSolo}
-            title={track.solo ? "Unsolo" : "Solo"}
+            title={track.solo ? _("Unsolo") : _("Solo")}
             className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
               track.solo
                 ? "bg-emerald-500/20 text-emerald-400"
@@ -385,7 +383,6 @@ const StepTrack = memo(function StepTrack({
           >S</button>
         </div>
 
-        {/* Instrument select */}
         <select
           value={track.instrument}
           onChange={e => onInstrument(e.target.value as InstrumentType)}
@@ -397,23 +394,21 @@ const StepTrack = memo(function StepTrack({
           ))}
         </select>
 
-        {/* Patch picker — only when PatchBlock is selected */}
         {isPatchBlock && (
           <select
             value={track.patchId ?? ""}
             onChange={e => onPatchChange(e.target.value)}
             className="text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-primary)]/60
                        rounded px-1 py-0.5 text-[var(--theme-primary)] w-full"
-            title="Select which patch this track triggers"
+            title={_("Select which patch this track triggers")}
           >
-            <option value="" disabled>— pick patch —</option>
+            <option value="" disabled>{_("— pick patch —")}</option>
             {patchEntries.map(e => (
               <option key={e.id} value={e.id}>{e.name}</option>
             ))}
           </select>
         )}
 
-        {/* Root note + octave — hidden for PatchBlock */}
         {!isPatchBlock && (
           <div className="flex items-center gap-1">
             <select
@@ -438,7 +433,6 @@ const StepTrack = memo(function StepTrack({
           </div>
         )}
 
-        {/* Length + clear */}
         <div className="flex items-center gap-1">
           <select
             value={track.length}
@@ -447,12 +441,12 @@ const StepTrack = memo(function StepTrack({
                        rounded px-1 py-0.5 text-[var(--theme-text)] flex-1"
           >
             {STEP_LENGTHS.map(n => (
-              <option key={n} value={n}>{n} steps</option>
+              <option key={n} value={n}>{n} {_("steps")}</option>
             ))}
           </select>
           <button
             onClick={onClear}
-            title="Clear all steps"
+            title={_("Clear all steps")}
             className="w-5 h-5 rounded text-[10px] bg-[var(--theme-bg)]
                        border border-[var(--theme-border)]
                        text-[var(--theme-text-muted)] hover:text-red-400 transition-colors"
@@ -460,7 +454,6 @@ const StepTrack = memo(function StepTrack({
         </div>
       </div>
 
-      {/*  Step grid  */}
       <div className="flex-1 min-w-0 px-2 py-2 overflow-x-auto">
         <div
           className="grid gap-[3px]"
@@ -480,7 +473,7 @@ const StepTrack = memo(function StepTrack({
                 key={step}
                 onClick={() => onToggle(step)}
                 aria-pressed={active}
-                aria-label={`Step ${step + 1}`}
+                aria-label={`${_("Step")} ${step + 1}`}
                 style={active ? { backgroundColor: track.color } : undefined}
                 className={[
                   "h-full min-h-[36px] rounded-[3px] border transition-all duration-75",
@@ -496,7 +489,6 @@ const StepTrack = memo(function StepTrack({
           })}
         </div>
 
-        {/* Beat markers */}
         <div
           className="grid mt-0.5"
           style={{ gridTemplateColumns: `repeat(${track.length}, minmax(18px, 1fr))` }}

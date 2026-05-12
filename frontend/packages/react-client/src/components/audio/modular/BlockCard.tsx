@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useLingui } from "@lingui/react";
 import type { BlockInstance, BlockTypeDef, PatchCable, ParamValue } from "@syngrafo/audio";
 import { XYPad } from "./XYPad";
 
@@ -25,6 +26,7 @@ export function BlockCard({
   onXY,
   onTrigger,
 }: BlockCardProps) {
+  const { _ } = useLingui();
   const driverOf = useCallback(
     (paramId: string): PatchCable | undefined =>
       cables.find(
@@ -48,7 +50,6 @@ export function BlockCard({
       }}
       onClick={() => onSelect(block.id)}
     >
-      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div
         className="flex items-center gap-2 px-2 py-1.5 shrink-0"
         style={{ backgroundColor: `${typeDef.color}22` }}
@@ -61,10 +62,9 @@ export function BlockCard({
           {block.label}
         </span>
 
-        {/* Trigger button (for sound-producing blocks) */}
         {typeDef.orcTemplate && onTrigger && (
           <button
-            title="Trigger"
+            title={_("Trigger")}
             onClick={e => {
               e.stopPropagation();
               onTrigger(block.id);
@@ -76,7 +76,7 @@ export function BlockCard({
         )}
 
         <button
-          title="Remove block"
+          title={_("Remove block")}
           onClick={e => {
             e.stopPropagation();
             onRemove(block.id);
@@ -87,7 +87,6 @@ export function BlockCard({
         </button>
       </div>
 
-      {/* ── XY Pad inline ───────────────────────────────────────────────── */}
       {isXY && onXY && (
         <div className="p-2 flex justify-center bg-[var(--theme-bg)]">
           <XYPad
@@ -106,7 +105,6 @@ export function BlockCard({
         </div>
       )}
 
-      {/* ── Params ──────────────────────────────────────────────────────── */}
       {!isXY && (
         <div className="flex flex-col gap-0.5 p-2 bg-[var(--theme-bg)]">
           {Object.entries(typeDef.params).map(([paramId, def]) => {
@@ -116,7 +114,6 @@ export function BlockCard({
 
             return (
               <div key={paramId} className="flex items-center gap-1.5 min-h-[22px]">
-                {/* Param label */}
                 <span
                   className="text-[9px] text-[var(--theme-text-muted)] w-16 shrink-0 truncate"
                   title={def.description ?? def.label}
@@ -124,7 +121,6 @@ export function BlockCard({
                   {def.label}
                 </span>
 
-                {/* Driven-by-cable badge */}
                 {isDriven && (
                   <span
                     className="text-[8px] px-1 rounded shrink-0 truncate max-w-[60px]"
@@ -138,7 +134,6 @@ export function BlockCard({
                   </span>
                 )}
 
-                {/* Number slider */}
                 {!isDriven && def.type === "number" && (
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <input
@@ -167,7 +162,6 @@ export function BlockCard({
                   </div>
                 )}
 
-                {/* Boolean toggle */}
                 {!isDriven && def.type === "boolean" && (
                   <button
                     className={[
@@ -182,11 +176,10 @@ export function BlockCard({
                       onParam(block.id, paramId, !value);
                     }}
                   >
-                    {value ? "ON" : "OFF"}
+                    {value ? _("ON") : _("OFF")}
                   </button>
                 )}
 
-                {/* Select dropdown */}
                 {!isDriven && def.type === "select" && def.options && (
                   <select
                     value={String(value)}
@@ -206,7 +199,6 @@ export function BlockCard({
                   </select>
                 )}
 
-                {/* String / file (read-only display) */}
                 {!isDriven && (def.type === "string" || def.type === "file") && (
                   <span className="text-[9px] text-[var(--theme-text-muted)] truncate flex-1 font-mono">
                     {String(value) || "—"}
@@ -218,7 +210,6 @@ export function BlockCard({
         </div>
       )}
 
-      {/* ── Live output indicators ───────────────────────────────────────── */}
       {block.outputs && Object.keys(block.outputs).length > 0 && (
         <div className="flex flex-wrap gap-1 px-2 pb-1.5 bg-[var(--theme-bg)]">
           {Object.entries(block.outputs).map(([portId, val]) => (

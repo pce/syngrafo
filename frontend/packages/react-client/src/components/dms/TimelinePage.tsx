@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useLingui } from "@lingui/react";
 import { useDms } from "../../store/dms-store";
 import { dms, isImageFile, isDocFile, isAudioFile, isTextFile, isSvgFile } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
@@ -72,6 +73,7 @@ type FilterKind = "all" | "files" | "images" | "docs" | "audio";
 
 const TimelinePage: React.FC = () => {
   const { state, dispatch } = useDms();
+  const { _ } = useLingui();
 
   const [entries,  setEntries]  = useState<FsEntry[]>([]);
   const [loading,  setLoading]  = useState(false);
@@ -92,7 +94,6 @@ const TimelinePage: React.FC = () => {
     }
   }, []);
 
-  // Auto-load when zone / currentPath changes
   useEffect(() => {
     const path = state.zone?.out_path ?? state.currentPath;
     if (path && path !== scanPath) {
@@ -117,10 +118,9 @@ const TimelinePage: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-[var(--theme-bg)] overflow-hidden">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0">
         <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text)]">
-          Timeline
+          {_("Timeline")}
         </span>
 
         {activePath && (
@@ -134,7 +134,6 @@ const TimelinePage: React.FC = () => {
 
         <div className="flex-1" />
 
-        {/* Filter pills */}
         <div className="flex items-center gap-0.5">
           {(["all", "files", "images", "docs", "audio"] as FilterKind[]).map((k) => (
             <button
@@ -151,11 +150,10 @@ const TimelinePage: React.FC = () => {
           ))}
         </div>
 
-        {/* Reload */}
         <button
           onClick={() => activePath && load(activePath)}
           disabled={loading}
-          title="Reload"
+          title={_("Reload")}
           className="p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors disabled:opacity-40"
         >
           <svg
@@ -169,11 +167,10 @@ const TimelinePage: React.FC = () => {
         </button>
       </div>
 
-      {/** Active-zone indicator — read-only pill showing the currently open zone. */}
       {state.zone && (
         <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]/60 shrink-0">
           <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 shrink-0 mr-1">
-            Zone
+            {_("Zone")}
           </span>
           <span
             title={`${state.zone.in_path} → ${state.zone.out_path}`}
@@ -184,10 +181,8 @@ const TimelinePage: React.FC = () => {
         </div>
       )}
 
-      {/*  Body ────────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
 
-        {/* Empty / no zone */}
         {!activePath && !loading && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
             <svg className="w-12 h-12 opacity-20 text-[var(--theme-text)]"
@@ -196,37 +191,33 @@ const TimelinePage: React.FC = () => {
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
             </svg>
-            <p className="text-sm font-bold text-[var(--theme-text)]">No active zone</p>
+            <p className="text-sm font-bold text-[var(--theme-text)]">{_("No active zone")}</p>
             <p className="text-xs text-[var(--theme-text-muted)] max-w-xs leading-relaxed">
-              Open a zone from the header to see its file activity timeline here.
+              {_("Open a zone from the header to see its file activity timeline here.")}
             </p>
           </div>
         )}
 
-        {/* Loading spinner */}
         {loading && (
           <div className="flex items-center justify-center py-16 gap-2 text-[var(--theme-text-muted)]">
             <span className="w-4 h-4 border-2 border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)] rounded-full animate-spin" />
-            <span className="text-xs font-bold uppercase tracking-widest">Scanning…</span>
+            <span className="text-xs font-bold uppercase tracking-widest">{_("Scanning…")}</span>
           </div>
         )}
 
-        {/* No files found */}
         {!loading && activePath && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
             <Icon name="folder" size="lg" className="opacity-20 text-[var(--theme-text)]" />
-            <p className="text-sm text-[var(--theme-text-muted)]">No files found</p>
+            <p className="text-sm text-[var(--theme-text-muted)]">{_("No files found")}</p>
           </div>
         )}
 
-        {/* Day-grouped timeline */}
         {!loading && dayKeys.map((dayKey) => {
           const dayEntries = grouped.get(dayKey) ?? [];
           const ts         = dayEntries[0]?.modified ?? new Date(dayKey).getTime();
 
           return (
             <div key={dayKey} className="mb-6">
-              {/* Day header */}
               <div className="flex items-center gap-2 mb-2 sticky top-0 bg-[var(--theme-bg)] py-1 z-10">
                 <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-primary)]">
                   {relativeDay(ts)}
@@ -240,9 +231,7 @@ const TimelinePage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Entry list */}
               <ul className="space-y-1 relative">
-                {/* Vertical timeline bar */}
                 <div
                   className="absolute left-4 top-0 bottom-0 w-px bg-[var(--theme-border)] opacity-40"
                   style={{ transform: "translateX(-50%)" }}
@@ -260,7 +249,6 @@ const TimelinePage: React.FC = () => {
                           : "hover:bg-[var(--theme-surface)]"
                       }`}
                     >
-                      {/* Timeline dot */}
                       <div
                         className={`absolute left-4 top-3.5 w-2 h-2 rounded-full border-2 -translate-x-1/2 shrink-0 ${
                           isSelected
@@ -269,7 +257,6 @@ const TimelinePage: React.FC = () => {
                         }`}
                       />
 
-                      {/* File icon */}
                       <div className="shrink-0 mt-0.5">
                         <Icon
                           name={fileIconName(entry)}
@@ -278,7 +265,6 @@ const TimelinePage: React.FC = () => {
                         />
                       </div>
 
-                      {/* Details */}
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-medium truncate ${
                           isSelected ? "text-[var(--theme-primary)]" : "text-[var(--theme-text)]"
@@ -290,7 +276,6 @@ const TimelinePage: React.FC = () => {
                         </p>
                       </div>
 
-                      {/* Meta */}
                       <div className="shrink-0 text-right">
                         {entry.modified && (
                           <p className="text-[10px] text-[var(--theme-text-muted)] font-mono opacity-70">
@@ -304,7 +289,7 @@ const TimelinePage: React.FC = () => {
                         )}
                         {entry.indexed && (
                           <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]">
-                            indexed
+                            {_("indexed")}
                           </span>
                         )}
                       </div>

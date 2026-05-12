@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useLingui } from "@lingui/react";
 import { EditorShell, type SDocument, createDocument } from "@syngrafo/editor";
 import { generateName } from "@syngrafo/shared";
 import { Icon } from "./Icon";
@@ -35,6 +36,7 @@ interface ContentProps {
 }
 
 function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: ContentProps) {
+  const { _ } = useLingui();
   const [doc] = useState<SDocument>(() => docProp ?? createDocument({ title: generateName() }));
 
   const handleClose = useCallback(() => onClose?.(), [onClose]);
@@ -74,11 +76,11 @@ function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: Cont
           {displayTitle}
         </span>
         <span className="text-[9px] text-[var(--theme-text-muted)] hidden sm:block select-none">
-          Esc to close
+          {_("Esc to close")}
         </span>
         <button
           onClick={handleClose}
-          title="Close editor (Esc)"
+          title={_("Close editor (Esc)")}
           className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
         >
           <Icon name="close" size="xs" />

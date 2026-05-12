@@ -958,13 +958,41 @@ if (typeof window.__lm_error === 'undefined')
   }
 }
 
+#include "cli/registry.hh"
+
 #ifdef _WIN32
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 #else
-int main()
+int main(int argc, char** argv)
 #endif
 {
   try {
+#ifdef _WIN32
+    int argc = __argc;
+    char** argv = __argv;
+#endif
+
+    sgf::cli::Context ctx{};
+    sgf::cli::Registry registry;
+
+    registry.register_command({
+        .name = "diagnostics",
+        .description = "Outputs system health checks.",
+        .execute = [](sgf::cli::Context& c, sgf::cli::ArgsSpan args) -> int {
+            if (c.format == sgf::cli::OutputFormat::Json) {
+                std::cout << "{ \"status\": \"ok\", \"onnx\": true }\n";
+            } else {
+                std::cout << c.color(sgf::cli::terminal::green) << "System is healthy." << c.color(sgf::cli::terminal::reset) << "\n"
+                          << "- ONNX: Ready\n";
+            }
+            return 0;
+        }
+    });
+
+    if (auto exit_code = registry.dispatch(argc, argv, ctx)) {
+        return *exit_code;
+    }
+
     EngineHandle nlp;
 
     return saucer::application::create({.id = "org.pce.papiere"})

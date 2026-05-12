@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useLingui } from "@lingui/react";
 import { Icon } from "../Icon";
 
 interface NLPStats {
@@ -26,13 +27,15 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   results,
   isProcessing,
 }) => {
-  // Parse results safely. The engine might return raw text or a JSON string.
+  const { _ } = useLingui();
+
+  // Parse results safely — the engine may return raw text or a JSON string.
   const data = useMemo(() => {
     if (!results) return null;
     try {
       return JSON.parse(results) as NLPStats;
     } catch (e) {
-      // If not JSON, it might be streaming raw text or partial data
+      // Not JSON yet — treat as streaming raw text.
       return null;
     }
   }, [results]);
@@ -44,7 +47,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           <Icon name="analytics" size="lg" />
         </div>
         <p className="text-[10px] font-black uppercase tracking-[0.3em]">
-          Awaiting Engine Analysis
+          {_("Awaiting Engine Analysis")}
         </p>
       </div>
     );
@@ -56,7 +59,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
       <div className="p-6 bg-slate-900 rounded-2xl border border-slate-800 font-mono text-xs text-emerald-400 leading-relaxed overflow-y-auto max-h-[500px] shadow-inner">
         <div className="flex items-center gap-2 mb-4 text-[10px] font-black uppercase tracking-widest text-emerald-500/50">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          Raw Stream Data
+          {_("Raw Stream Data")}
         </div>
         {results}
         {isProcessing && (
@@ -71,7 +74,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
       {/* High Level Metrics Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          label="Sentiment"
+          label={_("Sentiment")}
           value={data?.sentiment_score?.toFixed(2) || "0.00"}
           icon="sentiment"
           color="text-blue-500"
@@ -82,19 +85,19 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           }
         />
         <StatCard
-          label="Readability"
+          label={_("Readability")}
           value={data?.readability_score?.toFixed(1) || "0.0"}
           icon="readability"
           color="text-amber-500"
         />
         <StatCard
-          label="Tokens"
+          label={_("Tokens")}
           value={data?.tokens?.toString() || "0"}
           icon="brain"
           color="text-indigo-500"
         />
         <StatCard
-          label="Sentences"
+          label={_("Sentences")}
           value={data?.sentences?.toString() || "0"}
           icon="rows"
           color="text-emerald-500"
@@ -102,11 +105,10 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* POS Distribution Histogram */}
         <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
             <Icon name="stats" size="sm" />
-            Linguistic Distribution
+            {_("Linguistic Distribution")}
           </h3>
           <div className="space-y-4">
             {data?.pos_distribution ? (
@@ -134,13 +136,12 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                 ))
             ) : (
               <p className="text-xs text-slate-400 italic">
-                No distribution data available
+                {_("No distribution data available")}
               </p>
             )}
           </div>
         </div>
 
-        {/* Duplicates / Highlights Panel */}
         {data?.duplicates && data.duplicates.length > 0 && (
           <div className="md:col-span-3 bg-white dark:bg-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-700 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -158,11 +159,11 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                     <Icon name="search" size="sm" className="text-rose-500" />
                   </div>
                   <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-rose-500">
-                    Redundancy Report
+                    {_("Redundancy Report")}
                   </h3>
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  Pattern matching results from C++ Deduplication Addon
+                  {_("Pattern matching results from C++ Deduplication Addon")}
                 </p>
               </div>
 
@@ -171,7 +172,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                   {data.duplicates.length}
                 </span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-rose-400/70">
-                  Duplicates
+                  {_("Duplicates")}
                 </span>
               </div>
             </div>
@@ -188,13 +189,13 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover/card:text-rose-400 transition-colors">
-                        Pattern
+                        {_("Pattern")}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col items-end">
                         <span className="text-[7px] font-black uppercase tracking-tighter text-slate-300">
-                          Offset
+                          {_("Offset")}
                         </span>
                         <span className="text-[9px] font-mono font-bold text-slate-500">
                           {String(dup.offset).padStart(4, "0")}
@@ -203,7 +204,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                       <div className="w-px h-4 bg-slate-100 dark:bg-slate-800" />
                       <div className="flex flex-col items-end">
                         <span className="text-[7px] font-black uppercase tracking-tighter text-slate-300">
-                          Size
+                          {_("Size")}
                         </span>
                         <span className="text-[9px] font-mono font-bold text-slate-500">
                           {dup.length}
@@ -224,7 +225,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Deduplicator Mode: Detect
+                {_("Deduplicator Mode: Detect")}
               </div>
               <div className="text-[8px] font-black uppercase tracking-widest text-slate-300">
                 Engine: PCE-NLP-v2.0
@@ -233,11 +234,10 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           </div>
         )}
 
-        {/* Entities / Keywords Panel */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
             <Icon name="sparkles" size="sm" />
-            Key Terminology
+            {_("Key Terminology")}
           </h3>
           <div className="flex flex-wrap gap-2">
             {data?.entities && data.entities.length > 0 ? (
@@ -251,7 +251,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
               ))
             ) : (
               <p className="text-xs text-slate-400 italic">
-                Extracting entities...
+                {_("Extracting entities…")}
               </p>
             )}
           </div>

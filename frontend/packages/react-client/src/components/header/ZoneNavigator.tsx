@@ -1,4 +1,5 @@
 import React from "react";
+import { useLingui } from "@lingui/react";
 import { useDms } from "../../store/dms-store";
 import { Icon } from "../Icon";
 import { dms, type Zone } from "../../services/dms-service";
@@ -6,6 +7,7 @@ import { dms, type Zone } from "../../services/dms-service";
 const ZoneNavigator: React.FC = () => {
   const { state, dispatch } = useDms();
   const { zone, zones, isGlobalMode } = state;
+  const { _ } = useLingui();
 
   const handleSwitchZone = async (z: Zone | "global") => {
     if (z === "global") {
@@ -14,7 +16,7 @@ const ZoneNavigator: React.FC = () => {
         // Clears zone; SET_ZONE(null) sets currentPath="" so FileBrowser waits for "Select Inbox"
         dispatch({ type: "SET_ZONE", zone: null });
       } else {
-        dispatch({ type: "SET_ERROR", error: res.error || "Failed to switch to global" });
+        dispatch({ type: "SET_ERROR", error: res.error || _("Failed to switch to global") });
       }
     } else {
       const res = await dms.openZoneDb(z.name);
@@ -22,7 +24,7 @@ const ZoneNavigator: React.FC = () => {
         // SET_ZONE sets currentPath = zone.out_path; FileBrowser's useEffect auto-scans it
         dispatch({ type: "SET_ZONE", zone: z });
       } else {
-        dispatch({ type: "SET_ERROR", error: res.error || "Failed to open zone" });
+        dispatch({ type: "SET_ERROR", error: res.error || _("Failed to open zone") });
       }
     }
   };
@@ -38,7 +40,7 @@ const ZoneNavigator: React.FC = () => {
         }`}
       >
         <Icon name="download" size="xs" />
-        Input
+        {_("Input")}
       </button>
 
       <div className="w-px h-4 bg-black/10 dark:bg-white/10 mx-1" />
@@ -73,7 +75,7 @@ const ZoneNavigator: React.FC = () => {
           </button>
         ))}
         {zones.length === 0 && !isGlobalMode && (
-           <span className="text-[10px] text-zinc-400 px-2 py-1">No zones</span>
+          <span className="text-[10px] text-zinc-400 px-2 py-1">{_("No zones")}</span>
         )}
       </div>
     </div>

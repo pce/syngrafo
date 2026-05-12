@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useLingui } from "@lingui/react";
 import { useDms } from "../../store/dms-store";
 import { dms, type Bookmark } from "../../services/dms-service";
 import { Icon } from "../Icon";
@@ -30,6 +31,7 @@ const EMPTY_EDIT: EditState = { id: null, label: "", target: "" };
 
 export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClose }) => {
   const { state } = useDms();
+  const { _ } = useLingui();
   const zone      = state.zone;
   const zoneName  = zone?.name ?? "";
 
@@ -48,7 +50,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
     try {
       const res = await dms.bookmark.list(zoneName);
       if (res.ok && res.data) setRows(res.data);
-      else setError(res.error ?? "Failed to load bookmarks");
+      else setError(res.error ?? _("Failed to load bookmarks"));
     } finally {
       setLoading(false);
     }
@@ -86,14 +88,14 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
       if (edit.id === null) {
         const res = await dms.bookmark.add(zoneName, label, target);
         if (res.ok && res.data) setRows(prev => [...prev, res.data!]);
-        else setError(res.error ?? "Failed to add bookmark");
+        else setError(res.error ?? _("Failed to add bookmark"));
       } else {
         const row = rows.find(r => r.id === edit.id);
         if (!row) { cancelEdit(); return; }
         const res = await dms.bookmark.update(edit.id, label, target, row.sort_order);
         if (res.ok && res.data)
           setRows(prev => prev.map(r => r.id === res.data!.id ? res.data! : r));
-        else setError(res.error ?? "Failed to update bookmark");
+        else setError(res.error ?? _("Failed to update bookmark"));
       }
       setEdit(EMPTY_EDIT);
     } finally {
@@ -119,13 +121,13 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
     await Promise.all([
       dms.bookmark.update(a.id, a.label, a.target, a.sort_order),
       dms.bookmark.update(b.id, b.label, b.target, b.sort_order),
-    ]).catch(() => { setError("Reorder failed"); void reload(); });
+    ]).catch(() => { setError(_("Reorder failed")); void reload(); });
   }, [rows, reload]);
 
   if (!zoneName) {
     return (
       <div className="flex items-center justify-center h-full text-[var(--theme-text-muted)] text-xs italic">
-        Open a zone to see its bookmarks.
+        {_("Open a zone to see its bookmarks.")}
       </div>
     );
   }
@@ -141,7 +143,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
         value={edit.label}
         onChange={e => setEdit(p => ({ ...p, label: e.target.value }))}
         onKeyDown={e => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-        placeholder="Label"
+        placeholder={_("Label")}
         className="w-32 min-w-0 text-[11px] bg-transparent border-b border-[var(--theme-primary)]/40
                    text-[var(--theme-text)] placeholder-[var(--theme-text-muted)]/50
                    focus:outline-none focus:border-[var(--theme-primary)] py-0.5"
@@ -150,7 +152,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
         value={edit.target}
         onChange={e => setEdit(p => ({ ...p, target: e.target.value }))}
         onKeyDown={e => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-        placeholder="zone-relative/path or .notes"
+        placeholder={_("zone-relative/path or .notes")}
         className="flex-1 min-w-0 text-[11px] font-mono bg-transparent border-b
                    border-[var(--theme-primary)]/40 text-[var(--theme-text-muted)]
                    placeholder-[var(--theme-text-muted)]/40
@@ -159,13 +161,13 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
       <button
         onClick={() => void commitEdit()}
         disabled={saving || !edit.label.trim() || !edit.target.trim()}
-        title="Save"
+        title={_("Save")}
         className="p-1 rounded text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10
                    disabled:opacity-30 transition-colors shrink-0"
       >
         <Icon name="check" size="xs" />
       </button>
-      <button onClick={cancelEdit} title="Cancel"
+      <button onClick={cancelEdit} title={_("Cancel")}
         className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]
                    hover:bg-[var(--theme-bg)] transition-colors shrink-0">
         <Icon name="x" size="xs" />
@@ -188,14 +190,14 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
         )}
         <button
           onClick={startAdd}
-          title="Add bookmark"
+            title={_("Add bookmark")}
           className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
                      hover:bg-[var(--theme-bg)] transition-colors"
         >
           <Icon name="plus" size="xs" />
         </button>
         {onClose && (
-          <button onClick={onClose} title="Close"
+          <button onClick={onClose} title={_("Close")}
             className="p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)]
                        hover:text-[var(--theme-text)] transition-colors">
             <Icon name="close" size="xs" />
@@ -218,13 +220,13 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
         {loading && (
           <div className="flex items-center justify-center py-12 text-[var(--theme-text-muted)] text-xs">
             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-            Loading…
+            {_("Loading…")}
           </div>
         )}
 
         {!loading && sorted.length === 0 && !isAdding && (
           <div className="px-4 py-10 text-center text-[var(--theme-text-muted)] text-xs italic">
-            No bookmarks yet — click + to add one.
+            {_("No bookmarks yet — click + to add one.")}
           </div>
         )}
 
@@ -270,7 +272,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
                 <button
                   onClick={() => void moveRow(row.id, "up")}
                   disabled={idx === 0}
-                  title="Move up"
+                  title={_("Move up")}
                   className="p-0.5 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
                              disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
@@ -279,7 +281,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
                 <button
                   onClick={() => void moveRow(row.id, "down")}
                   disabled={idx === sorted.length - 1}
-                  title="Move down"
+                  title={_("Move down")}
                   className="p-0.5 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)]
                              disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
@@ -287,14 +289,14 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
                 </button>
                 <button
                   onClick={() => startEdit(row)}
-                  title="Edit"
+                  title={_("Edit")}
                   className="p-0.5 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
                 >
                   <Icon name="edit" size="xs" />
                 </button>
                 <button
                   onClick={() => void deleteRow(row.id)}
-                  title="Delete"
+                  title={_("Delete")}
                   className="p-0.5 rounded text-[var(--theme-text-muted)] hover:text-rose-500 transition-colors"
                 >
                   <Icon name="trash" size="xs" />
@@ -318,7 +320,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({ onNavigate, onClos
                        hover:bg-[var(--theme-bg)] transition-colors"
           >
             <Icon name="plus" size="xs" />
-            Add bookmark
+            {_("Add bookmark")}
           </button>
         </div>
       )}

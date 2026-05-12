@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useLingui } from "@lingui/react";
 import type { CollectionConfig } from "../../services/collection-service";
 import type { IconName } from "../Icon";
 import ConfirmDialog from "./ConfirmDialog";
@@ -41,6 +42,7 @@ function CollectionListView<T extends { id: number }>({
   title,
   className = "",
 }: Props<T>) {
+  const { _ } = useLingui();
   const [rows,          setRows]          = useState<T[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState<string | null>(null);
@@ -118,7 +120,7 @@ function CollectionListView<T extends { id: number }>({
       const draft = config.newRowFactory();
       const created = await config.create(draft);
       setRows(prev => [...prev, created]);
-      // Open label field of the new row for immediate edit
+      // Open label field of the new row for immediate edit.
       const firstEditable = config.columns.find(c => c.editable !== false && c.type !== "readonly");
       if (firstEditable) {
         const val = String((created as Record<string, unknown>)[firstEditable.key] ?? "");
@@ -139,7 +141,6 @@ function CollectionListView<T extends { id: number }>({
   return (
     <div className={`flex flex-col h-full ${className}`}>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       {(title || config.create) && (
         <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0">
           {title && (
@@ -150,20 +151,19 @@ function CollectionListView<T extends { id: number }>({
           {config.create && (
             <button
               onClick={addRow}
-              title="Add row"
+              title={_("Add row")}
               className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold
                          bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]
                          border border-[var(--theme-primary)]/30
                          hover:bg-[var(--theme-primary)]/20 transition-colors"
             >
               <Icon name="plus" size="xs" />
-              Add
+              {_("Add")}
             </button>
           )}
         </div>
       )}
 
-      {/* ── Error ──────────────────────────────────────────────────────────── */}
       {error && (
         <div className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-500 text-xs shrink-0">
           <span className="flex-1 truncate">{error}</span>
@@ -171,7 +171,6 @@ function CollectionListView<T extends { id: number }>({
         </div>
       )}
 
-      {/* ── Column headers ─────────────────────────────────────────────────── */}
       <div
         className="grid px-3 py-1 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/50 shrink-0"
         style={{ gridTemplateColumns: colTemplate }}
@@ -185,22 +184,21 @@ function CollectionListView<T extends { id: number }>({
           </span>
         ))}
         <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] text-right">
-          Actions
+          {_("Actions")}
         </span>
       </div>
 
-      {/* ── Rows ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {loading && (
           <div className="flex items-center justify-center py-12 text-[var(--theme-text-muted)] text-xs">
             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-            Loading…
+            {_("Loading…")}
           </div>
         )}
 
         {!loading && rows.length === 0 && (
           <div className="px-4 py-12 text-center text-[var(--theme-text-muted)] text-xs italic">
-            {config.emptyMessage ?? "No items"}
+            {config.emptyMessage ?? _("No items")}
           </div>
         )}
 
@@ -221,7 +219,6 @@ function CollectionListView<T extends { id: number }>({
                   className="flex items-center gap-1 py-1.5 pr-2 min-w-0"
                 >
                   {isEditing ? (
-                    /* ── Inline input ─────────────────────────────────── */
                     <input
                       ref={inputRef}
                       type={col.type === "number" ? "number" : "text"}
@@ -237,14 +234,13 @@ function CollectionListView<T extends { id: number }>({
                                  focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
                     />
                   ) : (
-                    /* ── Read cell ────────────────────────────────────── */
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span
                         onClick={() => {
                           if (!editable) return;
                           setEditCell({ id: row.id, key: col.key, value: String(rawVal ?? "") });
                         }}
-                        title={editable ? "Click to edit" : undefined}
+                        title={editable ? _("Click to edit") : undefined}
                         className={`flex-1 text-[11px] truncate text-[var(--theme-text)]
                           ${editable ? "cursor-text hover:text-[var(--theme-primary)] transition-colors" : ""}
                           ${col.type === "readonly" ? "text-[var(--theme-text-muted)]" : ""}
@@ -255,7 +251,7 @@ function CollectionListView<T extends { id: number }>({
                           : String(rawVal ?? "")}
                       </span>
 
-                      {/* Per-column action buttons (visible on hover) */}
+                      {/* Per-column action buttons — visible on hover */}
                       {col.actions?.map((act, i) => {
                         if (act.when && !act.when(row)) return null;
                         return (
@@ -277,18 +273,16 @@ function CollectionListView<T extends { id: number }>({
               );
             })}
 
-            {/* ── Actions column ─────────────────────────────────────────── */}
             <div className="flex items-center justify-end gap-1 py-1.5">
               <button
                 onClick={() => {
-                  // derive a human label from first column
                   const firstCol = config.columns[0];
                   const label = firstCol
                     ? String((row as Record<string, unknown>)[firstCol.key] ?? `#${row.id}`)
                     : `#${row.id}`;
                   setDeletePending({ id: row.id, label });
                 }}
-                title="Delete"
+                title={_("Delete")}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded
                            text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)]
                            transition-all"
@@ -300,17 +294,16 @@ function CollectionListView<T extends { id: number }>({
         ))}
       </div>
 
-      {/* ── Delete confirm dialog ───────────────────────────────────────────── */}
       {deletePending && (
         <ConfirmDialog
-          title="Delete item"
+          title={_("Delete item")}
           message={
             <>
               Delete <strong className="text-[var(--theme-text)]">"{deletePending.label}"</strong>?
-              <br />This action cannot be undone.
+              <br />{_("This action cannot be undone.")}
             </>
           }
-          confirmLabel="Delete"
+          confirmLabel={_("Delete")}
           onConfirm={confirmDelete}
           onCancel={() => setDeletePending(null)}
         />

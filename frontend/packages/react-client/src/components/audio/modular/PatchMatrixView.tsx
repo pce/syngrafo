@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useLingui } from "@lingui/react";
 import type { Patch, PatchCable, SignalTransform } from "@syngrafo/audio";
 import { BLOCK_REGISTRY, DEFAULT_TRANSFORM } from "@syngrafo/audio";
 
@@ -31,12 +32,12 @@ export function PatchMatrixView({
   onRemoveCable,
   onSetTransform,
 }: PatchMatrixViewProps) {
+  const { _ } = useLingui();
   const [editing, setEditing] = useState<{
     cableId:   string;
     transform: SignalTransform;
   } | null>(null);
 
-  // ── Rows: one per output port of each block (skip audio ports) ─────────
   const rows: MatrixRow[] = patch.blocks.flatMap(block => {
     const def = BLOCK_REGISTRY[block.kind];
     return Object.values(def.outputs)
@@ -50,7 +51,6 @@ export function PatchMatrixView({
       }));
   });
 
-  // ── Cols: one per modulatable param of each block ──────────────────────
   const cols: MatrixCol[] = patch.blocks.flatMap(block => {
     const def = BLOCK_REGISTRY[block.kind];
     return Object.values(def.params)
@@ -98,7 +98,7 @@ export function PatchMatrixView({
   if (rows.length === 0 || cols.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-[var(--theme-text-muted)] text-xs">
-        Add blocks to see the patch matrix
+        {_("Add blocks to see the patch matrix")}
       </div>
     );
   }
@@ -106,14 +106,12 @@ export function PatchMatrixView({
   return (
     <div className="flex flex-col gap-3">
 
-      {/* ── Matrix table ──────────────────────────────────────────────────── */}
       <div className="overflow-auto">
         <table className="border-collapse text-[10px] w-full">
           <thead>
             <tr>
-              {/* Top-left corner cell */}
               <th className="sticky left-0 z-20 bg-[var(--theme-surface)] border border-[var(--theme-border)] px-2 py-1 text-left min-w-[130px] text-[var(--theme-text-muted)] font-normal">
-                source ╲ dest
+                {_("source ╲ dest")}
               </th>
 
               {cols.map(col => (
@@ -197,7 +195,7 @@ export function PatchMatrixView({
                       }
                       title={
                         cable
-                          ? "Connected — click to edit transform, click again to remove"
+                          ? _("Connected — click to edit transform, click again to remove")
                           : `Connect ${row.portLabel} → ${col.paramLabel}`
                       }
                       onClick={() => !isSelf && handleCell(row, col)}
@@ -226,7 +224,6 @@ export function PatchMatrixView({
         </table>
       </div>
 
-      {/* ── Transform editor ──────────────────────────────────────────────── */}
       {editing &&
         (() => {
           const cable = patch.cables.find(c => c.id === editing.cableId);
@@ -242,7 +239,7 @@ export function PatchMatrixView({
           return (
             <div className="rounded border border-[var(--theme-border)] bg-[var(--theme-surface)] p-3 flex flex-wrap gap-3 items-end text-[10px]">
               <span className="text-[var(--theme-text-muted)] font-semibold uppercase tracking-wider w-full">
-                Cable transform
+                {_("Cable transform")}
               </span>
 
               {(["inMin", "inMax", "outMin", "outMax"] as const).map(k => (
@@ -263,7 +260,7 @@ export function PatchMatrixView({
               ))}
 
               <label className="flex flex-col gap-0.5 text-[var(--theme-text-muted)]">
-                curve
+                {_("curve")}
                 <select
                   value={t.mode}
                   className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded px-1 py-0.5 text-[var(--theme-text)] text-[10px]"
@@ -283,7 +280,7 @@ export function PatchMatrixView({
                   checked={t.clamp}
                   onChange={e => update({ clamp: e.target.checked })}
                 />
-                clamp
+                {_("clamp")}
               </label>
 
               <button
@@ -293,14 +290,14 @@ export function PatchMatrixView({
                   setEditing(null);
                 }}
               >
-                Remove pin
+                {_("Remove pin")}
               </button>
 
               <button
                 className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] px-2 py-0.5 rounded border border-[var(--theme-border)]"
                 onClick={() => setEditing(null)}
               >
-                Close
+                {_("Close")}
               </button>
             </div>
           );

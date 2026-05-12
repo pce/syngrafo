@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useLingui } from "@lingui/react";
 import { FileBrowser, LazyImage } from "@syngrafo/ui";
 import type { FileBrowserEntry } from "@syngrafo/ui";
 import { KeyboardScheme, KEYBOARD_SCHEME_PREF_KEY } from "@syngrafo/shared";
@@ -25,6 +26,7 @@ function FileIcon({ entry }: { entry: FsEntry }) {
 
 const ImportSelectBox: React.FC = () => {
   const { state, dispatch } = useDms();
+  const { _ } = useLingui();
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver,  setIsDragOver]  = useState(false);
   const [queue,       setQueue]       = useState<string[]>([]);
@@ -62,7 +64,7 @@ const ImportSelectBox: React.FC = () => {
     <>
       <div className="flex flex-col gap-2 p-3 bg-[var(--theme-bg)] border-t border-[var(--theme-border)]">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">Import to Zone</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{_("Import to Zone")}</span>
         </div>
 
         <div
@@ -93,17 +95,17 @@ const ImportSelectBox: React.FC = () => {
           {isImporting ? (
             <>
               <div className="w-4 h-4 border-2 border-[var(--theme-primary)] border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">Importing…</span>
+              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">{_("Importing…")}</span>
             </>
           ) : isDragOver ? (
             <>
               <Icon name="download" size="xs" className="text-[var(--theme-primary)]" />
-              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">Drop to choose…</span>
+              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">{_("Drop to choose…")}</span>
             </>
           ) : (
             <>
               <Icon name="plus" size="xs" className="text-[var(--theme-text-muted)]" />
-              <span className="text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wide">Click or Drop to Import</span>
+              <span className="text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wide">{_("Click or Drop to Import")}</span>
             </>
           )}
         </div>
@@ -132,6 +134,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
   onPathChange,
 }) => {
   const { state, dispatch } = useDms();
+  const { _ } = useLingui();
   const [loading, setLoading] = useState(false);
   const [keyboardScheme, setKeyboardScheme] = useState<KeyboardScheme>("macos");
   const onPathChangeRef = useRef(onPathChange);
@@ -244,7 +247,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
                 : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
             }`}
           >
-            Source
+            {_("Source")}
           </button>
           <button
             onClick={goToWorkspace}
@@ -255,7 +258,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
                 : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
             }`}
           >
-            Workspace
+            {_("Workspace")}
           </button>
         </div>
       </div>
@@ -271,7 +274,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
           }`}
         >
           <Icon name="edit" size="xs" />
-          <span>Notes</span>
+          <span>{_("Notes")}</span>
         </button>
         <button
           onClick={goToKanban}
@@ -283,7 +286,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
           }`}
         >
           <Icon name="rows" size="xs" />
-          <span>Kanban</span>
+          <span>{_("Kanban")}</span>
         </button>
       </div>
     </>
@@ -294,7 +297,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
       onClick={selectInboxFolder}
       className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] transition-colors shrink-0"
     >
-      Browse…
+      {_("Browse…")}
     </button>
   ) : (
     <button
@@ -303,7 +306,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
       title="Index all files in this folder"
       className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 disabled:opacity-40 text-[var(--theme-primary-fg)] transition-colors shrink-0"
     >
-      {state.indexing ? "…" : "Index"}
+      {state.indexing ? "…" : _("Index")}
     </button>
   );
 
@@ -311,9 +314,9 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
     <div className="px-3 py-2 border-t border-[var(--theme-border)] text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] shrink-0 bg-[var(--theme-bg)]/50">
       <span className="text-[var(--theme-text)]">{state.indexStatus.indexed}</span>
       <span className="mx-1">/</span>
-      <span>{state.indexStatus.total} indexed</span>
+      <span>{state.indexStatus.total}{" "}{_("indexed")}</span>
       {state.indexStatus.errors > 0 && (
-        <span className="text-[var(--theme-danger)] ml-auto float-right">{state.indexStatus.errors} errors</span>
+        <span className="text-[var(--theme-danger)] ml-auto float-right">{state.indexStatus.errors}{" "}{_("errors")}</span>
       )}
     </div>
   ) : undefined;

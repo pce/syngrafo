@@ -39,6 +39,7 @@ import {
   isVideoFile,
 } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
+import { useLingui } from "@lingui/react";
 import { Icon } from "../Icon";
 
 
@@ -101,6 +102,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
   const [isLoading, setIsLoading]   = useState(false);
 
+  const { _ } = useLingui();
   const listRef         = useRef<HTMLUListElement>(null);
   const lastClickRef    = useRef<string | null>(null);   // last clicked path for shift-range
 
@@ -296,7 +298,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
       className={`flex flex-col h-full bg-[var(--theme-surface)] ${className}`}
       onClick={() => onFocus?.(panelId)}
     >
-      {/* Optional title strip */}
       {title && (
         <div className="px-2 py-0.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)]/40 shrink-0">
           <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60">
@@ -305,12 +306,11 @@ const FilePanel: React.FC<FilePanelProps> = ({
         </div>
       )}
 
-      {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-1.5 py-1 border-b border-[var(--theme-border)] shrink-0">
         <button
           onClick={goUp}
           disabled={isAtRoot}
-          title="Up one level (Backspace)"
+          title={_("Up one level (Backspace)")}
           className="p-1 rounded hover:bg-[var(--theme-bg)] disabled:opacity-30 transition-colors text-[var(--theme-text-muted)]"
         >
           <Icon name="chevron-up" size="xs" />
@@ -322,48 +322,45 @@ const FilePanel: React.FC<FilePanelProps> = ({
         >
           {path
             ? path.split("/").slice(-2).join("/") || "/"
-            : "No folder selected"}
+            : _("No folder selected")}
         </span>
 
         <button
           onClick={browse}
-          title="Choose folder"
+          title={_("Choose folder")}
           className="p-1 rounded hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)]"
         >
           <Icon name="folder-open" size="xs" />
         </button>
         <button
           onClick={refresh}
-          title="Refresh"
+          title={_("Refresh")}
           className="p-1 rounded hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)]"
         >
           <Icon name="refresh" size="xs" />
         </button>
       </div>
 
-      {/* Selection badge */}
       {selCount > 0 && (
         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--theme-primary)]/10 border-b border-[var(--theme-primary)]/20 shrink-0">
           <span className="text-[9px] font-bold text-[var(--theme-primary)]">
-            {selCount} selected
+            {selCount}{" "}{_("selected")}
           </span>
           <button
             onClick={() => emitSelection(new Set())}
             className="ml-auto text-[9px] font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)] transition-colors"
           >
-            Clear
+            {_("Clear")}
           </button>
         </div>
       )}
 
-      {/* Spinner */}
       {isLoading && (
         <div className="flex items-center justify-center py-3 shrink-0">
           <div className="w-4 h-4 border-2 border-[var(--theme-primary)] border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
-      {/* Entry list */}
       <ul
         ref={listRef}
         className="flex-1 overflow-y-auto py-0.5 scrollbar-thin outline-none"
@@ -374,7 +371,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
       >
         {!isLoading && entries.length === 0 && (
           <li className="px-4 py-8 text-center text-[var(--theme-text-muted)] text-xs italic">
-            {path ? "Empty folder" : "No folder selected"}
+            {path ? _("Empty folder") : _("No folder selected")}
           </li>
         )}
 
@@ -403,7 +400,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
                 .join(" ")
                 .trim()}
             >
-              {/* Checkbox tick */}
               <span
                 className={[
                   "w-3 h-3 shrink-0 flex items-center justify-center rounded border transition-colors",
@@ -438,7 +434,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
               {entry.indexed && (
                 <span
                   className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500"
-                  title="Indexed"
+                  title={_("Indexed")}
                 />
               )}
 

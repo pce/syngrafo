@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLingui } from "@lingui/react";
 import { Icon } from "./Icon";
 import AudioTimelinePage from "./audio/AudioTimelinePage";
 import { PatchWorkstation } from "./audio/modular/index";
@@ -26,6 +27,7 @@ interface ContentProps {
 }
 
 function AudioPortalContent({ onClose, workingDir }: ContentProps) {
+  const { _ } = useLingui();
   const handleClose = useCallback(() => onClose?.(), [onClose]);
   const [activeTab, setActiveTab] = useState<"sequencer" | "patcher">("sequencer");
 
@@ -51,14 +53,13 @@ function AudioPortalContent({ onClose, workingDir }: ContentProps) {
       className="fixed inset-0 z-[200] flex flex-col bg-[var(--theme-bg)] text-[var(--theme-text)]"
       role="dialog"
       aria-modal="true"
-      aria-label="Csound Audio Editor"
+      aria-label={_("Csound Audio Editor")}
     >
       <header className="sgf-portal-header flex items-center gap-2 px-4 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] shrink-0 shadow-sm z-10">
         <Icon name="csound" size="xs" className="text-[var(--theme-primary)] shrink-0" />
         <span className="text-sm font-semibold text-[var(--theme-text)] flex-1 truncate">
-          Csound Audio Editor
+          {_("Csound Audio Editor")}
         </span>
-        {/* Tab switcher */}
         <div className="flex rounded border border-[var(--theme-border)] overflow-hidden text-[9px] mx-2">
           {(["sequencer", "patcher"] as const).map(tab => (
             <button
@@ -70,17 +71,17 @@ function AudioPortalContent({ onClose, workingDir }: ContentProps) {
                   : "px-3 py-1 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] uppercase tracking-wider"
               }
             >
-              {tab === "sequencer" ? "\u23F1 Seq" : "\u2B21 Patch"}
+              {tab === "sequencer" ? _("⏱ Seq") : _("⬡ Patch")}
             </button>
           ))}
         </div>
 
         <span className="text-[9px] text-[var(--theme-text-muted)] hidden sm:block select-none">
-          Esc to close
+          {_("Esc to close")}
         </span>
         <button
           onClick={handleClose}
-          title="Close audio editor (Esc)"
+          title={_("Close audio editor (Esc)")}
           className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
         >
           <Icon name="close" size="xs" />

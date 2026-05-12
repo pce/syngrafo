@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLingui } from "@lingui/react";
 import { useDms } from "../../store/dms-store";
 import { nlp } from "../../services/nlp-service";
 import { dms, isImageFile } from "../../services/dms-service";
@@ -38,6 +39,7 @@ function SentimentBadge({ data }: { data: SentimentData }) {
 
 const AnalysisPanel: React.FC = () => {
   const { state, dispatch } = useDms();
+  const { _ } = useLingui();
   const [keywords, setKeywords]   = useState<Keyword[]>([]);
   const [entities, setEntities]   = useState<Entity[]>([]);
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
@@ -181,7 +183,7 @@ const AnalysisPanel: React.FC = () => {
       <div className="flex flex-col items-center justify-center h-full gap-2 p-6 text-center">
         <Icon name="microscope" size="lg" className="opacity-20 text-[var(--theme-text-muted)]" />
         <p className="text-xs text-[var(--theme-text-muted)]">
-          Select a file to see its info and analysis
+          {_("Select a file to see its info and analysis")}
         </p>
       </div>
     );
@@ -190,14 +192,12 @@ const AnalysisPanel: React.FC = () => {
   return (
     <div className="p-4 space-y-5 bg-[var(--theme-surface)]">
 
-      {/* ── File Info Card — always shown when fileStats available ── */}
       {state.fileStats && (() => {
         const fs = state.fileStats;
         const kindLabel = KIND_LABEL[fs.kind] ?? "File";
         const kindIcon  = KIND_ICON[fs.kind]  ?? "file";
         return (
           <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] overflow-hidden">
-            {/* Title row */}
             <div className="flex items-center gap-2.5 px-3 py-2.5">
               <span className="shrink-0 text-[var(--theme-text-muted)]">
                 <Icon name={kindIcon as IconName} size="sm" />
@@ -212,23 +212,22 @@ const AnalysisPanel: React.FC = () => {
               </div>
               <div className="flex flex-col items-end gap-0.5 shrink-0">
                 {fs.indexed
-                  ? <span className="text-[8px] font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/>Indexed</span>
-                  : <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-border)] inline-block"/>Not indexed</span>
+                  ? <span className="text-[8px] font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"/>{_("Indexed")}</span>
+                  : <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-border)] inline-block"/>{_("Not indexed")}</span>
                 }
               </div>
             </div>
-            {/* Stats grid */}
             <div className="grid grid-cols-2 border-t border-[var(--theme-border)]">
               <div className="px-3 py-1.5 bg-[var(--theme-surface)]">
-                <p className="text-[8px] uppercase font-bold text-[var(--theme-text-muted)]">Size</p>
+                <p className="text-[8px] uppercase font-bold text-[var(--theme-text-muted)]">{_("Size")}</p>
                 <p className="text-[11px] font-mono text-[var(--theme-text)]">{fmtBytes(fs.size)}</p>
               </div>
               <div className="px-3 py-1.5 bg-[var(--theme-surface)] border-l border-[var(--theme-border)]">
-                <p className="text-[8px] uppercase font-bold text-[var(--theme-text-muted)]">Modified</p>
+                <p className="text-[8px] uppercase font-bold text-[var(--theme-text-muted)]">{_("Modified")}</p>
                 <p className="text-[11px] font-mono text-[var(--theme-text)]">{fmtDate(fs.mtime)}</p>
               </div>
               <div className="col-span-2 px-3 py-1.5 bg-[var(--theme-surface)] border-t border-[var(--theme-border)]">
-                <p className="text-[8px] uppercase font-bold text-[var(--theme-text-muted)]">MIME</p>
+                <p className="text-[8px] uppercase font-bold text-[var(--theme-text-muted)]">{_("MIME")}</p>
                 <p className="text-[10px] font-mono text-[var(--theme-text)] truncate">{fs.mime}</p>
               </div>
             </div>
@@ -236,10 +235,9 @@ const AnalysisPanel: React.FC = () => {
         );
       })()}
 
-      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
-          Analysis{" "}
+          {_("Analysis")}{" "}
           {loading && (
             <span className="text-[var(--theme-primary)] animate-pulse ml-1">●</span>
           )}
@@ -261,7 +259,7 @@ const AnalysisPanel: React.FC = () => {
               disabled={isFiling}
               className="px-2 py-1 text-[10px] bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] rounded shadow-lg transition-colors disabled:opacity-50"
             >
-              {isFiling ? "Filing..." : "File to Zone"}
+              {isFiling ? _("Filing...") : _("File to Zone")}
             </button>
             <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-50 min-w-[120px] bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded shadow-xl py-1">
               {zones.map((z) => (
@@ -278,28 +276,26 @@ const AnalysisPanel: React.FC = () => {
         )}
       </div>
 
-      {/* ── Language + Sentiment ── */}
       {(displayLang || displaySentiment) && (
         <section className="space-y-1.5">
           {displayLang && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-[var(--theme-text-muted)] w-20 shrink-0">Language</span>
+              <span className="text-[var(--theme-text-muted)] w-20 shrink-0">{_("Language")}</span>
               <span className="font-mono text-[var(--theme-text)] uppercase">{displayLang}</span>
             </div>
           )}
           {displaySentiment && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-[var(--theme-text-muted)] w-20 shrink-0">Sentiment</span>
+              <span className="text-[var(--theme-text-muted)] w-20 shrink-0">{_("Sentiment")}</span>
               <SentimentBadge data={displaySentiment} />
             </div>
           )}
         </section>
       )}
 
-      {/* ── Keywords ── */}
       {displayKeywords.length > 0 && (
         <section>
-          <h4 className="text-xs font-semibold text-[var(--theme-text-muted)] mb-2">Keywords</h4>
+          <h4 className="text-xs font-semibold text-[var(--theme-text-muted)] mb-2">{_("Keywords")}</h4>
           <div className="flex flex-wrap gap-1.5">
             {displayKeywords.map((kw) => (
               <span
@@ -314,10 +310,9 @@ const AnalysisPanel: React.FC = () => {
         </section>
       )}
 
-      {/* ── Entities ── */}
       {displayEntities.length > 0 && (
         <section>
-          <h4 className="text-xs font-semibold text-[var(--theme-text-muted)] mb-2">Entities</h4>
+          <h4 className="text-xs font-semibold text-[var(--theme-text-muted)] mb-2">{_("Entities")}</h4>
           <div className="space-y-1">
             {displayEntities.map((e, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
@@ -331,8 +326,6 @@ const AnalysisPanel: React.FC = () => {
         </section>
       )}
 
-      {/* ── OCR / Extracted Text — only for images ── */}
-      {/* For text files the content is already visible in the document viewer */}
       {isImage && (() => {
         const textToShow = state.viewerContent?.trim()
           || state.metadata?.snippet?.trim()
@@ -345,7 +338,7 @@ const AnalysisPanel: React.FC = () => {
               onClick={() => setOcrExpanded(e => !e)}
               className="w-full flex items-center justify-between px-3 py-2 bg-[var(--theme-bg)] text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
             >
-              <span>Extracted Text{!isFresh && <span className="ml-1 normal-case font-normal opacity-60">(stored)</span>}</span>
+              <span>{_("Extracted Text")}{!isFresh && <span className="ml-1 normal-case font-normal opacity-60">{_("(stored)")}</span>}</span>
               <span className="opacity-50">{ocrExpanded ? "▲" : "▼"}</span>
             </button>
             {ocrExpanded && (
@@ -357,31 +350,30 @@ const AnalysisPanel: React.FC = () => {
         );
       })()}
 
-      {/* ── EXIF Metadata (images only) ── */}
       {isImage && exif && Object.keys(exif).length > 0 && (
         <section className="border border-[var(--theme-border)] rounded-xl overflow-hidden">
           <button
             onClick={() => setExifExpanded(e => !e)}
             className="w-full flex items-center justify-between px-3 py-2 bg-[var(--theme-bg)] text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
           >
-            <span>Image Info</span>
+            <span>{_("Image Info")}</span>
             <span className="opacity-50">{exifExpanded ? "▲" : "▼"}</span>
           </button>
           {exifExpanded && (
             <div className="px-3 py-2 bg-[var(--theme-surface)] space-y-1">
               {(Object.entries(exif) as [string, unknown][]).map(([k, v]) => {
                 const label: Record<string, string> = {
-                  width: "Width", height: "Height", dpiX: "DPI X", dpiY: "DPI Y",
-                  colorModel: "Color", colorProfile: "Profile", orientation: "Orientation",
-                  cameraMake: "Camera Make", cameraModel: "Camera Model",
-                  lensModel: "Lens", lensMake: "Lens Make",
-                  dateTime: "Date Taken", software: "Software",
-                  aperture: "Aperture (f/)", exposureSec: "Exposure",
-                  focalLength: "Focal Length", iso: "ISO",
-                  flash: "Flash", colorSpace: "Color Space",
-                  exposureBias: "EV Bias", whiteBalance: "White Bal.",
-                  pixelDimensions: "Pixel Size",
-                  gpsLat: "GPS Lat", gpsLon: "GPS Lon", gpsAlt: "GPS Alt",
+                  width: _("Width"), height: _("Height"), dpiX: _("DPI X"), dpiY: _("DPI Y"),
+                  colorModel: _("Color"), colorProfile: _("Profile"), orientation: _("Orientation"),
+                  cameraMake: _("Camera Make"), cameraModel: _("Camera Model"),
+                  lensModel: _("Lens"), lensMake: _("Lens Make"),
+                  dateTime: _("Date Taken"), software: _("Software"),
+                  aperture: _("Aperture (f/)"), exposureSec: _("Exposure"),
+                  focalLength: _("Focal Length"), iso: _("ISO"),
+                  flash: _("Flash"), colorSpace: _("Color Space"),
+                  exposureBias: _("EV Bias"), whiteBalance: _("White Bal."),
+                  pixelDimensions: _("Pixel Size"),
+                  gpsLat: _("GPS Lat"), gpsLon: _("GPS Lon"), gpsAlt: _("GPS Alt"),
                 };
                 const display = String(v);
                 let fmtV = display;
@@ -392,8 +384,8 @@ const AnalysisPanel: React.FC = () => {
                 } else if (k === "focalLength") fmtV = `${parseFloat(display).toFixed(0)} mm`;
                 else if (k === "gpsLat" || k === "gpsLon") fmtV = parseFloat(display).toFixed(6);
                 else if (k === "gpsAlt") fmtV = `${parseFloat(display).toFixed(0)} m`;
-                else if (k === "flash") fmtV = Number(display) & 1 ? "Fired" : "No flash";
-                else if (k === "whiteBalance") fmtV = Number(display) === 0 ? "Auto" : "Manual";
+                else if (k === "flash") fmtV = Number(display) & 1 ? _("Fired") : _("No flash");
+                else if (k === "whiteBalance") fmtV = Number(display) === 0 ? _("Auto") : _("Manual");
                 return (
                   <div key={k} className="flex items-center gap-2 text-[11px]">
                     <span className="text-[var(--theme-text-muted)] w-24 shrink-0 text-[10px]">{label[k] ?? k}</span>
@@ -406,24 +398,23 @@ const AnalysisPanel: React.FC = () => {
         </section>
       )}
 
-      {/* ── Stored DB Metadata — only shown when the file is truly indexed (indexed_at > 0) ── */}
       {state.metadata && state.metadata.indexedAt > 0 && (
         <section className="border-t border-[var(--theme-border)] pt-4 space-y-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             <h4 className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
-              Database Entry
+              {_("Database Entry")}
             </h4>
           </div>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <div className="bg-[var(--theme-bg)] p-2 rounded border border-[var(--theme-border)]">
-              <p className="text-[9px] uppercase font-bold text-[var(--theme-text-muted)] mb-1">Indexed</p>
+              <p className="text-[9px] uppercase font-bold text-[var(--theme-text-muted)] mb-1">{_("Indexed")}</p>
               <p className="font-mono">
                 {new Date(state.metadata.indexedAt * 1000).toLocaleDateString()}
               </p>
             </div>
             <div className="bg-[var(--theme-bg)] p-2 rounded border border-[var(--theme-border)]">
-              <p className="text-[9px] uppercase font-bold text-[var(--theme-text-muted)] mb-1">Size</p>
+              <p className="text-[9px] uppercase font-bold text-[var(--theme-text-muted)] mb-1">{_("Size")}</p>
               <p className="font-mono">
                 {state.metadata.sizeBytes < 1024
                   ? `${state.metadata.sizeBytes} B`
@@ -437,7 +428,7 @@ const AnalysisPanel: React.FC = () => {
           {/* Show snippet in DB section only when NOT already shown in Extracted Text above */}
           {state.metadata.snippet && !state.viewerContent && !isImage && (
             <div className="bg-[var(--theme-bg)] p-3 rounded border border-[var(--theme-border)]">
-              <p className="text-[9px] uppercase font-bold text-[var(--theme-text-muted)] mb-1">Snippet</p>
+              <p className="text-[9px] uppercase font-bold text-[var(--theme-text-muted)] mb-1">{_("Snippet")}</p>
               <p className="text-[11px] leading-relaxed opacity-90 line-clamp-4 italic">
                 &ldquo;{state.metadata.snippet}&rdquo;
               </p>
@@ -452,11 +443,10 @@ const AnalysisPanel: React.FC = () => {
         </section>
       )}
 
-      {/* ── Colour swatches — auto-detected from any text content ── */}
       {extractedColors.length > 0 && (
         <section>
           <h4 className="text-xs font-semibold text-[var(--theme-text-muted)] mb-2">
-            Colors <span className="opacity-50 font-normal">({extractedColors.length})</span>
+            {_("Colors")} <span className="opacity-50 font-normal">({extractedColors.length})</span>
           </h4>
           <div className="flex flex-wrap gap-1.5">
             {extractedColors.map((color) => (
@@ -476,7 +466,6 @@ const AnalysisPanel: React.FC = () => {
         </section>
       )}
 
-      {/* ── Loading skeleton ── */}
       {loading && displayKeywords.length === 0 && (
         <div className="space-y-2">
           {[60, 80, 45, 70].map((w, i) => (
@@ -489,21 +478,19 @@ const AnalysisPanel: React.FC = () => {
         </div>
       )}
 
-      {/* ── Image palette & histogram ──────────────────────────────────────── */}
       {isImage && (
         <div className="mt-3 space-y-2">
           {isAnalyzing && (
             <div className="flex items-center gap-2 text-[var(--theme-text-muted)] text-[10px]">
               <span className="w-3 h-3 border border-current/40 border-t-current rounded-full animate-spin" />
-              Analysing palette…
+              {_("Analysing palette…")}
             </div>
           )}
           {imageAnalysis && (
             <>
-              {/* Colour palette swatches */}
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-1.5">
-                  Colour Palette ({imageAnalysis.palette.length})
+                  {_("Colour Palette")} ({imageAnalysis.palette.length})
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {imageAnalysis.palette.map((c, i) => (
@@ -520,10 +507,9 @@ const AnalysisPanel: React.FC = () => {
                   ))}
                 </div>
               </div>
-              {/* RGB histogram — thin stacked bars */}
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-                  RGB Histogram
+                  {_("RGB Histogram")}
                 </p>
                 {(['r','g','b'] as const).map(ch => {
                   const data = imageAnalysis.histogram[ch];
