@@ -22,10 +22,14 @@ import React, {
   useState,
 } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
+import { MarkupPreview, type MarkupFormat } from "@syngrafo/shared";
 
 import { dms } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
 import { useDms } from "../../store/dms-store";
+import { useSettings } from "../../store/settings-store";
+import { getResolvedPaperStyle, paperStyleBackgroundCss } from "../../models/paper-style";
 import { Icon } from "../Icon";
 
 export interface NotesViewProps {
@@ -41,170 +45,18 @@ interface CollectionGroup {
   notes: FsEntry[];
 }
 
-/** Escape HTML special chars. */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+type NoteFormat = MarkupFormat;
+
+function noteFormatFromPath(path: string): NoteFormat {
+  return path.endsWith(".adoc") ? "asciidoc" : "markdown";
 }
 
-/**
- * Apply inline markup: `code`, **bold**, *italic*, _italic_, inline images.
- * Images are extracted before HTML-escaping so URLs survive intact.
- */
-function applyInline(raw: string): string {
-  // Step 1: extract images to placeholders
-  const imgs: Array<{ src: string; alt: string }> = [];
-  let s = raw.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, src) => {
-    imgs.push({ src, alt });
-    return `\x00IMG${imgs.length - 1}\x00`;
-  });
-  // Step 2: HTML-escape everything
-  s = escapeHtml(s);
-  // Step 3: restore image tags
-  s = s.replace(/\x00IMG(\d+)\x00/g, (_m, idx) => {
-    const item = imgs[Number(idx)];
-    if (!item) return "";
-    const { src, alt } = item;
-    const safeSrc = src.startsWith("/") ? `local:/${src}` : src;
-    return (
-      `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(alt)}" ` +
-      `class="max-w-full rounded-lg border border-[var(--theme-border)] my-1 inline-block" loading="lazy" />`
-    );
-  });
-  // Step 4: inline patterns
-  return s
-    .replace(/`([^`]+)`/g,
-      `<code class="font-mono text-[0.82em] px-1 py-0.5 rounded ` +
-      `bg-[var(--theme-surface)] border border-[var(--theme-border)]">$1</code>`)
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/_(.+?)_/g, "<em>$1</em>");
+function isNoteEntry(entry: FsEntry): boolean {
+  return entry.kind === "file" && (entry.name.endsWith(".md") || entry.name.endsWith(".adoc"));
 }
 
-/**
- * Convert markdown string to HTML.
- * Supports: headings, task lists, bullets, hr, fenced code/ASCII art blocks
- * (```ascii / ```art / ```diagram), standalone image lines, inline markup.
- */
-function renderMarkdown(md: string): string {
-  const lines = md.split("\n");
-  const out: string[] = [];
-  let inCodeBlock = false;
-  let codeLang = "";
-  let codeLines: string[] = [];
-  let prevWasBlank = false;
-
-  const flushCode = () => {
-    const escaped = codeLines.map((l) => escapeHtml(l)).join("\n");
-    const isAscii = ["ascii", "art", "diagram", "txt"].includes(codeLang);
-    out.push(
-      `<pre class="my-2 overflow-x-auto rounded-lg p-3 text-[11px] leading-snug font-mono` +
-        ` whitespace-pre bg-[var(--theme-surface)] border border-[var(--theme-border)]` +
-        ` text-[var(--theme-text)]${isAscii ? " text-green-600 dark:text-green-400" : ""}">` +
-      (codeLang && !isAscii
-        ? `<span class="text-[9px] font-bold uppercase tracking-wider ` +
-          `text-[var(--theme-text-muted)] block mb-1">${escapeHtml(codeLang)}</span>`
-        : "") +
-      `<code>${escaped}</code></pre>`
-    );
-    codeLines = [];
-    codeLang = "";
-  };
-
-  for (const line of lines) {
-    if (inCodeBlock) {
-      if (line.trimEnd() === "```" || line.trimEnd() === "~~~") {
-        flushCode();
-        inCodeBlock = false;
-      } else {
-        codeLines.push(line);
-      }
-      prevWasBlank = false;
-      continue;
-    }
-
-    if (line.startsWith("```") || line.startsWith("~~~")) {
-      inCodeBlock = true;
-      codeLang = line.slice(3).trim().toLowerCase();
-      prevWasBlank = false;
-      continue;
-    }
-
-    if (line.trim() === "") {
-      if (!prevWasBlank) out.push("<br />");
-      prevWasBlank = true;
-      continue;
-    }
-    prevWasBlank = false;
-
-    if (line.startsWith("### ")) {
-      out.push(`<h3 class="text-base font-semibold mt-3 mb-1">${applyInline(line.slice(4))}</h3>`);
-      continue;
-    }
-    if (line.startsWith("## ")) {
-      out.push(`<h2 class="text-lg font-bold mt-4 mb-1">${applyInline(line.slice(3))}</h2>`);
-      continue;
-    }
-    if (line.startsWith("# ")) {
-      out.push(`<h1 class="text-xl font-bold mt-4 mb-2">${applyInline(line.slice(2))}</h1>`);
-      continue;
-    }
-
-    if (/^[-*_]{3,}$/.test(line.trim())) {
-      out.push('<hr class="my-3 border-[var(--theme-border)]" />');
-      continue;
-    }
-
-    // Standalone image line
-    const imgMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (imgMatch) {
-      const alt = escapeHtml(imgMatch[1] as string);
-      const src = imgMatch[2] as string;
-      const safeSrc = src.startsWith("/") ? `local:/${src}` : src;
-      out.push(
-        `<img src="${escapeHtml(safeSrc)}" alt="${alt}" loading="lazy" ` +
-        `class="max-w-full rounded-lg border border-[var(--theme-border)] my-2 block" />`
-      );
-      continue;
-    }
-
-    if (/^- \[ \] /.test(line)) {
-      out.push(
-        `<div class="flex items-start gap-2 my-0.5">` +
-          `<input type="checkbox" disabled class="mt-1 shrink-0 accent-current" />` +
-          `<span>${applyInline(line.slice(6))}</span>` +
-        `</div>`
-      );
-      continue;
-    }
-    if (/^- \[x\] /i.test(line)) {
-      out.push(
-        `<div class="flex items-start gap-2 my-0.5">` +
-          `<input type="checkbox" disabled checked class="mt-1 shrink-0 accent-current" />` +
-          `<span class="line-through opacity-60">${applyInline(line.slice(6))}</span>` +
-        `</div>`
-      );
-      continue;
-    }
-
-    if (line.startsWith("- ")) {
-      out.push(
-        `<div class="flex items-start gap-2 my-0.5">` +
-          `<span class="mt-[7px] w-1.5 h-1.5 rounded-full bg-current shrink-0 inline-block"></span>` +
-          `<span>${applyInline(line.slice(2))}</span>` +
-        `</div>`
-      );
-      continue;
-    }
-
-    out.push(`<p class="my-0.5">${applyInline(line)}</p>`);
-  }
-
-  if (inCodeBlock) flushCode();
-  return out.join("\n");
+function stripNoteExtension(name: string): string {
+  return name.replace(/\.(md|adoc)$/i, "");
 }
 
 /**
@@ -244,7 +96,8 @@ function fmtDate(ms: number | undefined): string {
 
 const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const { state: storeState, dispatch: storeDispatch } = useDms();
-  const { _ } = useLingui();
+  const { settings } = useSettings();
+  useLingui();
 
   const [rootNotes,    setRootNotes]    = useState<FsEntry[]>([]);
   const [collections,  setCollections]  = useState<CollectionGroup[]>([]);
@@ -261,6 +114,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   const [creatingNote,      setCreatingNote]      = useState(false);
   const [newNoteTitle,      setNewNoteTitle]       = useState("");
   const [newNoteCollection, setNewNoteCollection] = useState<string>("");
+  const [newNoteFormat, setNewNoteFormat] = useState<NoteFormat>("markdown");
 
   const [creatingCollection, setCreatingCollection] = useState(false);
   const [newCollectionName,  setNewCollectionName]  = useState("");
@@ -293,7 +147,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
 
     const entries = res.data.entries;
     const mdFiles = entries
-      .filter((e) => e.kind === "file" && e.name.endsWith(".md"))
+      .filter(isNoteEntry)
       .sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0));
 
     const subdirs = entries.filter((e) => e.kind === "dir");
@@ -302,7 +156,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
       const subRes = await dms.scanDir(dir.path);
       if (!subRes.ok || !subRes.data) continue;
       const subNotes = subRes.data.entries
-        .filter((e) => e.kind === "file" && e.name.endsWith(".md"))
+        .filter(isNoteEntry)
         .sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0));
       groups.push({ name: dir.name, dirPath: dir.path, notes: subNotes });
     }
@@ -403,23 +257,25 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
   );
 
   const createNote = useCallback(
-    async (title: string, collection: string) => {
+    async (title: string, collection: string, format: NoteFormat) => {
       const trimmed = title.trim();
       if (!trimmed) return;
       const baseSlug = slugify(trimmed) || "note";
       const targetDir = collection ? `${notesDir}/${collection}` : notesDir;
+      const ext = format === "asciidoc" ? "adoc" : "md";
       const existingNotes = collection
         ? (collections.find((c) => c.name === collection)?.notes ?? [])
         : rootNotes;
       const existingPaths = new Set(existingNotes.map((n) => n.path));
-      let filePath = `${targetDir}/${baseSlug}.md`;
+      let filePath = `${targetDir}/${baseSlug}.${ext}`;
       if (existingPaths.has(filePath)) {
         let n = 2;
-        while (existingPaths.has(`${targetDir}/${baseSlug}-${n}.md`)) n++;
-        filePath = `${targetDir}/${baseSlug}-${n}.md`;
+        while (existingPaths.has(`${targetDir}/${baseSlug}-${n}.${ext}`)) n++;
+        filePath = `${targetDir}/${baseSlug}-${n}.${ext}`;
       }
       await dms.createDir(targetDir);
-      const res = await dms.writeFile(filePath, `# ${trimmed}\n\n`);
+      const starter = format === "asciidoc" ? `= ${trimmed}\n\n` : `# ${trimmed}\n\n`;
+      const res = await dms.writeFile(filePath, starter);
       if (!res.ok) { console.error("[NotesView] Failed to create note:", res.error); return; }
       await loadNotes();
       setSelectedPath(filePath);
@@ -431,8 +287,8 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     const title = newNoteTitle.trim();
     setCreatingNote(false);
     setNewNoteTitle("");
-    if (title) await createNote(title, newNoteCollection);
-  }, [newNoteTitle, newNoteCollection, createNote]);
+    if (title) await createNote(title, newNoteCollection, newNoteFormat);
+  }, [newNoteTitle, newNoteCollection, newNoteFormat, createNote]);
 
   const createCollection = useCallback(async () => {
     const name = newCollectionName.trim();
@@ -480,12 +336,16 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
     });
   }, []);
 
-  const preview = useMemo(() => renderMarkdown(content), [content]);
+  const activeFormat = selectedPath ? noteFormatFromPath(selectedPath) : "markdown";
+  const paperStyle = useMemo(
+    () => getResolvedPaperStyle(settings.paperStyles, settings.defaultPaperStyleId),
+    [settings.defaultPaperStyleId, settings.paperStyles],
+  );
   const allCollectionNames = collections.map((c) => c.name);
 
   const renderNoteRow = (note: FsEntry, indent: boolean) => {
     const isSelected = note.path === selectedPath;
-    const label = note.name.replace(/\.md$/, "");
+    const label = stripNoteExtension(note.name);
     const isDeleting = confirmDeleteNote === note.path;
 
     if (isDeleting) {
@@ -500,11 +360,11 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
           <button
             onClick={() => void deleteNote(note.path)}
             className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0"
-          >{_("Yes")}</button>
+          >{i18n._({ id: "Yes", message: "Yes" })}</button>
           <button
             onClick={() => setConfirmDeleteNote(null)}
             className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0"
-          >{_("No")}</button>
+          >{i18n._({ id: "No", message: "No" })}</button>
         </div>
       );
     }
@@ -533,7 +393,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); setConfirmDeleteNote(note.path); }}
-          title={_("Delete note")}
+          title={i18n._({ id: "Delete note", message: "Delete note" })}
           className={[
             "shrink-0 w-5 h-5 flex items-center justify-center rounded transition-all",
             isSelected
@@ -559,19 +419,19 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--theme-border)] shrink-0">
           <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">
-            {_("Notes")}
+            {i18n._({ id: "Notes", message: "Notes" })}
           </span>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingCollection(true); setNewCollectionName(""); }}
-              title={_("New collection")}
+              title={i18n._({ id: "New collection", message: "New collection" })}
               className="w-6 h-6 flex items-center justify-center rounded transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 active:scale-95"
             >
               <Icon name="folder" size="xs" />
             </button>
             <button
-              onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingNote(true); setNewNoteTitle(""); setNewNoteCollection(""); }}
-              title={_("New note")}
+              onClick={() => { setConfirmDeleteNote(null); setConfirmDeleteCol(null); setCreatingNote(true); setNewNoteTitle(""); setNewNoteCollection(""); setNewNoteFormat("markdown"); }}
+              title={i18n._({ id: "New note", message: "New note" })}
               className="w-6 h-6 flex items-center justify-center rounded transition-colors text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 active:scale-95"
             >
               <Icon name="plus" size="xs" />
@@ -583,7 +443,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
           <div className="px-2 pt-2 pb-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-bg)] shrink-0">
             <div className="flex items-center gap-1 mb-1">
               <Icon name="folder" size="xs" className="text-[var(--theme-text-muted)] shrink-0" />
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">{_("New Collection")}</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">{i18n._({ id: "New Collection", message: "New Collection" })}</span>
             </div>
             <input
               autoFocus type="text" value={newCollectionName}
@@ -592,17 +452,17 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                 if (e.key === "Enter")  void createCollection();
                 if (e.key === "Escape") { setCreatingCollection(false); setNewCollectionName(""); }
               }}
-              placeholder={_("Collection name…")}
+              placeholder={i18n._({ id: "Collection name…", message: "Collection name…" })}
               className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
             />
             <div className="flex gap-1 mt-1.5">
               <button onClick={() => void createCollection()} disabled={!newCollectionName.trim()}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 disabled:opacity-40 transition-opacity">
-                {_("Create")}
+                {i18n._({ id: "Create", message: "Create" })}
               </button>
               <button onClick={() => { setCreatingCollection(false); setNewCollectionName(""); }}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors">
-                {_("Cancel")}
+                {i18n._({ id: "Cancel", message: "Cancel" })}
               </button>
             </div>
           </div>
@@ -617,16 +477,32 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                 if (e.key === "Enter")  void commitNewNote();
                 if (e.key === "Escape") { setCreatingNote(false); setNewNoteTitle(""); }
               }}
-              placeholder={_("Note title…")}
+              placeholder={i18n._({ id: "Note title…", message: "Note title…" })}
               className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-1.5"
             />
+            <div className="grid grid-cols-2 gap-1 mb-1.5">
+              <button
+                type="button"
+                onClick={() => setNewNoteFormat("markdown")}
+                className={`py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-colors ${newNoteFormat === "markdown" ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]" : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)]"}`}
+              >
+                Markdown
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewNoteFormat("asciidoc")}
+                className={`py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-colors ${newNoteFormat === "asciidoc" ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]" : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)]"}`}
+              >
+                AsciiDoc
+              </button>
+            </div>
             {allCollectionNames.length > 0 && (
               <select
                 value={newNoteCollection}
                 onChange={(e) => setNewNoteCollection(e.target.value)}
                 className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-md px-2 py-1 text-xs text-[var(--theme-text)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-1.5"
               >
-                <option value="">{_("(root — no collection)")}</option>
+                <option value="">{i18n._({ id: "(root — no collection)", message: "(root — no collection)" })}</option>
                 {allCollectionNames.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
@@ -635,11 +511,11 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
             <div className="flex gap-1">
               <button onClick={() => void commitNewNote()} disabled={!newNoteTitle.trim()}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 disabled:opacity-40 transition-opacity">
-                {_("Create")}
+                {i18n._({ id: "Create", message: "Create" })}
               </button>
               <button onClick={() => { setCreatingNote(false); setNewNoteTitle(""); }}
                 className="flex-1 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors">
-                {_("Cancel")}
+                {i18n._({ id: "Cancel", message: "Cancel" })}
               </button>
             </div>
           </div>
@@ -655,7 +531,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
             <div className="flex flex-col items-center justify-center py-10 px-4 gap-2 text-center">
               <Icon name="file" size="md" className="opacity-20 text-[var(--theme-text)]" />
               <p className="text-[10px] leading-relaxed text-[var(--theme-text-muted)]">
-                {_("No notes yet.")}<br />{_("Press ＋ to create one.")}
+                {i18n._({ id: "No notes yet.", message: "No notes yet." })}<br />{i18n._({ id: "Press ＋ to create one.", message: "Press ＋ to create one." })}
               </p>
             </div>
 
@@ -674,9 +550,9 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                           Delete &ldquo;{group.name}&rdquo; ({group.notes.length})?
                         </span>
                         <button onClick={() => void deleteCollection(group)}
-                          className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">{_("Yes")}</button>
+                          className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">{i18n._({ id: "Yes", message: "Yes" })}</button>
                         <button onClick={() => setConfirmDeleteCol(null)}
-                          className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">{_("No")}</button>
+                          className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">{i18n._({ id: "No", message: "No" })}</button>
                       </div>
                     ) : (
                       <div
@@ -693,7 +569,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setConfirmDeleteCol(group.name); }}
-                          title={_("Delete collection")}
+                          title={i18n._({ id: "Delete collection", message: "Delete collection" })}
                           className="shrink-0 w-4 h-4 flex items-center justify-center rounded transition-all text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-red-500/10 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
                         >
                           <Icon name="trash" size="xs" />
@@ -702,7 +578,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
                     )}
                     {!isCollapsed && (
                       group.notes.length === 0
-                        ? <div className="pl-6 pr-3 py-2 text-[10px] text-[var(--theme-text-muted)] italic">{_("Empty collection")}</div>
+                        ? <div className="pl-6 pr-3 py-2 text-[10px] text-[var(--theme-text-muted)] italic">{i18n._({ id: "Empty collection", message: "Empty collection" })}</div>
                         : group.notes.map((note) => renderNoteRow(note, true))
                     )}
                   </div>
@@ -722,9 +598,10 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               setCreatingNote(true);
               setNewNoteTitle("");
               setNewNoteCollection("");
+              setNewNoteFormat("markdown");
             }}
             className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8 cursor-pointer select-none group hover:bg-[var(--theme-primary)]/[0.03] transition-colors"
-            title={_("Click to create a new note")}
+            title={i18n._({ id: "Click to create a new note", message: "Click to create a new note" })}
           >
             <Icon
               name="edit"
@@ -732,7 +609,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               className="opacity-20 group-hover:opacity-40 transition-opacity text-[var(--theme-text)]"
             />
             <p className="text-sm text-[var(--theme-text-muted)] group-hover:text-[var(--theme-primary)] transition-colors">
-              {_("Click anywhere to create a new note")}
+              {i18n._({ id: "Click anywhere to create a new note", message: "Click anywhere to create a new note" })}
             </p>
           </div>
         ) : (
@@ -741,26 +618,33 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               <div className="flex flex-col flex-1 min-w-0 border-r border-[var(--theme-border)]">
                 <div className="shrink-0 px-3 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] flex items-center gap-2">
                   <span className="flex-1 text-xs font-semibold truncate text-[var(--theme-text)]">
-                    {selectedPath.split("/").pop()?.replace(/\.md$/, "") ?? ""}
+                    {stripNoteExtension(selectedPath.split("/").pop() ?? "")}
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] shrink-0">md</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] shrink-0">
+                    {activeFormat === "asciidoc" ? "adoc" : "md"}
+                  </span>
                 </div>
                 <textarea
                   value={content}
                   onChange={handleContentChange}
                   spellCheck={false}
-                  placeholder={_("Start writing…\n\nSupports **markdown**, `inline code`,\n```ascii\n┌─────┐\n│ art │\n└─────┘\n```\nand ![image](path)")}
-                  className="flex-1 w-full resize-none outline-none font-mono text-sm leading-relaxed p-4 bg-[var(--theme-bg)] text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)]"
+                  placeholder={activeFormat === "asciidoc"
+                    ? i18n._({ id: "Start writing…\\n\\nSupports = headings, *bold*, _italic_,\\n[source,txt]\\n----\\nASCII art\\n----\\nand image::path[alt]", message: "Start writing…\\n\\nSupports = headings, *bold*, _italic_,\\n[source,txt]\\n----\\nASCII art\\n----\\nand image::path[alt]" })
+                    : i18n._({ id: "Start writing…\\n\\nSupports **markdown**, `inline code`,\\n```ascii\\n┌─────┐\\n│ art │\\n└─────┘\\n```\\nand ![image](path)", message: "Start writing…\\n\\nSupports **markdown**, `inline code`,\\n```ascii\\n┌─────┐\\n│ art │\\n└─────┘\\n```\\nand ![image](path)" })}
+                  className="flex-1 w-full resize-none outline-none font-mono text-sm leading-relaxed p-4 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)]"
+                  style={{ background: paperStyleBackgroundCss(paperStyle) }}
                 />
               </div>
 
               <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
                 <div className="shrink-0 px-3 py-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">{_("Preview")}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">{i18n._({ id: "Preview", message: "Preview" })}</span>
                 </div>
-                <div
+                <MarkupPreview
+                  source={content}
+                  format={activeFormat}
                   className="flex-1 overflow-y-auto p-4 text-sm text-[var(--theme-text)] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: preview }}
+                  style={{ background: paperStyleBackgroundCss(paperStyle) }}
                 />
               </div>
             </div>
@@ -772,16 +656,16 @@ const NotesView: React.FC<NotesViewProps> = ({ notesDir }) => {
               {saveStatus === "saving" && (
                 <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-muted)]">
                     <span className="w-2.5 h-2.5 rounded-full border border-[var(--theme-primary)]/40 border-t-[var(--theme-primary)] animate-spin" />
-                    {_("Saving…")}
+                    {i18n._({ id: "Saving…", message: "Saving…" })}
                   </span>
               )}
               {saveStatus === "saved" && (
                 <span className="flex items-center gap-1 text-[10px] text-green-500 font-medium">
-                    <Icon name="check" size="xs" />{_("Saved")}
+                    <Icon name="check" size="xs" />{i18n._({ id: "Saved", message: "Saved" })}
                   </span>
               )}
               {saveStatus === "error" && (
-                <span className="text-[10px] font-medium text-red-500">{_("Save failed")}</span>
+                <span className="text-[10px] font-medium text-red-500">{i18n._({ id: "Save failed", message: "Save failed" })}</span>
               )}
               {saveStatus === "idle" && (
                 <span className="text-[10px] opacity-0 select-none" aria-hidden>&nbsp;</span>

@@ -46,6 +46,8 @@ export interface UseArrangementReturn {
   goToSection:         (idx: number) => void;
   /** Toggle whether the arrangement loops back to section 0 after the last */
   setLoopArrangement:  (loop: boolean) => void;
+  /** Replace the entire arrangement from a preset/load action. */
+  loadArrangement:     (arrangement: Arrangement, activeSectionIdx?: number) => void;
 }
 
 export function useArrangement(): UseArrangementReturn {
@@ -219,6 +221,12 @@ export function useArrangement(): UseArrangementReturn {
     setArrangement(prev => ({ ...prev, loopArrangement: loop }));
   }, []);
 
+  const loadArrangement = useCallback((nextArrangement: Arrangement, nextActiveSectionIdx = 0) => {
+    setArrangement(structuredClone(nextArrangement));
+    setActiveSectionIdx(Math.max(0, nextActiveSectionIdx));
+    repeatCounterRef.current = 0;
+  }, []);
+
   return {
     arrangement,
     activeSectionIdx,
@@ -237,5 +245,6 @@ export function useArrangement(): UseArrangementReturn {
     syncTracks,
     goToSection,
     setLoopArrangement,
+    loadArrangement,
   };
 }

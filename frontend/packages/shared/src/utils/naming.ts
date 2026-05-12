@@ -1,7 +1,10 @@
-
-// ── Name generator ──────────────────────────────────────────────────────────
-
-function r<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function r<T>(arr: readonly T[]): T {
+  const value = arr[Math.floor(Math.random() * arr.length)];
+  if (value === undefined) {
+    throw new Error("generateName word list cannot be empty");
+  }
+  return value;
+}
 
 /**
  * Returns a random evocative name suitable as a default filename.
@@ -16,8 +19,6 @@ export function generateName(): string {
   if (n === 4) return `${r(A)}_${r(N)}`;
   return `${r(A)} ${r(N)} ${Math.floor(Math.random() * 999)}`;
 }
-
-// ── Word lists ────────────────────────────────────────────────────────────────
 
 export const A = [
   // cinematic / moody

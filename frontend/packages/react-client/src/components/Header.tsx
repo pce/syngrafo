@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "./Icon";
 import { markov } from "../services/markov-service";
 import StatsDashboard from "./StatsDashboard";
@@ -34,7 +35,7 @@ const Header: React.FC<HeaderProps> = ({
   setIsGenerating: setExternalIsGenerating,
 }) => {
   const { theme, setTheme, availableThemes } = useTheme();
-  const { _ } = useLingui();
+  useLingui();
   const [internalIsGenerating, setInternalIsGenerating] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("generic_novel");
@@ -225,7 +226,7 @@ const Header: React.FC<HeaderProps> = ({
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Tooltip content={sidebarOpen ? _("Close Sidebar") : _("Open Sidebar")}>
+          <Tooltip content={sidebarOpen ? i18n._({ id: "Close Sidebar", message: "Close Sidebar" }) : i18n._({ id: "Open Sidebar", message: "Open Sidebar" })}>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 rounded-lg transition-colors hover:opacity-80"

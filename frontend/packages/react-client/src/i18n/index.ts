@@ -13,8 +13,9 @@
  *
  * In components:
  *   import { useLingui } from "@lingui/react";
- *   const { _ } = useLingui();
- *   return <p>{_("Hello World")}</p>;
+ *   import { i18n } from "@/i18n";
+ *   useLingui(); // keep component reactive to locale changes
+ *   return <p>{i18n._({ id: "Hello World", message: "Hello World" })}</p>;
  */
 
 import { setupI18n } from "@lingui/core";
@@ -24,20 +25,52 @@ import type { Messages } from "@lingui/core";
 import { messages as messagesEn } from "../locales/en/messages";
 import { messages as messagesDe } from "../locales/de/messages";
 import { messages as messagesEl } from "../locales/el/messages";
+import { messages as messagesEs } from "../locales/es/messages";
+import { messages as messagesJa } from "../locales/ja/messages";
+import { messages as messagesJaLatn } from "../locales/ja-Latn/messages";
+import { messages as messagesJaHrkt } from "../locales/ja-Hrkt/messages";
 
-export type SupportedLocale = "en" | "de" | "el";
+export const SUPPORTED_LOCALES = [
+  "en",
+  "de",
+  "el",
+  "es",
+  "ja",
+  "ja-Latn",
+  "ja-Hrkt",
+] as const;
+
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 /** Human-readable locale labels shown in the language picker. */
 export const LOCALES: Record<SupportedLocale, string> = {
   en: "English",
   de: "Deutsch",
   el: "Ελληνικά",
+  es: "Español",
+  ja: "日本語",
+  "ja-Latn": "Nihongo (Romaji)",
+  "ja-Hrkt": "にほんご (かな)",
+};
+
+export const LOCALE_BADGES: Record<SupportedLocale, string> = {
+  en: "EN",
+  de: "DE",
+  el: "EL",
+  es: "ES",
+  ja: "JA",
+  "ja-Latn": "LATN",
+  "ja-Hrkt": "KANA",
 };
 
 const CATALOGS: Record<SupportedLocale, Messages> = {
   en: messagesEn,
-  de: messagesDe,
-  el: messagesEl,
+  de: { ...messagesEn, ...messagesDe },
+  el: { ...messagesEn, ...messagesEl },
+  es: { ...messagesEn, ...messagesEs },
+  ja: { ...messagesEn, ...messagesJa },
+  "ja-Latn": { ...messagesEn, ...messagesJaLatn },
+  "ja-Hrkt": { ...messagesEn, ...messagesJaHrkt },
 };
 
 /** LinguiJS i18n singleton — thread-safe (pure immutable state). */
@@ -58,9 +91,11 @@ export function loadCatalog(locale: SupportedLocale): Promise<void> {
 export function detectLocale(): SupportedLocale {
   const candidates = navigator.languages ?? [navigator.language];
   for (const lang of candidates) {
-    const prefix = lang.split("-")[0] as SupportedLocale;
-    if (prefix in LOCALES) return prefix;
+    const normalized = lang.replaceAll("_", "-");
+    if (normalized in LOCALES) return normalized as SupportedLocale;
+
+    const [base] = normalized.split("-");
+    if (base in LOCALES) return base as SupportedLocale;
   }
   return "en";
 }
-

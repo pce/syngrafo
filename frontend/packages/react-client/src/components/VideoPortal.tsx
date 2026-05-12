@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "./Icon";
 import { VideoEditorPage } from "../../../video/src/editor/VideoEditorPage";
 
@@ -21,7 +22,7 @@ interface ContentProps {
 }
 
 function VideoPortalContent({ onClose, workingDir }: ContentProps) {
-  const { _ } = useLingui();
+  useLingui();
   const handleClose = useCallback(() => onClose?.(), [onClose]);
 
   useEffect(() => {
@@ -46,19 +47,19 @@ function VideoPortalContent({ onClose, workingDir }: ContentProps) {
       className="fixed inset-0 z-[200] flex flex-col bg-[var(--theme-bg)] text-[var(--theme-text)]"
       role="dialog"
       aria-modal="true"
-      aria-label={_("FFmpeg Video Editor")}
+      aria-label={i18n._({ id: "FFmpeg Video Editor", message: "FFmpeg Video Editor" })}
     >
       <header className="sgf-portal-header flex items-center gap-2 px-4 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] shrink-0 shadow-sm z-10">
         <Icon name="ffmpeg" size="xs" className="text-[var(--theme-primary)] shrink-0" />
         <span className="text-sm font-semibold text-[var(--theme-text)] flex-1 truncate">
-          {_("FFmpeg Video Editor")}
+          {i18n._({ id: "FFmpeg Video Editor", message: "FFmpeg Video Editor" })}
         </span>
         <span className="text-[9px] text-[var(--theme-text-muted)] hidden sm:block select-none">
-          {_("Esc to close")}
+          {i18n._({ id: "Esc to close", message: "Esc to close" })}
         </span>
         <button
           onClick={handleClose}
-          title={_("Close video editor (Esc)")}
+          title={i18n._({ id: "Close video editor (Esc)", message: "Close video editor (Esc)" })}
           className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
         >
           <Icon name="close" size="xs" />

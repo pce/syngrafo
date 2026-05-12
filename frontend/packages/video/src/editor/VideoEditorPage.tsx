@@ -25,6 +25,7 @@ import { SequenceImportDialog } from '../browser/SequenceImportDialog.tsx';
 import type { KenBurnsOp, VideoOperator } from '../types/effect.ts';
 import type { SequenceImportConfig } from '../types/sequence.ts';
 import { getLookPreset } from '../types/look.ts';
+import { ProjectHub } from './ProjectHub.tsx';
 
 export interface VideoEditorPageProps {
   /** If provided, loads an existing project; otherwise creates a new one. */
@@ -64,6 +65,7 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
   const [showSeqDialog,    setShowSeqDialog]    = useState(false);
   const [seqDialogPath,    setSeqDialogPath]    = useState('');
   const [inspectorClipId,  setInspectorClipId]  = useState<string | null>(null);
+  const [showHub,          setShowHub]          = useState(false);
 
   const saveTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -77,20 +79,30 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
 
     const load = async () => {
       try {
-        let p: VideoProject | undefined;
+        // Fetch the persisted project list first so we can resolve IDs across reloads.
+        const list = await videoStorage.listProjects();
 
         if (projectId !== undefined) {
-          p = await videoStorage.getProject(projectId);
+          // Try cache first; fall back to IPC lookup by matching numeric id.
+          let p = await videoStorage.getProject(projectId);
+          if (!p) {
+            const meta = list.find(m => m.id === projectId);
+            if (meta) p = await videoStorage.loadProjectByName(meta.name);
+          }
+          if (p) {
+            if (!cancelled) { setProject(p); setNameValue(p.name); setShowHub(false); }
+            return;
+          }
         }
 
-        if (!p) {
+        if (list.length > 0) {
+          // Show the hub — let the user pick which project to open.
+          if (!cancelled) setShowHub(true);
+        } else {
+          // First launch — create a blank project immediately.
           const template = defaultProject(generateName(), 30);
-          p = await videoStorage.createProject(template);
-        }
-
-        if (!cancelled) {
-          setProject(p);
-          setNameValue(p.name);
+          const p = await videoStorage.createProject(template);
+          if (!cancelled) { setProject(p); setNameValue(p.name); setShowHub(false); }
         }
       } catch (err) {
         console.error('[VideoEditor] Failed to load/create project:', err);
@@ -583,6 +595,35 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
     );
   }
 
+  if (showHub) {
+    return (
+      <ProjectHub
+        onOpen={async name => {
+          setLoading(true);
+          try {
+            const p = await videoStorage.loadProjectByName(name);
+            if (p) { setProject(p); setNameValue(p.name); }
+          } finally {
+            setShowHub(false);
+            setLoading(false);
+          }
+        }}
+        onNew={async () => {
+          setLoading(true);
+          try {
+            const template = defaultProject(generateName(), 30);
+            const p = await videoStorage.createProject(template);
+            setProject(p);
+            setNameValue(p.name);
+          } finally {
+            setShowHub(false);
+            setLoading(false);
+          }
+        }}
+      />
+    );
+  }
+
   if (!project) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[var(--theme-bg)] text-[var(--theme-danger)]">
@@ -639,6 +680,16 @@ export const VideoEditorPage: React.FC<VideoEditorPageProps> = ({
         </span>
 
         <div className="flex-1" />
+
+        <button
+          onClick={() => setShowHub(true)}
+          className="flex items-center gap-1 text-xs px-2 py-1.5 rounded
+                     border border-[var(--theme-border)] text-[var(--theme-text-muted)]
+                     hover:text-[var(--theme-text)] hover:border-[var(--theme-primary)]
+                     transition-colors"
+        >
+          ⊞ Projects
+        </button>
 
         <button
           onClick={() => setShowExportDialog(true)}

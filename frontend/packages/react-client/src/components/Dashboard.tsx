@@ -20,6 +20,8 @@ import BookmarksView from "./collections/BookmarksView";
 import { Icon } from "./Icon";
 import TimelinePage from "./dms/TimelinePage";
 import ZoneDashboard from "./dms/ZoneDashboard";
+import WorkflowsPage from "./dms/WorkflowsPage";
+import FolderDashboard from "./dms/FolderDashboard";
 import { EditorPortal } from "./EditorPortal";
 
 // Zone avatar colour (stable hash)
@@ -247,8 +249,9 @@ const Dashboard: React.FC = () => {
   const [showAudio,  setShowAudio]  = useState(false);
   const [showVideo,  setShowVideo]  = useState(false);
   const [activeView, setActiveView] = useState<"dms" | "timeline">("dms");
-  // "bookmarks" and "zone-dashboard" override the path-based center panel routing
-  const [centerView, setCenterView] = useState<"default" | "bookmarks" | "zone-dashboard">("default");
+  // "bookmarks", "zone-dashboard", and "workflows" override the path-based center panel routing
+  const [centerView, setCenterView] = useState<"default" | "bookmarks" | "zone-dashboard" | "workflows">("default");
+  const [workflowFilter, setWorkflowFilter] = useState<string | undefined>(undefined);
   const [missingDir, setMissingDir] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState("–");
   const [engineOk,      setEngineOk]      = useState<boolean | null>(null);
@@ -336,6 +339,17 @@ const Dashboard: React.FC = () => {
     if (state.selectedPath) setCenterView("default");
   }, [state.selectedPath]);
 
+  const navigateCenterTarget = useCallback(async (absPath: string, isDir: boolean) => {
+    setCenterView("default");
+    if (isDir) {
+      dispatch({ type: "SET_PATH", path: absPath });
+      const res = await dms.scanDir(absPath);
+      if (res.ok && res.data) dispatch({ type: "SET_ENTRIES", entries: res.data.entries });
+      return;
+    }
+    dispatch({ type: "SELECT_FILE", path: absPath });
+  }, [dispatch]);
+
   // Auto-load file content + metadata on file selection
   useEffect(() => {
     const path = state.selectedPath;
@@ -397,9 +411,16 @@ const Dashboard: React.FC = () => {
     // Single-click on one file shows the preview and analysis immediately.
     // (Double-click also dispatches via onFileOpen
     if (paths.length === 1 && paths[0]) {
-      dispatch({ type: "SELECT_FILE", path: paths[0] });
+      const entry = state.entries.find((item) => item.path === paths[0]);
+      if (entry?.kind === "dir") {
+        dispatch({ type: "SET_SELECTED_DIRECTORY", path: paths[0] });
+        dispatch({ type: "SELECT_FILE", path: null });
+      } else {
+        dispatch({ type: "SET_SELECTED_DIRECTORY", path: state.currentPath || null });
+        dispatch({ type: "SELECT_FILE", path: paths[0] });
+      }
     }
-  }, [dispatch]);
+  }, [dispatch, state.currentPath, state.entries]);
   const handleLeftFocus      = useCallback(() => setActivePanel("left"), []);
   const handleLeftPathChange = useCallback((p: string) => setLeftPath(p), []);
 
@@ -539,7 +560,13 @@ const Dashboard: React.FC = () => {
 
       {activeView === "timeline" && (
         <div className="flex-1 min-h-0 overflow-hidden">
-          <TimelinePage />
+          <TimelinePage
+            onNavigateToWorkflows={(stateFilter) => {
+              setWorkflowFilter(stateFilter);
+              setActiveView("dms");
+              setCenterView("workflows");
+            }}
+          />
         </div>
       )}
 
@@ -614,19 +641,21 @@ const Dashboard: React.FC = () => {
             <NotesView notesDir={state.zone.out_path + "/.notes"} />
           ) : state.zone && leftPath.startsWith(state.zone.out_path + "/.kanban") ? (
             <KanbanView kanbanDir={state.zone.out_path + "/.kanban"} />
+          ) : centerView === "workflows" ? (
+            <WorkflowsPage
+              stateFilter={workflowFilter}
+              onClose={() => {
+                setWorkflowFilter(undefined);
+                setCenterView(state.zone ? "zone-dashboard" : "default");
+              }}
+              onEditWorkflow={() => {
+                setWorkflowFilter(undefined);
+                setCenterView("zone-dashboard");
+              }}
+            />
           ) : centerView === "zone-dashboard" ? (
             <ZoneDashboard
-              onNavigate={async (absPath, isDir) => {
-                setCenterView("default");
-                if (isDir) {
-                  dispatch({ type: "SET_PATH", path: absPath });
-                  const res = await dms.scanDir(absPath);
-                  if (res.ok && res.data)
-                    dispatch({ type: "SET_ENTRIES", entries: res.data.entries });
-                } else {
-                  dispatch({ type: "SELECT_FILE", path: absPath });
-                }
-              }}
+              onNavigate={navigateCenterTarget}
               onManageBookmarks={() => setCenterView("bookmarks")}
               onEditZone={() => setShowZone(true)}
               onTheme={() => setShowTheme(true)}
@@ -634,19 +663,11 @@ const Dashboard: React.FC = () => {
             />
           ) : centerView === "bookmarks" ? (
             <BookmarksView
-              onNavigate={async (absPath, isDir) => {
-                setCenterView("default");
-                if (isDir) {
-                  dispatch({ type: "SET_PATH", path: absPath });
-                  const res = await dms.scanDir(absPath);
-                  if (res.ok && res.data)
-                    dispatch({ type: "SET_ENTRIES", entries: res.data.entries });
-                } else {
-                  dispatch({ type: "SELECT_FILE", path: absPath });
-                }
-              }}
+              onNavigate={navigateCenterTarget}
               onClose={() => setCenterView("default")}
             />
+          ) : !state.selectedPath && state.selectedDirectory ? (
+            <FolderDashboard path={state.selectedDirectory} onNavigate={navigateCenterTarget} />
           ) : (
             <DocumentViewer />
           )}

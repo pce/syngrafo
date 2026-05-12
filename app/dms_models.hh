@@ -48,6 +48,7 @@
                               //   build_mesh, save_as_ply, generate_depth_map
 #include "core/document.hh"   // BlockType, BlockMetadata, StyleRef, Block,
                               //   NLPResult, Entity, Keyword, Document
+#include "core/document_state.hh" // DocumentState, BlobRecord, lifecycle DTOs
 #include "core/palette.hh"    // PaletteEntry, ColorPalette, PaletteKind,
                               //   builtin_palettes()
 #include "core/zone.hh"       // Zone

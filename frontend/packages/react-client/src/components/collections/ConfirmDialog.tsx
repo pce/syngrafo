@@ -7,6 +7,7 @@
 
 import React, { useEffect } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 
 interface ConfirmDialogProps {
@@ -25,8 +26,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const { _ } = useLingui();
-  const resolvedLabel = confirmLabel ?? _("Delete");
+  useLingui();
+  const resolvedLabel = confirmLabel ?? i18n._({ id: "Delete", message: "Delete" });
 
   // Dismiss on Escape so callers don't have to wire keyboard handling themselves.
   useEffect(() => {
@@ -57,7 +58,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                        bg-[var(--theme-bg)] hover:bg-[var(--theme-surface)]
                        text-[var(--theme-text)] transition-colors"
           >
-            {_("Cancel")}
+            {i18n._({ id: "Cancel", message: "Cancel" })}
           </button>
           <button
             onClick={onConfirm}

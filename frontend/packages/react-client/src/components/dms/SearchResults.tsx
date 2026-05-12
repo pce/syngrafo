@@ -1,5 +1,6 @@
 import React from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { useDms } from "../../store/dms-store";
 import type { SearchResult } from "@/services/dms-service.ts";
 import { Icon } from "../Icon";
@@ -22,7 +23,7 @@ function SnippetText({ text, query }: { text: string; query: string }) {
 
 const SearchResults: React.FC = () => {
   const { state, dispatch } = useDms();
-  const { _ } = useLingui();
+  useLingui();
 
   if (!state.searching && state.searchResults.length === 0 && !state.searchQuery) {
     return null;
@@ -95,13 +96,13 @@ const SearchResults: React.FC = () => {
         {state.searching ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <span className="w-6 h-6 border-2 border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)] rounded-full animate-spin" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{_("Searching Index…")}</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Searching Index…", message: "Searching Index…" })}</span>
           </div>
         ) : state.searchResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--theme-text-muted)]">
             <Icon name="block" size="lg" className="opacity-20" />
-            <p className="text-sm font-medium">{_("No matches found")}</p>
-            <p className="text-xs">{_("Try a simpler keyword or check your index status.")}</p>
+            <p className="text-sm font-medium">{i18n._({ id: "No matches found", message: "No matches found" })}</p>
+            <p className="text-xs">{i18n._({ id: "Try a simpler keyword or check your index status.", message: "Try a simpler keyword or check your index status." })}</p>
           </div>
         ) : (
           <div className="space-y-1">

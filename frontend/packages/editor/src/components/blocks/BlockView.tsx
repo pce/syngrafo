@@ -9,6 +9,7 @@ import type {
   STrBlock,
   SpacingToken,
   Span,
+  TextBlockType,
 } from "../../models/sdm";
 import { useAssetSrc } from "../../hooks/useAssetSrc";
 import { useDataSource, aggregate } from "../../hooks/useDataSource";
@@ -17,8 +18,10 @@ import { useEditor } from "../../store/editor-store";
 import type { EditorAction } from "../../store/editor-store";
 import { createBlock } from "../../models/sdm-factory";
 import type { NLPToken, NLPBlockAnnotation } from "../../models/nlp";
-import { posColor, NER_COLORS } from "../../models/nlp";
+import { posColor, NER_COLORS, posLabel } from "../../models/nlp";
 import type { NLPVisibilityFlags } from "../../models/editor-context";
+import { focusBlockEditable, focusBlockNavigationTarget } from "../../utils/block-focus";
+import { InlineActionRail } from "../shared/InlineActionRail";
 
 /** Canonical spacing token → CSS rem value mapping. */
 const SPACING_PX: Record<SpacingToken, string> = {
@@ -163,12 +166,64 @@ function renderSpan(span: Span, i: number): React.ReactNode {
 
 
 
-// ── NLP annotation rendering ─────────────────────────────────────────────────
-// These helpers are used by BlockView for every text block type so that NLP
-// annotations work at any depth (nested list items, table cells, layout blocks).
+function ComposeBlockRail({
+  block,
+  dispatch,
+}: {
+  block: SBlock;
+  dispatch: React.Dispatch<EditorAction>;
+}) {
+  const typeActions: Array<{ id: TextBlockType; label: string }> = [
+    { id: "p", label: "P" },
+    { id: "h1", label: "H1" },
+    { id: "h2", label: "H2" },
+    { id: "quote", label: "Quote" },
+  ];
+  const insertActions: Array<{ type: TextBlockType; label: string }> = [
+    { type: "p", label: "+ Paragraph" },
+    { type: "h2", label: "+ Heading" },
+    { type: "quote", label: "+ Quote" },
+  ];
 
-/** Renders one NLP token with POS/NER/keyword/spell visual styling. */
-function NLPTokenSpan({ token, flags }: { token: NLPToken; flags: NLPVisibilityFlags }) {
+  return (
+    <InlineActionRail
+      title="Compose"
+      subtitle="Quick block actions"
+      badges={[block.type.toUpperCase()]}
+      metrics={[{ label: "Block", value: block.id.slice(0, 8) }]}
+      actions={[
+        ...typeActions.map((action) => ({
+          id: `type-${action.id}`,
+          label: action.label,
+          onClick: () => dispatch({ type: "CHANGE_BLOCK_TYPE", id: block.id, newType: action.id }),
+          active: block.type === action.id,
+        })),
+        ...insertActions.map((action) => ({
+          id: `insert-${action.type}`,
+          label: action.label,
+          onClick: () => dispatch({ type: "ADD_BLOCK", block: createBlock(action.type), afterId: block.id }),
+        })),
+      ]}
+      className="pointer-events-auto"
+    />
+  );
+}
+
+function NLPTokenSpan({
+  blockId,
+  token,
+  tokenIndex,
+  flags,
+  selected,
+  dispatch,
+}: {
+  blockId: string;
+  token: NLPToken;
+  tokenIndex: number;
+  flags: NLPVisibilityFlags;
+  selected: boolean;
+  dispatch: React.Dispatch<EditorAction>;
+}) {
   let bg: string | undefined;
   let outline: string | undefined;
   let decoration: string | undefined;
@@ -188,29 +243,119 @@ function NLPTokenSpan({ token, flags }: { token: NLPToken; flags: NLPVisibilityF
   if (flags.showSynonyms && token.synonyms?.length) {
     title = `Synonyms: ${token.synonyms.slice(0, 3).join(", ")}`;
   }
+
+  const metrics = [
+    ...(token.lemma ? [{ label: "Lemma", value: token.lemma }] : []),
+    ...(token.keywordScore != null ? [{ label: "Keyword", value: token.keywordScore.toFixed(2) }] : []),
+    ...(token.similarity != null ? [{ label: "Similarity", value: token.similarity.toFixed(3) }] : []),
+    ...(token.vectorDistance != null ? [{ label: "Vector dist.", value: token.vectorDistance.toFixed(3) }] : []),
+  ];
+
   return (
-    <span
-      style={{
-        background:          bg,
-        outline,
-        textDecoration:      decoration,
-        textDecorationColor: decoration ? "#ef4444" : undefined,
-        padding:             bg ? "0 2px" : undefined,
-        borderRadius:        bg ? "2px" : undefined,
-        cursor:              title ? "help" : undefined,
-      }}
-      title={title}
-    >
-      {token.text}{token.whitespaceAfter ?? " "}
+    <span className="relative inline-flex items-end">
+      <span
+        style={{
+          background: bg,
+          outline: selected ? "1px solid var(--theme-primary)" : outline,
+          textDecoration: decoration,
+          textDecorationColor: decoration ? "#ef4444" : undefined,
+          padding: bg || selected ? "0 2px" : undefined,
+          borderRadius: bg || selected ? "2px" : undefined,
+          cursor: "pointer",
+        }}
+        title={title}
+        onClick={(e) => {
+          e.stopPropagation();
+          dispatch({ type: "SELECT_TOKEN", blockId, tokenIndex });
+        }}
+      >
+        {flags.showPOS && token.pos && (
+          <span
+            style={{
+              position: "absolute",
+              top: "-0.2rem",
+              left: "-0.75rem",
+              writingMode: "vertical-rl",
+              transform: "rotate(180deg)",
+              fontSize: "7px",
+              lineHeight: 1,
+              letterSpacing: "0.08em",
+              color: "rgba(15,23,42,0.65)",
+              opacity: 0.8,
+              pointerEvents: "none",
+            }}
+          >
+            {posLabel(token.pos)}
+          </span>
+        )}
+        {token.text}
+      </span>
+      {token.whitespaceAfter ?? " "}
+      {selected && (
+        <div className="absolute left-0 top-full z-20 pt-1">
+          <InlineActionRail
+            title="Token"
+            subtitle={token.text}
+            badges={[
+              ...(token.pos ? [token.pos] : []),
+              ...(token.ner ? [token.ner] : []),
+              ...(token.isKeyword ? ["keyword"] : []),
+            ]}
+            metrics={metrics}
+            actions={[
+              {
+                id: "select-block",
+                label: "Block",
+                icon: "layout",
+                onClick: () => dispatch({ type: "SELECT_BLOCK", id: blockId }),
+              },
+              {
+                id: "clear",
+                label: "Close",
+                icon: "close",
+                onClick: () => dispatch({ type: "CLEAR_SELECTED_TOKEN" }),
+              },
+            ]}
+          >
+            {token.synonyms?.length ? (
+              <div className="flex flex-wrap gap-1">
+                {token.synonyms.slice(0, 6).map((synonym) => (
+                  <span
+                    key={synonym}
+                    className="rounded-full border border-[var(--theme-primary)]/20 bg-[var(--theme-primary)]/10 px-1.5 py-0.5 text-[8px] font-medium text-[var(--theme-primary)]"
+                  >
+                    {synonym}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </InlineActionRail>
+        </div>
+      )}
     </span>
   );
 }
 
-/** Returns annotated token spans + optional readability badge. */
-function renderNLPContent(nlp: NLPBlockAnnotation, flags: NLPVisibilityFlags): React.ReactNode {
+function renderNLPContent(
+  blockId: string,
+  nlp: NLPBlockAnnotation,
+  flags: NLPVisibilityFlags,
+  selectedTokenIndex: number | null,
+  dispatch: React.Dispatch<EditorAction>,
+): React.ReactNode {
   return (
     <>
-      {nlp.tokens.map((token, i) => <NLPTokenSpan key={i} token={token} flags={flags} />)}
+      {nlp.tokens.map((token, i) => (
+        <NLPTokenSpan
+          key={i}
+          blockId={blockId}
+          token={token}
+          tokenIndex={i}
+          flags={flags}
+          selected={selectedTokenIndex === i}
+          dispatch={dispatch}
+        />
+      ))}
       {flags.showReadability && nlp.readability && (
         <span
           style={{
@@ -437,13 +582,40 @@ function TableBlockView({
 export function BlockView({ block, selected, styles, dispatch }: BlockViewProps): React.ReactElement {
   // Use the store only to resolve selection state for recursively rendered children.
   const { state } = useEditor();
+  const isLayoutContext = state.context === "layout";
+  const isComposeContext = state.context === "compose";
+  const supportsInlineEditing = [
+    "p", "h1", "h2", "h3", "h4", "quote", "figcaption", "li", "td", "th", "code",
+  ].includes(block.type);
+  const isInlineEditing = isComposeContext
+    || (isLayoutContext && state.editingBlockId === block.id);
+  const selectedTokenIndex = state.selectedToken?.blockId === block.id ? state.selectedToken.tokenIndex : null;
+
+  const startEditing = useCallback((moveCaretToEnd = false) => {
+    if (!isLayoutContext || !supportsInlineEditing) return;
+    dispatch({ type: "START_EDITING_BLOCK", id: block.id, moveCaretToEnd });
+  }, [dispatch, block.id, isLayoutContext, supportsInlineEditing]);
+
+  const stopEditing = useCallback((focusNavigation = false) => {
+    if (!isLayoutContext) return;
+    dispatch({ type: "STOP_EDITING_BLOCK", id: block.id });
+    if (focusNavigation) requestAnimationFrame(() => focusBlockNavigationTarget(block.id));
+  }, [dispatch, block.id, isLayoutContext]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isComposeContext) {
+      dispatch({ type: "SELECT_BLOCK", id: block.id });
+      return;
+    }
+    if (isLayoutContext && supportsInlineEditing) {
+      if (!isInlineEditing) startEditing(false);
+      return;
+    }
     dispatch({ type: "SELECT_BLOCK", id: block.id });
-  }, [dispatch, block.id]);
+  }, [dispatch, block.id, isComposeContext, isLayoutContext, supportsInlineEditing, isInlineEditing, startEditing]);
 
-  const selClass = selected ? "block-selected" : "";
+  const selClass = (selected && state.context !== "compose") ? "block-selected" : "";
 
   // NLP overlay — derived from the store so it automatically propagates to
   // all recursively-rendered child blocks without extra prop drilling.
@@ -475,19 +647,63 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
   );
 
   /** Wraps element in selection div for top-level / container blocks. */
+  const handleLayoutNavigationKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
+    if (!isLayoutContext || state.editingBlockId === block.id) return;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      dispatch({ type: "SELECT_NEIGHBOR", direction: "up" });
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      dispatch({ type: "SELECT_NEIGHBOR", direction: "down" });
+    } else if (e.key === "Enter") {
+      if (!supportsInlineEditing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      startEditing(true);
+    } else if ((e.key === "Backspace" || e.key === "Delete") && selected) {
+      e.preventDefault();
+      dispatch({ type: "DELETE_BLOCK", id: block.id });
+    }
+  }, [dispatch, block.id, isLayoutContext, selected, startEditing, supportsInlineEditing, state.editingBlockId]);
+
+  const layoutWrapperFocusProps = isLayoutContext
+    ? { tabIndex: 0, "data-block-focus-target": "true", onKeyDown: handleLayoutNavigationKeyDown }
+    : {};
+  const layoutEditableFocusProps = isLayoutContext
+    ? { tabIndex: 0, "data-block-focus-target": "true" }
+    : {};
+  const handleEditableFocus = useCallback(() => {
+    dispatch({ type: "SELECT_BLOCK", id: block.id });
+  }, [dispatch, block.id]);
+
   const wrap = (el: React.ReactElement): React.ReactElement => (
-    <div data-block-id={block.id} onClick={handleClick} className={selClass} style={spacingStyle}>
+    <div
+      data-block-id={block.id}
+      onClick={handleClick}
+      {...layoutWrapperFocusProps}
+      className={selClass}
+      style={{ ...spacingStyle, position: "relative" }}
+    >
+      {isComposeContext && selected && (
+        <div className="pointer-events-none absolute right-0 top-0 z-10 -translate-y-full pb-2">
+          <ComposeBlockRail block={block} dispatch={dispatch} />
+        </div>
+      )}
       {el}
     </div>
   );
 
   const handleSpanBlur = useCallback((e: React.FocusEvent<HTMLElement>) => {
+    if (!isInlineEditing) return;
     dispatch({ type: "SET_BLOCK_SPANS", id: block.id, spans: [{ text: e.currentTarget.innerText }] });
-  }, [dispatch, block.id]);
+    if (isLayoutContext) dispatch({ type: "STOP_EDITING_BLOCK", id: block.id });
+  }, [dispatch, block.id, isInlineEditing, isLayoutContext]);
 
   const handleCodeBlur = useCallback((e: React.FocusEvent<HTMLElement>) => {
+    if (!isInlineEditing) return;
     dispatch({ type: "SET_BLOCK_TEXT", id: block.id, text: e.currentTarget.innerText });
-  }, [dispatch, block.id]);
+    if (isLayoutContext) dispatch({ type: "STOP_EDITING_BLOCK", id: block.id });
+  }, [dispatch, block.id, isInlineEditing, isLayoutContext]);
 
   // Alignment helper maps — declared once, reused across layout-block cases.
   const hAlignMap: Record<string, string> = {
@@ -502,32 +718,98 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
   /**
    * Keyboard handler for contentEditable text blocks.
-   * Enter (without modifier) → insert new paragraph after this block.
-   * Backspace on an empty block → delete it.
+   * Compose Mode:
+   *   - Enter spawns a new block seamlessly and focuses it.
+   *   - Backspace on an empty block deletes it.
+   *   - Arrow keys move caret normally.
+   * Layout Mode:
+   *   - Enter or tap enters editing; blur / Escape returns to navigation.
    */
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      const newBlock = createBlock("p");
-      dispatch({ type: "ADD_BLOCK", block: newBlock, afterId: block.id });
-      dispatch({ type: "SELECT_BLOCK", id: newBlock.id });
-      // Focus the new block's contentEditable after React re-renders.
-      requestAnimationFrame(() => {
-        const el = document.querySelector(
-          `[data-block-id="${newBlock.id}"] [contenteditable]`,
-        ) as HTMLElement | null;
-        el?.focus();
-      });
-    }
-    if (e.key === "Backspace") {
-      const text = e.currentTarget.textContent ?? "";
-      if (!text.trim()) {
+    if (state.context === "compose") {
+      if (e.key === " " && block.type === "p") {
+        const sel = window.getSelection();
+        const text = e.currentTarget.textContent ?? "";
+        if (sel && sel.isCollapsed && sel.focusOffset === text.length) {
+          let newType: TextBlockType | null = null;
+          if (text === "#") newType = "h1";
+          else if (text === "##") newType = "h2";
+          else if (text === "###") newType = "h3";
+          else if (text === "####") newType = "h4";
+          else if (text === ">") newType = "quote";
+
+          if (newType) {
+            e.preventDefault();
+            dispatch({ type: "CHANGE_BLOCK_TYPE", id: block.id, newType });
+            dispatch({ type: "SET_BLOCK_SPANS", id: block.id, spans: [{ text: "" }] });
+            // Focus and clear content
+            requestAnimationFrame(() => {
+              focusBlockEditable(block.id);
+              const el = e.currentTarget;
+              el.textContent = "";
+            });
+            return;
+          }
+        }
+      }
+
+      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        dispatch({ type: "DELETE_BLOCK", id: block.id });
-        dispatch({ type: "SELECT_BLOCK", id: null });
+        const newBlock = createBlock("p");
+        dispatch({ type: "ADD_BLOCK", block: newBlock, afterId: block.id });
+
+        // Focus the new block seamlessly
+        requestAnimationFrame(() => focusBlockEditable(newBlock.id));
+      }
+      if (e.key === "Backspace") {
+        const sel = window.getSelection();
+        const text = e.currentTarget.textContent ?? "";
+
+        // Delete block if empty
+        if (!text.trim()) {
+          e.preventDefault();
+          dispatch({ type: "DELETE_BLOCK", id: block.id });
+          return;
+        }
+
+        // If caret is exactly at position 0, merge with block above
+        if (sel && sel.isCollapsed && sel.focusOffset === 0) {
+          e.preventDefault();
+          dispatch({ type: "MERGE_BLOCK_UP", id: block.id });
+        }
+      }
+    } else if (isLayoutContext) {
+      if (!isInlineEditing) {
+        handleLayoutNavigationKeyDown(e);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        stopEditing(true);
       }
     }
-  }, [dispatch, block.id]);
+  }, [
+    dispatch,
+    block.id,
+    state.context,
+    isLayoutContext,
+    isInlineEditing,
+    handleLayoutNavigationKeyDown,
+    startEditing,
+    stopEditing,
+  ]);
+
+  const handleCodeKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
+    if (!isLayoutContext) return;
+    if (!isInlineEditing) {
+      handleLayoutNavigationKeyDown(e);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      stopEditing(true);
+    }
+  }, [handleLayoutNavigationKeyDown, isInlineEditing, isLayoutContext, stopEditing]);
 
   // Apply block-level text-alignment (overrides SStyleProps.align from the style class).
   if (block.align?.h) {
@@ -549,15 +831,17 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
         p: "Paragraph", h1: "Heading 1", h2: "Heading 2", h3: "Heading 3", h4: "Heading 4",
       };
       if (showNLPOverlay && block.nlp) {
-        return wrap(<Tag style={inlineStyle}>{renderNLPContent(block.nlp, nlpFlags)}</Tag>);
+        return wrap(<Tag style={inlineStyle}>{renderNLPContent(block.id, block.nlp, nlpFlags, selectedTokenIndex, dispatch)}</Tag>);
       }
       return wrap(
         <Tag
           style={inlineStyle}
-          contentEditable
+          contentEditable={isInlineEditing}
           suppressContentEditableWarning
           onBlur={handleSpanBlur}
           onKeyDown={handleKeyDown}
+          onFocus={handleEditableFocus}
+          data-block-editable="true"
           data-placeholder={headingPlaceholders[block.type]}
           className="sgf-editable focus:outline-none"
         >
@@ -568,15 +852,17 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
     case "quote":
       if (showNLPOverlay && block.nlp) {
-        return wrap(<blockquote style={inlineStyle}>{renderNLPContent(block.nlp, nlpFlags)}</blockquote>);
+        return wrap(<blockquote style={inlineStyle}>{renderNLPContent(block.id, block.nlp, nlpFlags, selectedTokenIndex, dispatch)}</blockquote>);
       }
       return wrap(
         <blockquote
           style={inlineStyle}
-          contentEditable
+          contentEditable={isInlineEditing}
           suppressContentEditableWarning
           onBlur={handleSpanBlur}
           onKeyDown={handleKeyDown}
+          onFocus={handleEditableFocus}
+          data-block-editable="true"
           data-placeholder="Quote"
           className="sgf-editable focus:outline-none"
         >
@@ -586,15 +872,17 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
     case "figcaption":
       if (showNLPOverlay && block.nlp) {
-        return wrap(<figcaption style={inlineStyle}>{renderNLPContent(block.nlp, nlpFlags)}</figcaption>);
+        return wrap(<figcaption style={inlineStyle}>{renderNLPContent(block.id, block.nlp, nlpFlags, selectedTokenIndex, dispatch)}</figcaption>);
       }
       return wrap(
         <figcaption
           style={inlineStyle}
-          contentEditable
+          contentEditable={isInlineEditing}
           suppressContentEditableWarning
           onBlur={handleSpanBlur}
           onKeyDown={handleKeyDown}
+          onFocus={handleEditableFocus}
+          data-block-editable="true"
           data-placeholder="Caption"
           className="sgf-editable focus:outline-none"
         >
@@ -607,7 +895,7 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
       if (showNLPOverlay && block.nlp) {
         return (
           <li data-block-id={block.id} style={inlineStyle} className={selClass} onClick={handleClick}>
-            {renderNLPContent(block.nlp, nlpFlags)}
+            {renderNLPContent(block.id, block.nlp, nlpFlags, selectedTokenIndex, dispatch)}
           </li>
         );
       }
@@ -617,10 +905,13 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
           style={inlineStyle}
           className={`${selClass} sgf-editable focus:outline-none`}
           onClick={handleClick}
-          contentEditable
+          onKeyDown={handleKeyDown}
+          {...layoutEditableFocusProps}
+          contentEditable={isInlineEditing}
           suppressContentEditableWarning
           onBlur={handleSpanBlur}
-          onKeyDown={handleKeyDown}
+          onFocus={handleEditableFocus}
+          data-block-editable="true"
           data-placeholder="List item"
         >
           {block.spans.map(renderSpan)}
@@ -634,7 +925,7 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
       if (showNLPOverlay && block.nlp) {
         return (
           <CellTag data-block-id={block.id} style={inlineStyle} className={selClass} onClick={handleClick}>
-            {renderNLPContent(block.nlp, nlpFlags)}
+            {renderNLPContent(block.id, block.nlp, nlpFlags, selectedTokenIndex, dispatch)}
           </CellTag>
         );
       }
@@ -644,10 +935,13 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
           style={inlineStyle}
           className={`${selClass} focus:outline-none`}
           onClick={handleClick}
-          contentEditable
+          onKeyDown={handleKeyDown}
+          {...layoutEditableFocusProps}
+          contentEditable={isInlineEditing}
           suppressContentEditableWarning
           onBlur={handleSpanBlur}
-          onKeyDown={handleKeyDown}
+          onFocus={handleEditableFocus}
+          data-block-editable="true"
         >
           {block.spans.map(renderSpan)}
         </CellTag>
@@ -677,9 +971,12 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
         <pre style={inlineStyle}>
           <code
             className={`language-${block.language ?? "text"}`}
-            contentEditable
+            contentEditable={isInlineEditing}
             suppressContentEditableWarning
             onBlur={handleCodeBlur}
+            onKeyDown={handleCodeKeyDown}
+            onFocus={handleEditableFocus}
+            data-block-editable="true"
           >
             {block.text}
           </code>
@@ -690,7 +987,7 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
     case "img":
       return (
-        <div data-block-id={block.id} onClick={handleClick} className={selClass}>
+        <div data-block-id={block.id} onClick={handleClick} className={selClass} {...layoutWrapperFocusProps}>
           <ImgBlockView
             block={block as SImgBlock}
             selClass=""
@@ -704,7 +1001,7 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
 
     case "hr":
       return (
-        <div data-block-id={block.id} onClick={handleClick} className={selClass}>
+        <div data-block-id={block.id} onClick={handleClick} className={selClass} {...layoutWrapperFocusProps}>
           <hr style={inlineStyle} />
         </div>
       );
@@ -714,6 +1011,7 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
         <div
           data-block-id={block.id}
           onClick={handleClick}
+          {...layoutWrapperFocusProps}
           className={`sgf-page-ruler sgf-pagebreak-block ${selClass}`}
           style={{ ...inlineStyle }}
         >
@@ -843,7 +1141,7 @@ export function BlockView({ block, selected, styles, dispatch }: BlockViewProps)
       // for unknown future types — keep it for forward-compatibility.
       const unknown = block as unknown as { id: string; type: string };
       return (
-        <div data-block-id={unknown.id} onClick={handleClick} className={selClass}>
+        <div data-block-id={unknown.id} onClick={handleClick} className={selClass} {...layoutWrapperFocusProps}>
           <div data-block-type={unknown.type}>
             [{unknown.type}]
           </div>

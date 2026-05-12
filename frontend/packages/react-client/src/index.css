@@ -299,6 +299,7 @@
     /* 4. Hide all editor-internal chrome (toolbar, panels, status bar …)
      *    .sgf-ui is the shared marker class used throughout EditorShell.tsx  */
     .sgf-ui { display: none !important; }
+    .block-selected { outline: none !important; }
 
     /* 5. Let the canvas scroll container expand to its natural height         */
     .sgf-canvas-outer {
@@ -312,7 +313,8 @@
         box-shadow:    none !important;
         margin:        0    !important;
         border-radius: 0    !important;
-        width:         100% !important;
+        max-width:     none !important;
+        min-height:    auto !important;
     }
 
     /* 7. index.css sets body { min-h-screen; overflow-hidden } — undo that   */
@@ -336,6 +338,7 @@ body.sgf-exporting #sgf-editor-root {
 
 body.sgf-exporting .sgf-portal-header { display: none !important; }
 body.sgf-exporting .sgf-ui            { display: none !important; }
+body.sgf-exporting .block-selected    { outline: none !important; }
 
 body.sgf-exporting .sgf-canvas-outer {
     overflow:   visible !important;
@@ -347,7 +350,8 @@ body.sgf-exporting .sgf-canvas-page {
     box-shadow:    none !important;
     margin:        0    !important;
     border-radius: 0    !important;
-    width:         100% !important;
+    max-width:     none !important;
+    min-height:    auto !important;
 }
 
 body.sgf-exporting,

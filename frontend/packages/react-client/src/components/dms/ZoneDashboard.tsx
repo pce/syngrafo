@@ -12,8 +12,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { useDms } from "../../store/dms-store";
-import { dms, type Bookmark, type DiskUsageInfo, type ZoneDiskUsage } from "@/services/dms-service.ts";
+import { dms, type Bookmark, type DiskUsageInfo, type ZoneDiskUsage, type ZoneWorkflow, type WorkflowState, type WorkflowTransition } from "@/services/dms-service.ts";
 import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 import NetHealthWidget from "../widgets/NetHealthWidget";
@@ -28,9 +29,9 @@ const ZoneInfoWidget: React.FC<{
   zone: { name: string; description: string; taxonomy_domain: string; in_path: string; out_path: string };
   onEdit: () => void;
 }> = ({ zone, onEdit }) => {
-  const { _ } = useLingui();
+  useLingui();
   return (
-    <Widget title={_("Zone")} icon={<Icon name={IC("layers")} size="xs" />}>
+    <Widget title={i18n._({ id: "Zone", message: "Zone" })} icon={<Icon name={IC("layers")} size="xs" />}>
       <div className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -44,7 +45,7 @@ const ZoneInfoWidget: React.FC<{
           <button
             onClick={onEdit}
             className="shrink-0 p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] transition-colors"
-            title={_("Edit Zone")}
+            title={i18n._({ id: "Edit Zone", message: "Edit Zone" })}
           >
             <Icon name="edit" size="xs" />
           </button>
@@ -75,25 +76,25 @@ const BookmarksWidget: React.FC<{
   onNavigate: (path: string, isDir: boolean) => void;
   onManage: () => void;
 }> = ({ bookmarks, zoneName, onNavigate, onManage }) => {
-  const { _ } = useLingui();
+  useLingui();
   const handleGoTo = async (bm: Bookmark) => {
-    const res = await dms.bookmark.resolve(zoneName, bm.target);
+    const res = await dms.bookmark.resolve(zoneName, bm.root, bm.target);
     if (res.ok && res.data?.abs_path)
       onNavigate(res.data.abs_path, res.data.kind === "folder");
   };
 
   return (
     <Widget
-      title={_("Bookmarks")}
+      title={i18n._({ id: "Bookmarks", message: "Bookmarks" })}
       icon={<Icon name="bookmark" size="xs" />}
       className="col-span-2"
     >
       {bookmarks.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-4 text-center">
           <Icon name="bookmark" size="md" className="text-[var(--theme-text-muted)] opacity-30" />
-          <p className="text-[11px] text-[var(--theme-text-muted)]">{_("No bookmarks yet.")}</p>
+          <p className="text-[11px] text-[var(--theme-text-muted)]">{i18n._({ id: "No bookmarks yet.", message: "No bookmarks yet." })}</p>
           <button onClick={onManage} className="text-[10px] font-bold text-[var(--theme-primary)] hover:underline">
-            {_("Manage Bookmarks →")}
+            {i18n._({ id: "Manage Bookmarks →", message: "Manage Bookmarks →" })}
           </button>
         </div>
       ) : (
@@ -140,17 +141,17 @@ const BookmarksWidget: React.FC<{
 interface StatsData { total: number; indexed: number; lastIndexed?: number }
 
 const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => {
-  const { _ } = useLingui();
+  useLingui();
   return (
-    <Widget title={_("Overview")} icon={<Icon name={IC("trending-up")} size="xs" />}>
+    <Widget title={i18n._({ id: "Overview", message: "Overview" })} icon={<Icon name={IC("trending-up")} size="xs" />}>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-0.5">
           <span className="text-2xl font-black text-[var(--theme-text)]">{data?.total ?? "–"}</span>
-          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">{_("Docs indexed")}</span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">{i18n._({ id: "Docs indexed", message: "Docs indexed" })}</span>
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-2xl font-black text-[var(--theme-text)]">{data?.indexed ?? "–"}</span>
-          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">{_("Searchable")}</span>
+          <span className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">{i18n._({ id: "Searchable", message: "Searchable" })}</span>
         </div>
         {data?.lastIndexed && data.lastIndexed > 0 && (
           <div className="col-span-2 flex items-center gap-1.5 mt-1">
@@ -166,7 +167,7 @@ const StatsWidget: React.FC<{ data: StatsData | null }> = ({ data }) => {
 };
 
 const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
-  const { _ } = useLingui();
+  useLingui();
   const storageKey = `zone_palette_${zoneName}`;
 
   const [colors, setColors] = useState<string[]>(() => {
@@ -192,13 +193,13 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
 
   return (
     <Widget
-      title={_("Color Palette")}
+      title={i18n._({ id: "Color Palette", message: "Color Palette" })}
       icon={<Icon name={IC("color-swatch")} size="xs" />}
       className="col-span-2"
     >
       <div className="flex flex-col gap-3">
         <p className="text-[10px] text-[var(--theme-text-muted)] leading-relaxed">
-          {_("Brand / project styleguide colours saved to this Zone.")}
+          {i18n._({ id: "Brand / project styleguide colours saved to this Zone.", message: "Brand / project styleguide colours saved to this Zone." })}
         </p>
 
         <div className="flex flex-wrap gap-2 items-center">
@@ -212,7 +213,7 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
               <button
                 onClick={() => removeColor(c)}
                 className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[var(--theme-danger)] text-white text-[8px] hidden group-hover:flex items-center justify-center leading-none"
-                title={_("Remove")}
+                title={i18n._({ id: "Remove", message: "Remove" })}
               >
                 ×
               </button>
@@ -231,20 +232,20 @@ const ColorPaletteWidget: React.FC<{ zoneName: string }> = ({ zoneName }) => {
                 onClick={addColor}
                 className="px-2 py-1 text-[9px] font-black rounded-lg bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90 transition-opacity"
               >
-                {_("Add")}
+                {i18n._({ id: "Add", message: "Add" })}
               </button>
               <button
                 onClick={() => setPicker(false)}
                 className="px-2 py-1 text-[9px] font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors"
               >
-                {_("Cancel")}
+                {i18n._({ id: "Cancel", message: "Cancel" })}
               </button>
             </div>
           ) : (
             <button
               onClick={() => setPicker(true)}
               className="w-9 h-9 rounded-xl border-2 border-dashed border-[var(--theme-border)] hover:border-[var(--theme-primary)]/60 flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
-              title={_("Add colour")}
+              title={i18n._({ id: "Add colour", message: "Add colour" })}
             >
               <Icon name="plus" size="xs" />
             </button>
@@ -301,7 +302,7 @@ const Donut: React.FC<{
 };
 
 const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label, info }) => {
-  const { _ } = useLingui();
+  useLingui();
   const pct = Math.round(info.usedRatio * 100);
   // Color gradient: green → amber → red by usage
   const color =
@@ -328,10 +329,10 @@ const DiskUsageRow: React.FC<{ label: string; info: DiskUsageInfo }> = ({ label,
         </div>
         <div className="flex justify-between mt-1">
           <span className="text-[9px] text-[var(--theme-text-muted)] font-mono">
-            {humanSize(info.used)} {_("used")}
+            {humanSize(info.used)} {i18n._({ id: "used", message: "used" })}
           </span>
           <span className="text-[9px] text-[var(--theme-text-muted)] font-mono">
-            {humanSize(info.available)} {_("free")}
+            {humanSize(info.available)} {i18n._({ id: "free", message: "free" })}
           </span>
         </div>
         <p className="text-[8px] text-[var(--theme-text-muted)] font-mono truncate mt-0.5 opacity-60">
@@ -349,18 +350,18 @@ interface DiskUsageState {
 }
 
 const DiskUsageWidget: React.FC<DiskUsageState> = ({ data, loading, error }) => {
-  const { _ } = useLingui();
+  useLingui();
   return (
-    <Widget title={_("Disk Usage")} icon={<Icon name={IC("database")} size="xs" />}>
+    <Widget title={i18n._({ id: "Disk Usage", message: "Disk Usage" })} icon={<Icon name={IC("database")} size="xs" />}>
       {loading ? (
-        <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">{_("Loading…")}</p>
+        <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">{i18n._({ id: "Loading…", message: "Loading…" })}</p>
       ) : error ? (
         <p className="text-[10px] text-[var(--theme-danger,#ef4444)]">{error}</p>
       ) : data ? (
         <div className="flex flex-col gap-4">
-          <DiskUsageRow label={_("Input path")} info={data.in_path} />
+          <DiskUsageRow label={i18n._({ id: "Input path", message: "Input path" })} info={data.in_path} />
           {data.out_path && (
-            <DiskUsageRow label={_("Workspace")} info={data.out_path} />
+            <DiskUsageRow label={i18n._({ id: "Workspace", message: "Workspace" })} info={data.out_path} />
           )}
           <p className="text-[8px] text-[var(--theme-text-muted)] opacity-50 leading-tight">
             Volume capacity: {humanSize(data.in_path.capacity)}
@@ -371,25 +372,25 @@ const DiskUsageWidget: React.FC<DiskUsageState> = ({ data, loading, error }) => 
   );
 };
 
-const ZONE_MODE_LABELS: Record<string, { label: string; icon: string }> = {
-  "general":              { label: "General",               icon: "layers"  },
-  "document-management":  { label: "Document Management",   icon: "document" },
-  "creative-workbench":   { label: "Creative Workbench",    icon: "sparkles" },
-  "game-assets-2d":       { label: "Game Assets — 2D Zone", icon: "grid"    },
-  "game-assets-3d":       { label: "Game Assets — 3D Zone", icon: "cube"    },
-  "social-media":         { label: "Social Media Studio",   icon: "share"   },
-  "photography":          { label: "Photography",           icon: "image"   },
+const ZONE_MODE_LABELS: Record<string, { label: { id: string; message: string }; icon: string }> = {
+  "general":              { label: { id: "General", message: "General" }, icon: "layers"  },
+  "document-management":  { label: { id: "Document Management", message: "Document Management" }, icon: "document" },
+  "creative-workbench":   { label: { id: "Creative Workbench", message: "Creative Workbench" }, icon: "sparkles" },
+  "game-assets-2d":       { label: { id: "Game Assets — 2D Zone", message: "Game Assets — 2D Zone" }, icon: "grid"    },
+  "game-assets-3d":       { label: { id: "Game Assets — 3D Zone", message: "Game Assets — 3D Zone" }, icon: "cube"    },
+  "social-media":         { label: { id: "Social Media Studio", message: "Social Media Studio" }, icon: "share"   },
+  "photography":          { label: { id: "Photography", message: "Photography" }, icon: "image"   },
 };
 
 const ZoneModeBadge: React.FC<{ mode: string }> = ({ mode }) => {
-  const { _ } = useLingui();
+  useLingui();
   const meta = ZONE_MODE_LABELS[mode] ?? ZONE_MODE_LABELS["general"];
   if (!meta) return null;
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest"
       style={{ background: "var(--theme-border)", color: "var(--theme-text-muted)" }}>
       <Icon name={IC(meta.icon)} size="xs" />
-      {_(meta.label)}
+      {i18n._(meta.label)}
     </span>
   );
 };
@@ -399,14 +400,14 @@ const QuickActionsWidget: React.FC<{
   onEditZone: () => void;
   onTheme: () => void;
 }> = ({ onManageBookmarks, onEditZone, onTheme }) => {
-  const { _ } = useLingui();
+  useLingui();
   const actions = [
-    { icon: "bookmark" as const, label: _("Bookmarks"),  action: onManageBookmarks  },
-    { icon: "edit"     as const, label: _("Edit Zone"),   action: onEditZone        },
-    { icon: "sparkles" as const, label: _("Theme"),       action: onTheme           },
+    { icon: "bookmark" as const, label: i18n._({ id: "Bookmarks", message: "Bookmarks" }),  action: onManageBookmarks  },
+    { icon: "edit"     as const, label: i18n._({ id: "Edit Zone", message: "Edit Zone" }),   action: onEditZone        },
+    { icon: "sparkles" as const, label: i18n._({ id: "Theme", message: "Theme" }),       action: onTheme           },
   ];
   return (
-    <Widget title={_("Quick Actions")} icon={<Icon name={IC("star")} size="xs" />}>
+    <Widget title={i18n._({ id: "Quick Actions", message: "Quick Actions" })} icon={<Icon name={IC("star")} size="xs" />}>
       <div className="flex flex-col gap-1">
         {actions.map(({ icon, label, action }) => (
           <button
@@ -419,6 +420,332 @@ const QuickActionsWidget: React.FC<{
             <Icon name="chevron-right" size="xs" className="ml-auto text-[var(--theme-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>
         ))}
+      </div>
+    </Widget>
+  );
+};
+
+function makeWorkflowStateKey(label: string, fallbackIndex: number): string {
+  const cleaned = label
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  return cleaned || `STATE_${fallbackIndex + 1}`;
+}
+
+const WorkflowEditorWidget: React.FC<{
+  workflow: ZoneWorkflow | null;
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+  onChange: (next: ZoneWorkflow) => void;
+  onSave: () => void;
+  onReload: () => void;
+}> = ({ workflow, loading, saving, error, onChange, onSave, onReload }) => {
+  useLingui();
+
+  if (loading) {
+    return (
+      <Widget title={i18n._({ id: "Workflow Schema", message: "Workflow Schema" })} icon={<Icon name={IC("flow")} size="xs" />}>
+        <p className="text-[10px] text-[var(--theme-text-muted)] animate-pulse py-2">{i18n._({ id: "Loading workflow…", message: "Loading workflow…" })}</p>
+      </Widget>
+    );
+  }
+
+  if (!workflow) return null;
+
+  const updateStates = (states: WorkflowState[]) => onChange({ ...workflow, states });
+  const updateTransitions = (transitions: WorkflowTransition[]) => onChange({ ...workflow, transitions });
+  const renameStateKey = (oldKey: string, nextKey: string, nextStates: WorkflowState[]) => {
+    const nextTransitions = oldKey === nextKey ? workflow.transitions : workflow.transitions.map((transition) => ({
+      ...transition,
+      from: transition.from === oldKey ? nextKey : transition.from,
+      to: transition.to === oldKey ? nextKey : transition.to,
+    }));
+    onChange({ ...workflow, states: nextStates, transitions: nextTransitions });
+  };
+
+  const setDefaultState = (key: string) => {
+    updateStates(workflow.states.map((state) => ({ ...state, isDefault: state.key === key })));
+  };
+
+  const removeState = (key: string) => {
+    const remaining = workflow.states.filter((state) => state.key !== key);
+    if (remaining.length === 0) return;
+    if (!remaining.some((state) => state.isDefault)) remaining[0] = { ...remaining[0], isDefault: true };
+    updateStates(remaining);
+    updateTransitions(workflow.transitions.filter((transition) => transition.from !== key && transition.to !== key));
+  };
+
+  const addState = () => {
+    const index = workflow.states.length;
+    updateStates([
+      ...workflow.states,
+      {
+        key: `STATE_${index + 1}`,
+        label: `State ${index + 1}`,
+        color: "#64748b",
+        category: "custom",
+        isDefault: workflow.states.length === 0,
+        isTerminal: false,
+        sortOrder: (index + 1) * 10,
+      },
+    ]);
+  };
+
+  const addTransition = () => {
+    if (workflow.states.length < 2) return;
+    updateTransitions([
+      ...workflow.transitions,
+      {
+        from: workflow.states[0]?.key ?? "",
+        to: workflow.states[1]?.key ?? workflow.states[0]?.key ?? "",
+        label: workflow.states[1]?.label ?? workflow.states[0]?.label ?? "Transition",
+        requiresReason: false,
+        sortOrder: (workflow.transitions.length + 1) * 10,
+      },
+    ]);
+  };
+
+  return (
+    <Widget
+      title={i18n._({ id: "Workflow Schema", message: "Workflow Schema" })}
+      icon={<Icon name={IC("flow")} size="xs" />}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <label className="flex-1 min-w-0">
+            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
+              {i18n._({ id: "Workflow name", message: "Workflow name" })}
+            </span>
+            <input
+              value={workflow.name}
+              onChange={(e) => onChange({ ...workflow, name: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-2 text-xs text-[var(--theme-text)]"
+              placeholder={i18n._({ id: "Workflow name placeholder", message: "Editorial workflow" })}
+            />
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onReload}
+              className="px-3 py-2 rounded-xl border border-[var(--theme-border)] text-[10px] font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors"
+            >
+              {i18n._({ id: "Reload workflow", message: "Reload" })}
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving}
+              className="px-3 py-2 rounded-xl bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] text-[10px] font-black hover:opacity-90 disabled:opacity-60 transition-opacity"
+            >
+              {saving ? i18n._({ id: "Saving workflow", message: "Saving…" }) : i18n._({ id: "Save workflow", message: "Save workflow" })}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-xl border border-[var(--theme-danger,#ef4444)]/30 bg-[var(--theme-danger,#ef4444)]/10 px-3 py-2 text-[10px] text-[var(--theme-danger,#ef4444)]">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <section className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
+                  {i18n._({ id: "States", message: "States" })}
+                </p>
+                <p className="text-[10px] text-[var(--theme-text-muted)]">
+                  {i18n._({ id: "States help", message: "Exactly one default state is required." })}
+                </p>
+              </div>
+              <button
+                onClick={addState}
+                className="px-2.5 py-1.5 rounded-lg border border-[var(--theme-border)] text-[10px] font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-surface)] transition-colors"
+              >
+                {i18n._({ id: "Add state", message: "Add state" })}
+              </button>
+            </div>
+            <div className="space-y-3">
+              {workflow.states.map((state, index) => (
+                <div key={state.key || index} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface)] p-3">
+                  <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-2">
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Label", message: "Label" })}</span>
+                      <input
+                        value={state.label}
+                        onChange={(e) => {
+                          const next = [...workflow.states];
+                          const oldKey = next[index].key;
+                          const label = e.target.value;
+                          next[index] = { ...next[index], label, key: makeWorkflowStateKey(label, index) };
+                          renameStateKey(oldKey, next[index].key, next);
+                        }}
+                        className="mt-1 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-1.5 text-xs text-[var(--theme-text)]"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Key", message: "Key" })}</span>
+                      <input
+                        value={state.key}
+                        onChange={(e) => {
+                          const next = [...workflow.states];
+                          const oldKey = next[index].key;
+                          next[index] = { ...next[index], key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_") };
+                          renameStateKey(oldKey, next[index].key, next);
+                        }}
+                        className="mt-1 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-1.5 text-xs font-mono text-[var(--theme-text)]"
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-end">
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Color", message: "Color" })}</span>
+                      <input
+                        type="color"
+                        value={state.color || "#64748b"}
+                        onChange={(e) => {
+                          const next = [...workflow.states];
+                          next[index] = { ...next[index], color: e.target.value };
+                          updateStates(next);
+                        }}
+                        className="mt-1 h-9 w-12 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)]"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Category", message: "Category" })}</span>
+                      <input
+                        value={state.category}
+                        onChange={(e) => {
+                          const next = [...workflow.states];
+                          next[index] = { ...next[index], category: e.target.value };
+                          updateStates(next);
+                        }}
+                        className="mt-1 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-1.5 text-xs text-[var(--theme-text)]"
+                      />
+                    </label>
+                    <div className="flex gap-4 px-1 pb-1">
+                      <label className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-muted)]">
+                        <input type="radio" checked={state.isDefault} onChange={() => setDefaultState(state.key)} />
+                        {i18n._({ id: "Default", message: "Default" })}
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-muted)]">
+                        <input
+                          type="checkbox"
+                          checked={state.isTerminal}
+                          onChange={(e) => {
+                            const next = [...workflow.states];
+                            next[index] = { ...next[index], isTerminal: e.target.checked };
+                            updateStates(next);
+                          }}
+                        />
+                        {i18n._({ id: "Terminal", message: "Terminal" })}
+                      </label>
+                    </div>
+                    <button
+                      onClick={() => removeState(state.key)}
+                      disabled={workflow.states.length === 1}
+                      className="h-9 px-2.5 rounded-lg border border-[var(--theme-border)] text-[10px] font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] disabled:opacity-40 transition-colors"
+                    >
+                      {i18n._({ id: "Remove", message: "Remove" })}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg)] p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
+                  {i18n._({ id: "Transitions", message: "Transitions" })}
+                </p>
+                <p className="text-[10px] text-[var(--theme-text-muted)]">
+                  {i18n._({ id: "Transitions help", message: "Allowed moves between workflow states." })}
+                </p>
+              </div>
+              <button
+                onClick={addTransition}
+                disabled={workflow.states.length < 2}
+                className="px-2.5 py-1.5 rounded-lg border border-[var(--theme-border)] text-[10px] font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-surface)] disabled:opacity-40 transition-colors"
+              >
+                {i18n._({ id: "Add transition", message: "Add transition" })}
+              </button>
+            </div>
+            <div className="space-y-3">
+              {workflow.transitions.length === 0 ? (
+                <p className="text-[10px] text-[var(--theme-text-muted)]">{i18n._({ id: "No transitions yet", message: "No transitions yet." })}</p>
+              ) : workflow.transitions.map((transition, index) => (
+                <div key={`${transition.from}-${transition.to}-${index}`} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface)] p-3">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2">
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "From", message: "From" })}</span>
+                      <select
+                        value={transition.from}
+                        onChange={(e) => {
+                          const next = [...workflow.transitions];
+                          next[index] = { ...next[index], from: e.target.value };
+                          updateTransitions(next);
+                        }}
+                        className="mt-1 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-1.5 text-xs text-[var(--theme-text)]"
+                      >
+                        {workflow.states.map((state) => <option key={state.key} value={state.key}>{state.label}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "To", message: "To" })}</span>
+                      <select
+                        value={transition.to}
+                        onChange={(e) => {
+                          const next = [...workflow.transitions];
+                          next[index] = { ...next[index], to: e.target.value };
+                          updateTransitions(next);
+                        }}
+                        className="mt-1 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-1.5 text-xs text-[var(--theme-text)]"
+                      >
+                        {workflow.states.map((state) => <option key={state.key} value={state.key}>{state.label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-end">
+                    <label>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Action label", message: "Action label" })}</span>
+                      <input
+                        value={transition.label}
+                        onChange={(e) => {
+                          const next = [...workflow.transitions];
+                          next[index] = { ...next[index], label: e.target.value };
+                          updateTransitions(next);
+                        }}
+                        className="mt-1 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2.5 py-1.5 text-xs text-[var(--theme-text)]"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 px-1 pb-2 text-[10px] text-[var(--theme-text-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={transition.requiresReason}
+                        onChange={(e) => {
+                          const next = [...workflow.transitions];
+                          next[index] = { ...next[index], requiresReason: e.target.checked };
+                          updateTransitions(next);
+                        }}
+                      />
+                      {i18n._({ id: "Reason required", message: "Reason required" })}
+                    </label>
+                    <button
+                      onClick={() => updateTransitions(workflow.transitions.filter((_, rowIndex) => rowIndex !== index))}
+                      className="h-9 px-2.5 rounded-lg border border-[var(--theme-border)] text-[10px] font-bold text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors"
+                    >
+                      {i18n._({ id: "Remove transition", message: "Remove" })}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
     </Widget>
   );
@@ -440,7 +767,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
   onClose,
 }) => {
   const { state } = useDms();
-  const { _ } = useLingui();
+  useLingui();
   const zone = state.zone;
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
@@ -448,6 +775,10 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
   const [diskData, setDiskData]         = useState<ZoneDiskUsage | null>(null);
   const [diskLoading, setDiskLoading]   = useState(true);
   const [diskError, setDiskError]       = useState<string | null>(null);
+  const [workflow, setWorkflow]         = useState<ZoneWorkflow | null>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(true);
+  const [workflowSaving, setWorkflowSaving] = useState(false);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
   const netHealth                       = useNetHealth(3000);
 
   // Zone Mode persisted to localStorage
@@ -482,6 +813,89 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
     });
   }, [zone?.name]);
 
+  useEffect(() => {
+    if (!zone?.name) return;
+    setWorkflowLoading(true);
+    setWorkflowError(null);
+    dms.lifecycle.workflow(zone.name).then((r) => {
+      if (r.ok && r.data) setWorkflow(r.data);
+      else setWorkflowError(r.error ?? "Failed to load workflow");
+      setWorkflowLoading(false);
+    });
+  }, [zone?.name]);
+
+  const handleReloadWorkflow = () => {
+    if (!zone?.name) return;
+    setWorkflowLoading(true);
+    setWorkflowError(null);
+    dms.lifecycle.workflow(zone.name).then((r) => {
+      if (r.ok && r.data) setWorkflow(r.data);
+      else setWorkflowError(r.error ?? "Failed to load workflow");
+      setWorkflowLoading(false);
+    });
+  };
+
+  const handleSaveWorkflow = async () => {
+    if (!zone?.name || !workflow) return;
+    const states = workflow.states.map((item, index) => ({
+      ...item,
+      key: item.key.trim(),
+      label: (item.label || item.key).trim(),
+      category: (item.category || "custom").trim(),
+      color: item.color || "#64748b",
+      sortOrder: (index + 1) * 10,
+    }));
+    if (states.length === 0) {
+      setWorkflowError("Workflow must contain at least one state.");
+      return;
+    }
+    if (states.some((item) => !item.key)) {
+      setWorkflowError("Every workflow state needs a key.");
+      return;
+    }
+    if (new Set(states.map((item) => item.key)).size !== states.length) {
+      setWorkflowError("Workflow state keys must be unique.");
+      return;
+    }
+    if (states.filter((item) => item.isDefault).length !== 1) {
+      setWorkflowError("Choose exactly one default workflow state.");
+      return;
+    }
+
+    const stateKeys = new Set(states.map((item) => item.key));
+    const transitions = workflow.transitions.map((item, index) => ({
+      ...item,
+      from: item.from.trim(),
+      to: item.to.trim(),
+      label: (item.label || item.to).trim(),
+      sortOrder: (index + 1) * 10,
+    }));
+    if (transitions.some((item) => !stateKeys.has(item.from) || !stateKeys.has(item.to))) {
+      setWorkflowError("Every transition must reference existing states.");
+      return;
+    }
+    const transitionPairs = new Set(transitions.map((item) => `${item.from}→${item.to}`));
+    if (transitionPairs.size !== transitions.length) {
+      setWorkflowError("Workflow transitions must be unique.");
+      return;
+    }
+
+    setWorkflowSaving(true);
+    setWorkflowError(null);
+    const res = await dms.lifecycle.saveWorkflow(zone.name, {
+      ...workflow,
+      name: workflow.name.trim() || `${zone.name} workflow`,
+      states,
+      transitions,
+    });
+    setWorkflowSaving(false);
+    if (!res.ok || !res.data) {
+      setWorkflowError(res.error ?? "Failed to save workflow");
+      return;
+    }
+    setWorkflow(res.data);
+  };
+
   if (!zone) return null;
 
   return (
@@ -491,7 +905,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1">
             <h1 className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-0.5">
-              {_("Zone Dashboard")}
+              {i18n._({ id: "Zone Dashboard", message: "Zone Dashboard" })}
             </h1>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xl font-black text-[var(--theme-text)]">{zone.name}</span>
@@ -501,7 +915,7 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              title={_("Close dashboard")}
+              title={i18n._({ id: "Close dashboard", message: "Close dashboard" })}
               className="p-1.5 rounded-lg hover:bg-[var(--theme-surface)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
             >
               <Icon name="close" size="xs" />
@@ -553,6 +967,18 @@ const ZoneDashboard: React.FC<ZoneDashboardProps> = ({
 
           <div className="sm:col-span-2 lg:col-span-1">
             <NetHealthWidget {...netHealth} />
+          </div>
+
+          <div className="sm:col-span-2 lg:col-span-3">
+            <WorkflowEditorWidget
+              workflow={workflow}
+              loading={workflowLoading}
+              saving={workflowSaving}
+              error={workflowError}
+              onChange={setWorkflow}
+              onSave={handleSaveWorkflow}
+              onReload={handleReloadWorkflow}
+            />
           </div>
 
         </div>

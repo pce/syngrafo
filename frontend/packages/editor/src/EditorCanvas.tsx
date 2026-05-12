@@ -4,6 +4,7 @@ import { PAGE_SIZE_MM } from "./models/sdm";
 import type { SpacingToken } from "./models/sdm";
 import { BlockView } from "./components/blocks/BlockView";
 import { Icon } from "./components/Icon";
+import { resolvePageBackgroundCss } from "./services/page-background";
 
 const MM_TO_PX = 96 / 25.4; // 1 CSS px = 1/96 inch; 1 mm = 1/25.4 inch
 
@@ -121,9 +122,11 @@ export function EditorCanvas({ showRulers = true }: { showRulers?: boolean }): R
   }, []);
 
   /// Each ruler marks the boundary between page N and page N+1.
-  const pageHeightPx   = h * MM_TO_PX;
-  const numRulers      = showRulers
-    ? Math.max(0, Math.floor(pageBorderBoxHeightPx / pageHeightPx))
+  /// Stay on page 1 until content measurably exceeds a full page; otherwise an
+  /// exact one-page layout would incorrectly announce a second page.
+  const pageHeightPx = h * MM_TO_PX;
+  const numRulers = showRulers
+    ? Math.max(0, Math.ceil((pageBorderBoxHeightPx - pageHeightPx - 0.5) / pageHeightPx))
     : 0;
   const rulerPositions = Array.from({ length: numRulers }, (_, i) => ({
     topMm:   (i + 1) * h,
@@ -157,11 +160,11 @@ export function EditorCanvas({ showRulers = true }: { showRulers?: boolean }): R
     font-family: sans-serif;
     color: rgba(0, 0, 0, 0.45);
     margin-right: ${marginMm}mm;
-    margin-bottom: ${Math.round(marginMm / 2)}mm;
-  }`
+     margin-bottom: ${Math.round(marginMm / 2)}mm;
+   }`
       : "";
-    return `\n@page {\n  size: ${w}mm ${h}mm ${page.orientation};${pageCounter}\n}`;
-  }, [w, h, page.orientation, marginMm, page.showPageNumbers]);
+    return `\n@page {\n  size: ${w}mm ${h}mm;${pageCounter}\n}`;
+  }, [w, h, marginMm, page.showPageNumbers]);
 
   return (
     <>
@@ -183,7 +186,7 @@ export function EditorCanvas({ showRulers = true }: { showRulers?: boolean }): R
             lineHeight:  "1.6",
             // Background: explicit color or white. transparent is useful for
             // screen overlays; WebkitPrintColorAdjust makes it print correctly.
-            backgroundColor:           page.background?.color ?? "white",
+            background:                resolvePageBackgroundCss(page.background),
             WebkitPrintColorAdjust:    "exact",
             printColorAdjust:          "exact",
           } as React.CSSProperties}
@@ -196,8 +199,38 @@ export function EditorCanvas({ showRulers = true }: { showRulers?: boolean }): R
         >
           {blocks.length === 0 ? (
             <div
-              className="flex flex-col items-center justify-center h-48 gap-2"
+              tabIndex={0}
+              role="button"
+              className="flex flex-col items-center justify-center h-48 gap-2 cursor-text focus:outline-none"
               style={{ color: "#ccc" }}
+              onClick={() => {
+                const newBlock = { ...blocks[0] ?? { type: "p", spans: [] }, id: crypto.randomUUID() };
+                dispatch({ type: "ADD_BLOCK", block: newBlock as any });
+                requestAnimationFrame(() => {
+                  const el = document.querySelector(`[data-block-id="${newBlock.id}"] [contenteditable]`) as HTMLElement | null;
+                  el?.focus();
+                });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || (e.key.length === 1 && !e.metaKey && !e.ctrlKey)) {
+                  e.preventDefault();
+                  const newBlock = { type: "p", spans: [{ text: e.key.length === 1 ? e.key : "" }], id: crypto.randomUUID() };
+                  dispatch({ type: "ADD_BLOCK", block: newBlock as any });
+                  requestAnimationFrame(() => {
+                    const el = document.querySelector(`[data-block-id="${newBlock.id}"] [contenteditable]`) as HTMLElement | null;
+                    if (el) {
+                      el.focus();
+                      // Move caret to end
+                      const sel = window.getSelection();
+                      const range = document.createRange();
+                      range.selectNodeContents(el);
+                      range.collapse(false);
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
+                    }
+                  });
+                }
+              }}
             >
               <Icon name="layout" size="xl" />
               <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>

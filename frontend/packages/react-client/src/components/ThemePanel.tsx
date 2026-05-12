@@ -1,16 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { useTheme, THEME_PRESETS, FONT_PAIRS } from "../store/theme-store";
 import type { ThemePreset, FontPair } from "../store/theme-store";
 import { useSettings } from "../store/settings-store";
 import { useLocale } from "../store/locale-store";
-import { LOCALES, type SupportedLocale } from "../i18n";
+import { LOCALES, LOCALE_BADGES, type SupportedLocale } from "../i18n";
 import { Icon } from "./Icon";
 import Toggle from "./ui/Toggle";
 import Tooltip from "./ui/Tooltip";
 import { models, type LlmModelInfo, type LlmDownloadProgress } from "../services/dms-service";
 import { dms } from "../services/dms-service";
-import { INPUT_MAPPING_PRESETS, type KeyboardScheme, KEYBOARD_SCHEME_PREF_KEY } from "@syngrafo/shared";
+import {
+  INPUT_MAPPING_PRESETS,
+  KEYBOARD_SCHEME_PREF_KEY,
+  detectPreferredKeyboardScheme,
+  normalizeKeyboardScheme,
+  type KeyboardScheme,
+} from "@syngrafo/shared";
+import { getResolvedPaperStyle, paperStyleBackgroundCss, type PaperStylePreset } from "../models/paper-style";
 
 
 const COLOR_SLOTS: Array<{ label: string; var: string }> = [
@@ -97,6 +105,15 @@ const SVG_SIZE_OPTIONS: Array<{ bytes: number; label: string }> = [
   { bytes: 209_715_200,    label: "200 MB"  },
 ];
 
+const ASYNC_COPY_THRESHOLD_OPTIONS: Array<{ bytes: number; label: string }> = [
+  { bytes: 0, label: "Always background" },
+  { bytes: 134_217_728, label: "128 MB" },
+  { bytes: 268_435_456, label: "256 MB" },
+  { bytes: 536_870_912, label: "512 MB" },
+  { bytes: 1_073_741_824, label: "1 GB" },
+  { bytes: 2_147_483_648, label: "2 GB" },
+];
+
 const SettingRow: React.FC<{
   label: string;
   help:  string;
@@ -139,7 +156,7 @@ function fmt_bytes(bytes: number): string {
 
 
 const ModelsTab: React.FC = () => {
-  const { _ } = useLingui();
+  useLingui();
   const [catalog, setCatalog] = useState<LlmModelInfo[]>([]);
   const [modelsDir, setModelsDirState] = useState<string>("");
   const [dirInput, setDirInput] = useState<string>("");
@@ -216,7 +233,7 @@ const ModelsTab: React.FC = () => {
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          {_("NLP Engine — ONNX Models")}
+          {i18n._({ id: "NLP Engine — ONNX Models", message: "NLP Engine — ONNX Models" })}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
           Managed by <code className="font-mono">scripts/download_models.py</code> — placed in&nbsp;
@@ -234,7 +251,7 @@ const ModelsTab: React.FC = () => {
                   <p className="text-[9px] text-[var(--theme-text-muted)] font-mono truncate">{displayModel}</p>
                 </div>
                 <span className={`text-[9px] font-bold shrink-0 ${active ? "text-emerald-400" : "text-[var(--theme-text-muted)]"}`}>
-                  {active ? _("loaded") : size}
+                  {active ? i18n._({ id: "loaded", message: "loaded" }) : size}
                 </span>
               </div>
             );
@@ -244,19 +261,19 @@ const ModelsTab: React.FC = () => {
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          {_("LLM Model Storage")}
+          {i18n._({ id: "LLM Model Storage", message: "LLM Model Storage" })}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
-          {_("Where GGUF model files are stored. Changes take effect on next launch.")}
+          {i18n._({ id: "Where GGUF model files are stored. Changes take effect on next launch.", message: "Where GGUF model files are stored. Changes take effect on next launch." })}
         </p>
         <div className="flex gap-1.5 items-stretch">
           <input
             type="text" value={dirInput} onChange={(e) => setDirInput(e.target.value)}
-            placeholder={modelsDir || _("e.g. ~/Library/Application Support/Syngrafo/models")}
+            placeholder={modelsDir || i18n._({ id: "e.g. ~/Library/Application Support/Syngrafo/models", message: "e.g. ~/Library/Application Support/Syngrafo/models" })}
             className="flex-1 text-[10px] font-mono px-2 py-1.5 min-w-0 focus:outline-none"
             style={{ background: "var(--theme-bg)", color: "var(--theme-text)", border: "1px solid var(--theme-border)", borderRadius: "var(--theme-radius-sm, 4px)" }}
           />
-          <button onClick={handlePickDir} title={_("Browse…")}
+          <button onClick={handlePickDir} title={i18n._({ id: "Browse…", message: "Browse…" })}
             className="shrink-0 px-2 py-1 text-[10px] font-bold border border-[var(--theme-border)] hover:bg-[var(--theme-bg)] transition-colors"
             style={{ borderRadius: "var(--theme-radius-sm, 4px)", color: "var(--theme-text-muted)" }}>
             <Icon name="folder-open" size="xs" />
@@ -264,15 +281,15 @@ const ModelsTab: React.FC = () => {
           <button onClick={handleSaveDir} disabled={!dirInput.trim() || dirInput === modelsDir}
             className="shrink-0 px-2.5 py-1 text-[10px] font-bold bg-[var(--theme-primary)]/80 text-[var(--theme-bg)] disabled:opacity-40 hover:opacity-90 transition-all"
             style={{ borderRadius: "var(--theme-radius-sm, 4px)" }}>
-            {dirSaved ? "✓" : _("Save")}
+            {dirSaved ? "✓" : i18n._({ id: "Save", message: "Save" })}
           </button>
         </div>
-        {dirSaved && <p className="text-[9px] text-amber-400 mt-1">{_("⚠ Restart required for the new path to take effect.")}</p>}
+        {dirSaved && <p className="text-[9px] text-amber-400 mt-1">{i18n._({ id: "⚠ Restart required for the new path to take effect.", message: "⚠ Restart required for the new path to take effect." })}</p>}
       </section>
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          {_("LLM Catalog")}
+          {i18n._({ id: "LLM Catalog", message: "LLM Catalog" })}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
           GGUF models downloaded on demand via libcurl.
@@ -282,7 +299,7 @@ const ModelsTab: React.FC = () => {
           <p className="text-[10px] text-[var(--theme-text-muted)] italic">
             {typeof window.saucer?.call === "function"
               ? "No models in catalog — check data/llm_catalog.json."
-              : _("Not connected to native host.")}
+              : i18n._({ id: "Not connected to native host.", message: "Not connected to native host." })}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -314,13 +331,13 @@ const ModelsTab: React.FC = () => {
                   )}
                   <div className="flex gap-1.5 mt-0.5">
                     {m.downloaded ? (
-                      <button onClick={() => handleDelete(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">{_("Delete")}</button>
+                      <button onClick={() => handleDelete(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">{i18n._({ id: "Delete", message: "Delete" })}</button>
                     ) : isDownloading ? (
-                      <button onClick={() => handleCancel(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-colors">{_("Cancel")}</button>
+                      <button onClick={() => handleCancel(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-colors">{i18n._({ id: "Cancel", message: "Cancel" })}</button>
                     ) : (
-                      <button onClick={() => handleDownload(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-[var(--theme-primary)]/60 text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 transition-colors">{_("↓ Download")}</button>
+                      <button onClick={() => handleDownload(m.id)} className="text-[9px] font-bold px-2 py-0.5 rounded border border-[var(--theme-primary)]/60 text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 transition-colors">{i18n._({ id: "↓ Download", message: "↓ Download" })}</button>
                     )}
-                    {m.downloaded && <span className="text-[9px] text-emerald-400 font-bold self-center ml-1">{_("✓ Ready")}</span>}
+                    {m.downloaded && <span className="text-[9px] text-emerald-400 font-bold self-center ml-1">{i18n._({ id: "✓ Ready", message: "✓ Ready" })}</span>}
                   </div>
                 </div>
               );
@@ -334,20 +351,18 @@ const ModelsTab: React.FC = () => {
 
 
 const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
-  const { _ } = useLingui();
+  useLingui();
   const { theme, setTheme, saveTheme, isSaving: isSavingTheme } = useTheme();
   const { settings, setSetting, saveSettings, isSaving: isSavingSettings } = useSettings();
   const { locale, setLocale } = useLocale();
   const isSaving = isSavingTheme || isSavingSettings;
   const [tab, setTab] = useState<Tab>("appearance");
   const [saveOk, setSaveOk] = useState(false);
-  const [keyboardScheme, setKeyboardScheme] = useState<KeyboardScheme>("macos");
+  const [keyboardScheme, setKeyboardScheme] = useState<KeyboardScheme>(detectPreferredKeyboardScheme());
 
   useEffect(() => {
     dms.loadPreference(KEYBOARD_SCHEME_PREF_KEY).then(value => {
-      if (value && ["macos", "windows", "vi"].includes(value)) {
-        setKeyboardScheme(value as KeyboardScheme);
-      }
+      setKeyboardScheme(normalizeKeyboardScheme(value));
     });
   }, []);
 
@@ -371,6 +386,14 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
     });
   };
 
+  const selectedPaperStyle = getResolvedPaperStyle(settings.paperStyles, settings.defaultPaperStyleId);
+
+  const patchPaperStyle = useCallback((id: string, updater: (style: PaperStylePreset) => PaperStylePreset) => {
+    setSetting({
+      paperStyles: settings.paperStyles.map((style) => style.id === id ? updater(style) : style),
+    });
+  }, [settings.paperStyles, setSetting]);
+
   const handleSave = async () => {
     await Promise.all([saveTheme(), saveSettings()]);
     setSaveOk(true);
@@ -390,10 +413,10 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Custom Colours")}
+          {i18n._({ id: "Custom Colours", message: "Custom Colours" })}
         </h3>
         <p className="text-[10px] text-[var(--theme-text-muted)] leading-relaxed mb-2">
-          {_("Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides.")}
+          {i18n._({ id: "Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides.", message: "Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides." })}
         </p>
         {COLOR_SLOTS.map(({ label, var: varName }) => {
           const current = getComputedColor(varName);
@@ -426,10 +449,10 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Language */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          {_("Language")}
+          {i18n._({ id: "Language", message: "Language" })}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
-          {_("UI language. All catalogs are pre-loaded — switching is instant.")}
+          {i18n._({ id: "UI language. All catalogs are pre-loaded — switching is instant.", message: "UI language. All catalogs are pre-loaded — switching is instant." })}
         </p>
         <div className="grid grid-cols-3 gap-1.5">
           {(Object.entries(LOCALES) as [SupportedLocale, string][]).map(([code, label]) => (
@@ -446,7 +469,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
               `}
             >
               <span className="text-[13px] font-black leading-none tracking-wider uppercase">
-                {code.toUpperCase()}
+                {LOCALE_BADGES[code]}
               </span>
               <span>{label}</span>
             </button>
@@ -457,12 +480,12 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Application behaviour */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Application")}
+          {i18n._({ id: "Application", message: "Application" })}
         </h3>
         <div className="flex flex-col divide-y divide-[var(--theme-border)]">
           <SettingRow
-            label={_("Close to Systray")}
-            help={_("Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully.")}
+            label={i18n._({ id: "Close to Systray", message: "Close to Systray" })}
+            help={i18n._({ id: "Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully.", message: "Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully." })}
           >
             <Toggle
               checked={settings.closeToSystray}
@@ -471,8 +494,8 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             />
           </SettingRow>
           <SettingRow
-            label={_("Auto-Update")}
-            help={_("Check for updates on startup and offer to install them automatically.")}
+            label={i18n._({ id: "Auto-Update", message: "Auto-Update" })}
+            help={i18n._({ id: "Check for updates on startup and offer to install them automatically.", message: "Check for updates on startup and offer to install them automatically." })}
           >
             <Toggle
               checked={settings.autoUpdate}
@@ -483,13 +506,176 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
       </section>
 
+      <section>
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
+          {i18n._({ id: "Paper", message: "Paper" })}
+        </h3>
+        <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
+          {i18n._({ id: "Choose the default paper appearance for new documents. Notes and markup previews reuse the same preset so editing and preview feel like the same page.", message: "Choose the default paper appearance for new documents. Notes and markup previews reuse the same preset so editing and preview feel like the same page." })}
+        </p>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {settings.paperStyles.map((style) => {
+            const active = style.id === settings.defaultPaperStyleId;
+            return (
+              <button
+                key={style.id}
+                onClick={() => setSetting({ defaultPaperStyleId: style.id })}
+                className={`rounded-lg border p-2 text-left transition-colors ${active ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]/8" : "border-[var(--theme-border)] hover:border-[var(--theme-primary)]/50"}`}
+              >
+                <div
+                  className="h-10 rounded-md border border-[var(--theme-border)] mb-2"
+                  style={{ background: paperStyleBackgroundCss(style) }}
+                />
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${active ? "text-[var(--theme-primary)]" : "text-[var(--theme-text)]"}`}>
+                    {style.label}
+                  </span>
+                  {active && <span className="text-[8px] font-black uppercase tracking-wider text-[var(--theme-primary)] ml-auto">Default</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-surface)] p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">
+              {i18n._({ id: "Edit preset", message: "Edit preset" })}
+            </span>
+            <span className="text-[10px] font-medium text-[var(--theme-text)]">{selectedPaperStyle.label}</span>
+          </div>
+          <input
+            type="text"
+            value={selectedPaperStyle.label}
+            onChange={(e) => patchPaperStyle(selectedPaperStyle.id, (style) => ({ ...style, label: e.target.value || style.label }))}
+            className="w-full rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[11px] px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+          />
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => patchPaperStyle(selectedPaperStyle.id, (style) => ({ ...style, background: { color: style.background.color ?? "#ffffff" } }))}
+              className={`py-1 rounded border text-[9px] font-bold transition-colors ${selectedPaperStyle.background.gradient ? "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50" : "bg-[var(--theme-primary)] border-[var(--theme-primary)] text-[var(--theme-primary-fg)]"}`}
+            >
+              Solid
+            </button>
+            <button
+              onClick={() => patchPaperStyle(selectedPaperStyle.id, (style) => ({
+                ...style,
+                background: style.background.gradient
+                  ? style.background
+                  : {
+                      gradient: {
+                        type: "linear",
+                        angle: 180,
+                        stops: [
+                          { color: style.background.color ?? "#fffdf8", position: 0 },
+                          { color: "#f5efe3", position: 100 },
+                        ],
+                      },
+                    },
+              }))}
+              className={`py-1 rounded border text-[9px] font-bold transition-colors ${selectedPaperStyle.background.gradient ? "bg-[var(--theme-primary)] border-[var(--theme-primary)] text-[var(--theme-primary-fg)]" : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50"}`}
+            >
+              Gradient
+            </button>
+          </div>
+          {!selectedPaperStyle.background.gradient ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={selectedPaperStyle.background.color?.startsWith("#") ? selectedPaperStyle.background.color : "#ffffff"}
+                onChange={(e) => patchPaperStyle(selectedPaperStyle.id, (style) => ({ ...style, background: { color: e.target.value } }))}
+                className="w-10 h-8 rounded cursor-pointer border border-[var(--theme-border)] bg-transparent"
+              />
+              <input
+                type="text"
+                value={selectedPaperStyle.background.color ?? ""}
+                onChange={(e) => patchPaperStyle(selectedPaperStyle.id, (style) => ({ ...style, background: { color: e.target.value } }))}
+                className="flex-1 rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[11px] px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
+                placeholder="#ffffff"
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={selectedPaperStyle.background.gradient.stops[0]?.color?.startsWith("#") ? selectedPaperStyle.background.gradient.stops[0].color : "#fffdf8"}
+                    onChange={(e) => patchPaperStyle(selectedPaperStyle.id, (style) => ({
+                      ...style,
+                      background: {
+                        gradient: {
+                          type: "linear",
+                          angle: style.background.gradient?.angle ?? 180,
+                          stops: [
+                            { color: e.target.value, position: 0 },
+                            style.background.gradient?.stops[1] ?? { color: "#f5efe3", position: 100 },
+                          ],
+                        },
+                      },
+                    }))}
+                    className="w-10 h-8 rounded cursor-pointer border border-[var(--theme-border)] bg-transparent"
+                  />
+                  <span className="text-[10px] text-[var(--theme-text-muted)]">From</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={selectedPaperStyle.background.gradient.stops[1]?.color?.startsWith("#") ? selectedPaperStyle.background.gradient.stops[1].color : "#f5efe3"}
+                    onChange={(e) => patchPaperStyle(selectedPaperStyle.id, (style) => ({
+                      ...style,
+                      background: {
+                        gradient: {
+                          type: "linear",
+                          angle: style.background.gradient?.angle ?? 180,
+                          stops: [
+                            style.background.gradient?.stops[0] ?? { color: "#fffdf8", position: 0 },
+                            { color: e.target.value, position: 100 },
+                          ],
+                        },
+                      },
+                    }))}
+                    className="w-10 h-8 rounded cursor-pointer border border-[var(--theme-border)] bg-transparent"
+                  />
+                  <span className="text-[10px] text-[var(--theme-text-muted)]">To</span>
+                </div>
+              </div>
+              <label className="flex items-center gap-3 text-[10px] text-[var(--theme-text-muted)]">
+                <span>Angle</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={selectedPaperStyle.background.gradient.angle}
+                  onChange={(e) => patchPaperStyle(selectedPaperStyle.id, (style) => ({
+                    ...style,
+                    background: {
+                      gradient: {
+                        type: "linear",
+                        angle: Number(e.target.value),
+                        stops: style.background.gradient?.stops ?? [
+                          { color: "#fffdf8", position: 0 },
+                          { color: "#f5efe3", position: 100 },
+                        ],
+                      },
+                    },
+                  }))}
+                  className="flex-1"
+                />
+                <span className="tabular-nums text-[var(--theme-text)]">{selectedPaperStyle.background.gradient.angle}°</span>
+              </label>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Keyboard & Input */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-          {_("Keyboard & Input")}
+          {i18n._({ id: "Keyboard & Input", message: "Keyboard & Input" })}
         </h3>
         <p className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed mb-3">
-          {_("Controls how file selection, navigation and multi-select work in the file browser. Saved immediately — no restart required.")}
+          {i18n._({ id: "Controls how file selection, navigation and multi-select work in the file browser. Saved immediately — no restart required.", message: "Controls how file selection, navigation and multi-select work in the file browser. Saved immediately — no restart required." })}
         </p>
         <div className="flex flex-col gap-1.5">
           {INPUT_MAPPING_PRESETS.map(preset => (
@@ -518,6 +704,11 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
               <span className="text-[9px] text-[var(--theme-text-muted)] leading-relaxed">
                 {preset.shortDescription}
               </span>
+              {preset.touchDescription && (
+                <span className="text-[8px] text-[var(--theme-text-muted)]/80 leading-relaxed">
+                  {preset.touchDescription}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -526,12 +717,12 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* Display */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Display")}
+          {i18n._({ id: "Display", message: "Display" })}
         </h3>
         <div className="flex flex-col divide-y divide-[var(--theme-border)]">
           <SettingRow
-            label={_("SVG Inline Preview Limit")}
-            help={_("Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB.")}
+            label={i18n._({ id: "SVG Inline Preview Limit", message: "SVG Inline Preview Limit" })}
+            help={i18n._({ id: "Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB.", message: "Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB." })}
           >
             <select
               value={settings.svgPreviewMaxBytes}
@@ -549,6 +740,26 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
               ))}
             </select>
           </SettingRow>
+          <SettingRow
+            label={i18n._({ id: "Background Copy Threshold", message: "Background Copy Threshold" })}
+            help={i18n._({ id: "Files at or above this size start as background copy/move tasks so the file browser stays responsive. 512 MB is the default sweet spot; set this to Always background if you want queued transfers for every copy.", message: "Files at or above this size start as background copy/move tasks so the file browser stays responsive. 512 MB is the default sweet spot; set this to Always background if you want queued transfers for every copy." })}
+          >
+            <select
+              value={settings.asyncCopyThresholdBytes}
+              onChange={(e) => setSetting({ asyncCopyThresholdBytes: Number(e.target.value) })}
+              className="text-[10px] font-bold px-2 py-1 focus:outline-none cursor-pointer"
+              style={{
+                background:   "var(--theme-bg)",
+                color:        "var(--theme-text)",
+                border:       "1px solid var(--theme-border)",
+                borderRadius: "var(--theme-radius-sm, 4px)",
+              }}
+            >
+              {ASYNC_COPY_THRESHOLD_OPTIONS.map(({ bytes, label }) => (
+                <option key={bytes} value={bytes}>{label}</option>
+              ))}
+            </select>
+          </SettingRow>
         </div>
       </section>
 
@@ -562,7 +773,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
       {/* ── Theme Presets ─────────────────────────────────────────────────── */}
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Theme Presets")}
+          {i18n._({ id: "Theme Presets", message: "Theme Presets" })}
         </h3>
         <div className="grid grid-cols-2 gap-2">
           {THEME_PRESETS.map((p) => (
@@ -580,7 +791,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Corner Radius")}
+          {i18n._({ id: "Corner Radius", message: "Corner Radius" })}
         </h3>
         <div className="grid grid-cols-5 gap-1.5">
           {RADIUS_OPTIONS.map(({ id, label, preview }) => (
@@ -611,7 +822,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Density / Font Size")}
+          {i18n._({ id: "Density / Font Size", message: "Density / Font Size" })}
         </h3>
         <div className="grid grid-cols-3 gap-2">
           {DENSITY_OPTIONS.map(({ id, label, icon }) => (
@@ -638,7 +849,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Typography")}
+          {i18n._({ id: "Typography", message: "Typography" })}
         </h3>
         <div className="flex flex-col gap-1.5">
           {FONT_PAIRS.map((pair) => (
@@ -679,19 +890,19 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         </div>
         {theme.density === "compact" && (
           <p className="mt-2 text-[9px] text-[var(--theme-text-muted)] opacity-60">
-            {_("Compact mode removes all corner rounding.")}
+            {i18n._({ id: "Compact mode removes all corner rounding.", message: "Compact mode removes all corner rounding." })}
           </p>
         )}
         {theme.radius === "none" && theme.density !== "compact" && (
           <p className="mt-2 text-[9px] text-[var(--theme-text-muted)] opacity-60">
-            {_("Radius: None — all rounded corners are suppressed.")}
+            {i18n._({ id: "Radius: None — all rounded corners are suppressed.", message: "Radius: None — all rounded corners are suppressed." })}
           </p>
         )}
       </section>
 
       <section>
         <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] mb-2">
-          {_("Live Preview")}
+          {i18n._({ id: "Live Preview", message: "Live Preview" })}
         </h3>
         <div
           className="rounded-xl border border-[var(--theme-border)] overflow-hidden"
@@ -707,15 +918,15 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             <div className="h-2 bg-[var(--theme-text-muted)]/20 w-1/2" style={{ borderRadius: "var(--theme-radius-sm)" }} />
             <div className="flex gap-2 mt-1">
               <span className="text-[10px] px-2 py-0.5 font-bold text-[var(--theme-bg)] bg-[var(--theme-primary)]" style={{ borderRadius: "var(--theme-radius-sm)" }}>
-                {_("Primary")}
+                {i18n._({ id: "Primary", message: "Primary" })}
               </span>
               <span className="text-[10px] px-2 py-0.5 font-bold text-white bg-[var(--theme-danger)]" style={{ borderRadius: "var(--theme-radius-sm)" }}>
-                {_("Danger")}
+                {i18n._({ id: "Danger", message: "Danger" })}
               </span>
             </div>
             <div className="flex items-baseline gap-2 mt-1 pt-1.5 border-t border-[var(--theme-border)]">
               <span className="text-[11px] text-[var(--theme-text)]" style={{ fontFamily: "var(--theme-font-sans)" }}>
-                {_("The quick brown fox")}
+                {i18n._({ id: "The quick brown fox", message: "The quick brown fox" })}
               </span>
               <span className="text-[10px] text-[var(--theme-text-muted)]" style={{ fontFamily: "var(--theme-font-mono)" }}>
                 const x = 42;
@@ -744,8 +955,8 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--theme-border)] shrink-0">
           <div>
-            <h2 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-widest">{_("Theme & Settings")}</h2>
-                <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">{_("Theme · Radius · Density · Colour Overrides · Config · Models")}</p>
+            <h2 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-widest">{i18n._({ id: "Theme & Settings", message: "Theme & Settings" })}</h2>
+                <p className="text-[10px] text-[var(--theme-text-muted)] mt-0.5">{i18n._({ id: "Theme · Radius · Density · Colour Overrides · Config · Models", message: "Theme · Radius · Density · Colour Overrides · Config · Models" })}</p>
           </div>
           <button
             onClick={onClose}
@@ -791,11 +1002,11 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             {isSaving ? (
               <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : saveOk ? (
-              <>{_("✓ Saved")}</>
+              <>{i18n._({ id: "✓ Saved", message: "✓ Saved" })}</>
             ) : (
               <>
                 <Icon name="download" size="xs" />
-                {_("Save to DB")}
+                {i18n._({ id: "Save to DB", message: "Save to DB" })}
               </>
             )}
           </button>
@@ -803,7 +1014,7 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ onClose }) => {
             onClick={onClose}
             className="px-4 py-2 rounded-lg border border-[var(--theme-border)] text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors"
           >
-            {_("Close")}
+            {i18n._({ id: "Close", message: "Close" })}
           </button>
         </div>
       </div>

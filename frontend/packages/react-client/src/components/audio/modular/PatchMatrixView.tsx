@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import type { Patch, PatchCable, SignalTransform } from "@syngrafo/audio";
 import { BLOCK_REGISTRY, DEFAULT_TRANSFORM } from "@syngrafo/audio";
 
@@ -32,7 +33,7 @@ export function PatchMatrixView({
   onRemoveCable,
   onSetTransform,
 }: PatchMatrixViewProps) {
-  const { _ } = useLingui();
+  useLingui();
   const [editing, setEditing] = useState<{
     cableId:   string;
     transform: SignalTransform;
@@ -98,7 +99,7 @@ export function PatchMatrixView({
   if (rows.length === 0 || cols.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-[var(--theme-text-muted)] text-xs">
-        {_("Add blocks to see the patch matrix")}
+        {i18n._({ id: "Add blocks to see the patch matrix", message: "Add blocks to see the patch matrix" })}
       </div>
     );
   }
@@ -111,7 +112,7 @@ export function PatchMatrixView({
           <thead>
             <tr>
               <th className="sticky left-0 z-20 bg-[var(--theme-surface)] border border-[var(--theme-border)] px-2 py-1 text-left min-w-[130px] text-[var(--theme-text-muted)] font-normal">
-                {_("source ╲ dest")}
+                {i18n._({ id: "source ╲ dest", message: "source ╲ dest" })}
               </th>
 
               {cols.map(col => (
@@ -195,7 +196,7 @@ export function PatchMatrixView({
                       }
                       title={
                         cable
-                          ? _("Connected — click to edit transform, click again to remove")
+                          ? i18n._({ id: "Connected — click to edit transform, click again to remove", message: "Connected — click to edit transform, click again to remove" })
                           : `Connect ${row.portLabel} → ${col.paramLabel}`
                       }
                       onClick={() => !isSelf && handleCell(row, col)}
@@ -239,7 +240,7 @@ export function PatchMatrixView({
           return (
             <div className="rounded border border-[var(--theme-border)] bg-[var(--theme-surface)] p-3 flex flex-wrap gap-3 items-end text-[10px]">
               <span className="text-[var(--theme-text-muted)] font-semibold uppercase tracking-wider w-full">
-                {_("Cable transform")}
+                {i18n._({ id: "Cable transform", message: "Cable transform" })}
               </span>
 
               {(["inMin", "inMax", "outMin", "outMax"] as const).map(k => (
@@ -260,7 +261,7 @@ export function PatchMatrixView({
               ))}
 
               <label className="flex flex-col gap-0.5 text-[var(--theme-text-muted)]">
-                {_("curve")}
+                {i18n._({ id: "curve", message: "curve" })}
                 <select
                   value={t.mode}
                   className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded px-1 py-0.5 text-[var(--theme-text)] text-[10px]"
@@ -280,7 +281,7 @@ export function PatchMatrixView({
                   checked={t.clamp}
                   onChange={e => update({ clamp: e.target.checked })}
                 />
-                {_("clamp")}
+                {i18n._({ id: "clamp", message: "clamp" })}
               </label>
 
               <button
@@ -290,14 +291,14 @@ export function PatchMatrixView({
                   setEditing(null);
                 }}
               >
-                {_("Remove pin")}
+                {i18n._({ id: "Remove pin", message: "Remove pin" })}
               </button>
 
               <button
                 className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] px-2 py-0.5 rounded border border-[var(--theme-border)]"
                 onClick={() => setEditing(null)}
               >
-                {_("Close")}
+                {i18n._({ id: "Close", message: "Close" })}
               </button>
             </div>
           );

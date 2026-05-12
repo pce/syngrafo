@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 
 interface NLPStats {
@@ -27,7 +28,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   results,
   isProcessing,
 }) => {
-  const { _ } = useLingui();
+  useLingui();
 
   // Parse results safely — the engine may return raw text or a JSON string.
   const data = useMemo(() => {
@@ -47,7 +48,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           <Icon name="analytics" size="lg" />
         </div>
         <p className="text-[10px] font-black uppercase tracking-[0.3em]">
-          {_("Awaiting Engine Analysis")}
+          {i18n._({ id: "Awaiting Engine Analysis", message: "Awaiting Engine Analysis" })}
         </p>
       </div>
     );
@@ -59,7 +60,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
       <div className="p-6 bg-slate-900 rounded-2xl border border-slate-800 font-mono text-xs text-emerald-400 leading-relaxed overflow-y-auto max-h-[500px] shadow-inner">
         <div className="flex items-center gap-2 mb-4 text-[10px] font-black uppercase tracking-widest text-emerald-500/50">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          {_("Raw Stream Data")}
+          {i18n._({ id: "Raw Stream Data", message: "Raw Stream Data" })}
         </div>
         {results}
         {isProcessing && (
@@ -74,7 +75,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
       {/* High Level Metrics Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          label={_("Sentiment")}
+          label={i18n._({ id: "Sentiment", message: "Sentiment" })}
           value={data?.sentiment_score?.toFixed(2) || "0.00"}
           icon="sentiment"
           color="text-blue-500"
@@ -85,19 +86,19 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           }
         />
         <StatCard
-          label={_("Readability")}
+          label={i18n._({ id: "Readability", message: "Readability" })}
           value={data?.readability_score?.toFixed(1) || "0.0"}
           icon="readability"
           color="text-amber-500"
         />
         <StatCard
-          label={_("Tokens")}
+          label={i18n._({ id: "Tokens", message: "Tokens" })}
           value={data?.tokens?.toString() || "0"}
           icon="brain"
           color="text-indigo-500"
         />
         <StatCard
-          label={_("Sentences")}
+          label={i18n._({ id: "Sentences", message: "Sentences" })}
           value={data?.sentences?.toString() || "0"}
           icon="rows"
           color="text-emerald-500"
@@ -108,7 +109,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
         <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
             <Icon name="stats" size="sm" />
-            {_("Linguistic Distribution")}
+            {i18n._({ id: "Linguistic Distribution", message: "Linguistic Distribution" })}
           </h3>
           <div className="space-y-4">
             {data?.pos_distribution ? (
@@ -136,7 +137,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                 ))
             ) : (
               <p className="text-xs text-slate-400 italic">
-                {_("No distribution data available")}
+                {i18n._({ id: "No distribution data available", message: "No distribution data available" })}
               </p>
             )}
           </div>
@@ -159,11 +160,11 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                     <Icon name="search" size="sm" className="text-rose-500" />
                   </div>
                   <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-rose-500">
-                    {_("Redundancy Report")}
+                    {i18n._({ id: "Redundancy Report", message: "Redundancy Report" })}
                   </h3>
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                  {_("Pattern matching results from C++ Deduplication Addon")}
+                  {i18n._({ id: "Pattern matching results from C++ Deduplication Addon", message: "Pattern matching results from C++ Deduplication Addon" })}
                 </p>
               </div>
 
@@ -172,7 +173,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                   {data.duplicates.length}
                 </span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-rose-400/70">
-                  {_("Duplicates")}
+                  {i18n._({ id: "Duplicates", message: "Duplicates" })}
                 </span>
               </div>
             </div>
@@ -189,13 +190,13 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover/card:text-rose-400 transition-colors">
-                        {_("Pattern")}
+                        {i18n._({ id: "Pattern", message: "Pattern" })}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col items-end">
                         <span className="text-[7px] font-black uppercase tracking-tighter text-slate-300">
-                          {_("Offset")}
+                          {i18n._({ id: "Offset", message: "Offset" })}
                         </span>
                         <span className="text-[9px] font-mono font-bold text-slate-500">
                           {String(dup.offset).padStart(4, "0")}
@@ -204,7 +205,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
                       <div className="w-px h-4 bg-slate-100 dark:bg-slate-800" />
                       <div className="flex flex-col items-end">
                         <span className="text-[7px] font-black uppercase tracking-tighter text-slate-300">
-                          {_("Size")}
+                          {i18n._({ id: "Size", message: "Size" })}
                         </span>
                         <span className="text-[9px] font-mono font-bold text-slate-500">
                           {dup.length}
@@ -225,7 +226,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {_("Deduplicator Mode: Detect")}
+                {i18n._({ id: "Deduplicator Mode: Detect", message: "Deduplicator Mode: Detect" })}
               </div>
               <div className="text-[8px] font-black uppercase tracking-widest text-slate-300">
                 Engine: PCE-NLP-v2.0
@@ -237,7 +238,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
             <Icon name="sparkles" size="sm" />
-            {_("Key Terminology")}
+            {i18n._({ id: "Key Terminology", message: "Key Terminology" })}
           </h3>
           <div className="flex flex-wrap gap-2">
             {data?.entities && data.entities.length > 0 ? (
@@ -251,7 +252,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
               ))
             ) : (
               <p className="text-xs text-slate-400 italic">
-                {_("Extracting entities…")}
+                {i18n._({ id: "Extracting entities…", message: "Extracting entities…" })}
               </p>
             )}
           </div>

@@ -6,14 +6,14 @@
  * as a lightweight React context so any component in the tree can read and
  * mutate them.
  *
- * Target format (zone-relative materialized path):
+ * Target format (root-relative materialized path):
  *   path/to/file.py           → whole file
  *   path/to/file.py?10:12     → line range 10–12 (inclusive)
  *   path/to/file.py?10:       → from line 10 to EOF
  *   path/to/folder/           → directory (trailing slash)
  *   path/to/image.png         → image (kind inferred from extension)
  *
- * Canonical URI:  /#<zoneName>/<target>
+ * Canonical URI:  /#<zoneName>/<root>/<target>
  *
  * Usage:
  *   const { bookmarks, loading, addBookmark, deleteBookmark } = useBookmarks();
@@ -28,7 +28,7 @@ import React, {
   useReducer,
 } from "react";
 
-import { dms, type Bookmark, type BookmarkResolveResult } from "../services/dms-service";
+import { dms, type Bookmark, type BookmarkResolveResult, type BookmarkRoot } from "../services/dms-service";
 
 
 interface BookmarkState {
@@ -117,10 +117,10 @@ interface BookmarkCtx {
 
   /**
    * Add a new bookmark to the current zone.
-   * `target` is a zone-relative path (e.g. `"src/main.py?10:20"`).
+   * `root` selects the base area and `target` is relative to it.
    * Returns the created Bookmark or throws.
    */
-  addBookmark: (label: string, target: string) => Promise<Bookmark>;
+  addBookmark: (root: BookmarkRoot, label: string, target: string) => Promise<Bookmark>;
 
   /**
    * Remove a bookmark by id.
@@ -132,16 +132,17 @@ interface BookmarkCtx {
    */
   updateBookmark: (
     id: number,
+    root: BookmarkRoot,
     label: string,
     target: string,
     sortOrder: number,
   ) => Promise<Bookmark>;
 
   /**
-   * Resolve a zone-relative target to an absolute path + line info.
+   * Resolve a typed bookmark target to an absolute path + line info.
    * Uses the zone from the bookmarks context (must be loaded first).
    */
-  resolveTarget: (target: string) => Promise<BookmarkResolveResult | null>;
+  resolveTarget: (root: BookmarkRoot, target: string) => Promise<BookmarkResolveResult | null>;
 
   /** Clear the last error. */
   clearError: () => void;
@@ -166,9 +167,9 @@ export function BookmarkProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addBookmark = useCallback(
-    async (label: string, target: string): Promise<Bookmark> => {
+    async (root: BookmarkRoot, label: string, target: string): Promise<Bookmark> => {
       if (!state.zoneName) throw new Error("No zone loaded");
-      const res = await dms.bookmark.add(state.zoneName, label, target);
+      const res = await dms.bookmark.add(state.zoneName, root, label, target);
       if (!res.ok || !res.data) throw new Error(res.error ?? "Failed to add bookmark");
       dispatch({ type: "ADD_BOOKMARK", bookmark: res.data });
       return res.data;
@@ -185,11 +186,12 @@ export function BookmarkProvider({ children }: { children: React.ReactNode }) {
   const updateBookmark = useCallback(
     async (
       id: number,
+      root: BookmarkRoot,
       label: string,
       target: string,
       sortOrder: number,
     ): Promise<Bookmark> => {
-      const res = await dms.bookmark.update(id, label, target, sortOrder);
+      const res = await dms.bookmark.update(id, root, label, target, sortOrder);
       if (!res.ok || !res.data) throw new Error(res.error ?? "Failed to update bookmark");
       dispatch({ type: "UPDATE_BOOKMARK", bookmark: res.data });
       return res.data;
@@ -198,9 +200,9 @@ export function BookmarkProvider({ children }: { children: React.ReactNode }) {
   );
 
   const resolveTarget = useCallback(
-    async (target: string): Promise<BookmarkResolveResult | null> => {
+    async (root: BookmarkRoot, target: string): Promise<BookmarkResolveResult | null> => {
       if (!state.zoneName) return null;
-      const res = await dms.bookmark.resolve(state.zoneName, target);
+      const res = await dms.bookmark.resolve(state.zoneName, root, target);
       return res.ok && res.data ? res.data : null;
     },
     [state.zoneName],
@@ -258,4 +260,3 @@ export function useZoneBookmarks(zoneName: string) {
 
   return ctx;
 }
-

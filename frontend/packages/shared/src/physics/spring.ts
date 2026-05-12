@@ -1,4 +1,4 @@
-import type { SpringConfig } from '../types/physics.ts';
+import type { SpringConfig } from "../types/physics";
 
 /**
  * Single step of a damped harmonic oscillator (semi-implicit Euler).

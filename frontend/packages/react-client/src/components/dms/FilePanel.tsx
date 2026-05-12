@@ -37,9 +37,12 @@ import {
   isSvgFile,
   isAudioFile,
   isVideoFile,
+  onDmsProgress,
+  type DmsProgressEvent,
 } from "../../services/dms-service";
 import type { FsEntry } from "../../services/dms-service";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 
 
@@ -101,8 +104,18 @@ const FilePanel: React.FC<FilePanelProps> = ({
   const [selection, setSelection]   = useState<Set<string>>(new Set());
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
   const [isLoading, setIsLoading]   = useState(false);
+  const [transferEntries, setTransferEntries] = useState<Record<string, {
+    taskId: string;
+    name: string;
+    path: string;
+    kind: "dir" | "file";
+    size?: number;
+    transferLabel: string;
+    transferProgress: number;
+    destDir: string;
+  }>>({});
 
-  const { _ } = useLingui();
+  useLingui();
   const listRef         = useRef<HTMLUListElement>(null);
   const lastClickRef    = useRef<string | null>(null);   // last clicked path for shift-range
 
@@ -137,6 +150,59 @@ const FilePanel: React.FC<FilePanelProps> = ({
     if (initialPath) navigate(initialPath);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPath]);
+
+  useEffect(() => {
+    const unsubscribe = onDmsProgress((event: DmsProgressEvent) => {
+      if (event.kind !== "transfer" || !event.task_id || !event.operation) return;
+      if (event.phase === "start" && Array.isArray(event.entries)) {
+        setTransferEntries((prev) => {
+          const next = { ...prev };
+          for (const entry of event.entries) {
+            next[entry.target_path] = {
+              taskId: event.task_id!,
+              name: entry.name,
+              path: entry.target_path,
+              kind: entry.is_dir ? "dir" : "file",
+              size: entry.size_bytes,
+              transferLabel: event.operation === "move" ? "moving" : "copying",
+              transferProgress: 0,
+              destDir: event.dest_dir ?? "",
+            };
+          }
+          return next;
+        });
+        return;
+      }
+
+      const progress = event.total_bytes && event.total_bytes > 0
+        ? Math.round(((event.done_bytes ?? 0) / event.total_bytes) * 100)
+        : (event.phase === "complete" ? 100 : 0);
+      if (event.target_path) {
+        setTransferEntries((prev) => {
+          const current = prev[event.target_path ?? ""];
+          if (!current) return prev;
+          return {
+            ...prev,
+            [event.target_path!]: {
+              ...current,
+              transferProgress: progress,
+            },
+          };
+        });
+      }
+      if (event.phase === "complete" || event.phase === "cancelled") {
+        if (event.dest_dir === path) void navigate(path);
+        setTransferEntries((prev) => {
+          const next = { ...prev };
+          for (const [entryPath, entry] of Object.entries(prev)) {
+            if (entry.taskId === event.task_id) delete next[entryPath];
+          }
+          return next;
+        });
+      }
+    });
+    return unsubscribe;
+  }, [navigate, path]);
 
   const goUp = useCallback(() => {
     const clean = path.replace(/\/$/, "");
@@ -292,6 +358,29 @@ const FilePanel: React.FC<FilePanelProps> = ({
 
   const isAtRoot = !path || path === "/";
   const selCount = selection.size;
+  const renderedEntries = [
+    ...entries.map((entry) => {
+      const overlay = transferEntries[entry.path];
+      return overlay
+        ? {
+            ...entry,
+            size: overlay.size ?? entry.size,
+            transferLabel: overlay.transferLabel,
+            transferProgress: overlay.transferProgress,
+          }
+        : entry;
+    }),
+    ...Object.values(transferEntries)
+      .filter((entry) => entry.destDir === path && !entries.some((existing) => existing.path === entry.path))
+      .map((entry) => ({
+        name: entry.name,
+        path: entry.path,
+        kind: entry.kind,
+        size: entry.size,
+        transferLabel: entry.transferLabel,
+        transferProgress: entry.transferProgress,
+      })),
+  ];
 
   return (
     <div
@@ -310,7 +399,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
         <button
           onClick={goUp}
           disabled={isAtRoot}
-          title={_("Up one level (Backspace)")}
+          title={i18n._({ id: "Up one level (Backspace)", message: "Up one level (Backspace)" })}
           className="p-1 rounded hover:bg-[var(--theme-bg)] disabled:opacity-30 transition-colors text-[var(--theme-text-muted)]"
         >
           <Icon name="chevron-up" size="xs" />
@@ -322,19 +411,19 @@ const FilePanel: React.FC<FilePanelProps> = ({
         >
           {path
             ? path.split("/").slice(-2).join("/") || "/"
-            : _("No folder selected")}
+            : i18n._({ id: "No folder selected", message: "No folder selected" })}
         </span>
 
         <button
           onClick={browse}
-          title={_("Choose folder")}
+          title={i18n._({ id: "Choose folder", message: "Choose folder" })}
           className="p-1 rounded hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)]"
         >
           <Icon name="folder-open" size="xs" />
         </button>
         <button
           onClick={refresh}
-          title={_("Refresh")}
+          title={i18n._({ id: "Refresh", message: "Refresh" })}
           className="p-1 rounded hover:bg-[var(--theme-bg)] transition-colors text-[var(--theme-text-muted)]"
         >
           <Icon name="refresh" size="xs" />
@@ -344,13 +433,13 @@ const FilePanel: React.FC<FilePanelProps> = ({
       {selCount > 0 && (
         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--theme-primary)]/10 border-b border-[var(--theme-primary)]/20 shrink-0">
           <span className="text-[9px] font-bold text-[var(--theme-primary)]">
-            {selCount}{" "}{_("selected")}
+            {selCount}{" "}{i18n._({ id: "selected", message: "selected" })}
           </span>
           <button
             onClick={() => emitSelection(new Set())}
             className="ml-auto text-[9px] font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)] transition-colors"
           >
-            {_("Clear")}
+            {i18n._({ id: "Clear", message: "Clear" })}
           </button>
         </div>
       )}
@@ -369,13 +458,13 @@ const FilePanel: React.FC<FilePanelProps> = ({
         onFocus={() => onFocus?.(panelId)}
         aria-label={`File panel ${panelId}`}
       >
-        {!isLoading && entries.length === 0 && (
+        {!isLoading && renderedEntries.length === 0 && (
           <li className="px-4 py-8 text-center text-[var(--theme-text-muted)] text-xs italic">
-            {path ? _("Empty folder") : _("No folder selected")}
+            {path ? i18n._({ id: "Empty folder", message: "Empty folder" }) : i18n._({ id: "No folder selected", message: "No folder selected" })}
           </li>
         )}
 
-        {entries.map((entry) => {
+        {renderedEntries.map((entry) => {
           const isSel      = selection.has(entry.path);
           const isFocused  = entry.path === focusedPath;
           const clickable  = entry.kind === "dir" || isSupportedFile(entry.path);
@@ -425,16 +514,31 @@ const FilePanel: React.FC<FilePanelProps> = ({
                 {entry.name}
               </span>
 
+              {"transferLabel" in entry && entry.transferLabel && (
+                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]">
+                  {entry.transferLabel}
+                </span>
+              )}
+
               {entry.kind === "file" && (
                 <span className="text-[9px] tabular-nums shrink-0 text-[var(--theme-text-muted)]">
                   {fmtSize(entry.size)}
                 </span>
               )}
 
+              {"transferProgress" in entry && typeof entry.transferProgress === "number" && (
+                <span className="w-10 h-1.5 rounded-full overflow-hidden shrink-0 bg-[var(--theme-border)]">
+                  <span
+                    className="block h-full bg-[var(--theme-primary)] transition-[width] duration-150"
+                    style={{ width: `${Math.max(4, Math.min(100, entry.transferProgress))}%` }}
+                  />
+                </span>
+              )}
+
               {entry.indexed && (
                 <span
                   className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500"
-                  title={_("Indexed")}
+                  title={i18n._({ id: "Indexed", message: "Indexed" })}
                 />
               )}
 

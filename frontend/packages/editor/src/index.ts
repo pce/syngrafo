@@ -9,6 +9,7 @@ export * from "./models/default-styles";
 
 // Functional history
 export * from "./models/history";
+export * from "./models/document-meta";
 
 // Serialisation
 export { encodeDocument, decodeDocument } from "./models/project";
@@ -64,3 +65,12 @@ export type { ILMPromptBuilder, StyleEntry } from "./services/lm-prompt-builder"
 
 // HTML parser utilities
 export { htmlToBlocks, blocksToHtml, htmlToSpans, spansToHtml } from "./services/html-parser";
+export {
+  blocksToMarkdown,
+  blocksToAsciiDoc,
+  blocksToPlainText,
+  spansToMarkdown,
+  spansToAsciiDoc,
+  spansToPlainText,
+} from "./services/block-serializers";
+export { resolvePageBackgroundCss } from "./services/page-background";

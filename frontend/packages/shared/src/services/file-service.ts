@@ -1,7 +1,7 @@
 /** @file File-system IPC helpers — shared across audio, video, editor packages. */
 
-import { ipcCall } from '../ipc.ts';
-import type { IpcResult } from '../ipc.ts';
+import { ipcCall } from "../ipc";
+import type { IpcResult } from "../ipc";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -38,15 +38,16 @@ interface RawFsEntry {
 }
 
 function mapRawEntry(raw: RawFsEntry): FsEntry {
-  return {
+  const entry: FsEntry = {
     name: String(raw.name ?? ''),
     path: String(raw.path ?? ''),
     kind: raw.is_dir ? 'dir' : 'file',
-    size: typeof raw.size === 'number' ? raw.size : undefined,
-    modified: typeof raw.mtime === 'number' ? raw.mtime * 1000 : undefined,
-    mime: typeof raw.mime_type === 'string' ? raw.mime_type : undefined,
     indexed: !!raw.indexed,
   };
+  if (typeof raw.size === "number") entry.size = raw.size;
+  if (typeof raw.mtime === "number") entry.modified = raw.mtime * 1000;
+  if (typeof raw.mime_type === "string") entry.mime = raw.mime_type;
+  return entry;
 }
 
 // ---------------------------------------------------------------------------

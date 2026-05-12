@@ -16,8 +16,10 @@
 
 import React, { useState, useEffect } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { dms }  from "../../services/dms-service";
 import { Icon }   from "../Icon";
+import { useSettings } from "../../store/settings-store";
 
 
 
@@ -58,7 +60,7 @@ const PathInput: React.FC<{
   onBrowse?: () => void;
   readOnly?: boolean;
 }> = ({ label, value, onChange, onBrowse, readOnly }) => {
-  const { _ } = useLingui();
+  useLingui();
   return (
   <div className="flex flex-col gap-1">
     <label className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
@@ -77,7 +79,7 @@ const PathInput: React.FC<{
         <button
           type="button"
           onClick={onBrowse}
-          title={_("Browse")}
+          title={i18n._({ id: "Browse", message: "Browse" })}
           className="px-2 py-1 rounded-lg border border-[var(--theme-border)] hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] transition-colors"
         >
           <Icon name="folder-open" size="xs" />
@@ -138,11 +140,24 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { settings } = useSettings();
   const [dest, setDest]             = useState(defaultDest);
   const [conflict, setConflict]     = useState<"keep" | "replace" | "skip">("keep");
   const [busy, setBusy]             = useState(false);
   const [status, setStatus]         = useState<StatusMsg | null>(null);
-  const { _ } = useLingui();
+  const [totalBytes, setTotalBytes] = useState(0);
+  useLingui();
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(sources.map(async (source) => {
+      const res = await dms.fileStats(source);
+      return res.ok && res.data ? res.data.size : 0;
+    })).then((sizes) => {
+      if (!cancelled) setTotalBytes(sizes.reduce((sum, size) => sum + size, 0));
+    });
+    return () => { cancelled = true; };
+  }, [sources]);
 
   const browse = async () => {
     const res = await dms.selectDirectory();
@@ -150,13 +165,37 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
   };
 
   const execute = async () => {
-    if (!dest.trim()) { setStatus({ kind: "error", text: _("Destination path is required.") }); return; }
+    if (!dest.trim()) { setStatus({ kind: "error", text: i18n._({ id: "Destination path is required.", message: "Destination path is required." }) }); return; }
     setBusy(true);
     setStatus(null);
 
+    const resolvedTotalBytes = totalBytes > 0
+      ? totalBytes
+      : (await Promise.all(sources.map(async (source) => {
+          const res = await dms.fileStats(source);
+          return res.ok && res.data ? res.data.size : 0;
+        }))).reduce((sum, size) => sum + size, 0);
+    const shouldRunAsync = settings.asyncCopyThresholdBytes <= 0
+      || resolvedTotalBytes >= settings.asyncCopyThresholdBytes;
+    if (shouldRunAsync) {
+      const res = await dms.transfer.start(op, sources, dest, conflict);
+      setBusy(false);
+      if (!res.ok) {
+        setStatus({ kind: "error", text: res.error ?? `${op} failed` });
+        return;
+      }
+      setStatus({
+        kind: "success",
+        text: `${op === "copy" ? "Queued" : "Started"} background ${op} for ${sources.length} item${sources.length !== 1 ? "s" : ""}.`,
+      });
+      onSuccess();
+      setTimeout(() => onClose(), 500);
+      return;
+    }
+
     const res = op === "copy"
-      ? await dms.copyFiles(sources, dest, conflict)
-      : await dms.moveFiles(sources, dest, conflict);
+      ? await dms.transfer.copy(sources, dest, conflict)
+      : await dms.transfer.move(sources, dest, conflict);
 
     setBusy(false);
 
@@ -175,7 +214,7 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
     }
   };
 
-    const title = op === "copy" ? _("Copy Files") : _("Move Files");
+    const title = op === "copy" ? i18n._({ id: "Copy Files", message: "Copy Files" }) : i18n._({ id: "Move Files", message: "Move Files" });
     const accentColor = op === "copy" ? "bg-blue-500 hover:bg-blue-600" : "bg-amber-500 hover:bg-amber-600";
 
   return (
@@ -197,7 +236,7 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
         </div>
 
         <PathInput
-          label={_("Destination directory")}
+          label={i18n._({ id: "Destination directory", message: "Destination directory" })}
           value={dest}
           onChange={setDest}
           onBrowse={browse}
@@ -205,7 +244,7 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
 
         <div className="mt-2">
           <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-1.5">
-            {_("If file exists")}
+            {i18n._({ id: "If file exists", message: "If file exists" })}
           </p>
           <div className="flex gap-2">
             {(["keep", "replace", "skip"] as const).map((opt) => (
@@ -219,12 +258,17 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
                   className="accent-[var(--theme-primary)]"
                 />
                 <span className="text-xs capitalize text-[var(--theme-text)]">
-                  {opt === "keep" ? _("Keep both") : opt === "replace" ? _("Replace") : _("Skip")}
+                  {opt === "keep" ? i18n._({ id: "Keep both", message: "Keep both" }) : opt === "replace" ? i18n._({ id: "Replace", message: "Replace" }) : i18n._({ id: "Skip", message: "Skip" })}
                 </span>
               </label>
             ))}
           </div>
         </div>
+        <p className="text-[10px] text-[var(--theme-text-muted)]">
+          {settings.asyncCopyThresholdBytes <= 0
+            ? i18n._({ id: "Transfers always run in the background.", message: "Transfers always run in the background." })
+            : `Background threshold: ${(settings.asyncCopyThresholdBytes / (1024 * 1024)).toFixed(0)} MB · current selection: ${(totalBytes / (1024 * 1024)).toFixed(1)} MB`}
+        </p>
       </div>
 
       <StatusBar msg={status} />
@@ -236,7 +280,7 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
           disabled={busy}
           className="px-4 py-1.5 text-xs font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors"
         >
-          {_("Cancel")}
+          {i18n._({ id: "Cancel", message: "Cancel" })}
         </button>
         <button
           onClick={execute}
@@ -244,7 +288,7 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
           className={`px-4 py-1.5 text-xs font-bold rounded-lg ${accentColor} text-white disabled:opacity-40 transition-colors flex items-center gap-1.5`}
         >
           {busy && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-          {op === "copy" ? _("Copy") : _("Move")} {sources.length}{" "}{sources.length !== 1 ? _("items") : _("item")}
+          {op === "copy" ? i18n._({ id: "Copy", message: "Copy" }) : i18n._({ id: "Move", message: "Move" })} {sources.length}{" "}{sources.length !== 1 ? i18n._({ id: "items", message: "items" }) : i18n._({ id: "item", message: "item" })}
         </button>
       </div>
     </ModalShell>
@@ -260,7 +304,7 @@ export interface DeleteDialogProps {
 export const DeleteDialog: React.FC<DeleteDialogProps> = ({ paths, onClose, onSuccess }) => {
   const [busy, setBusy]     = useState(false);
   const [status, setStatus] = useState<StatusMsg | null>(null);
-  const { _ } = useLingui();
+  useLingui();
 
   const execute = async () => {
     setBusy(true);
@@ -283,7 +327,7 @@ export const DeleteDialog: React.FC<DeleteDialogProps> = ({ paths, onClose, onSu
   };
 
   return (
-    <ModalShell title={_("Delete Files")} onClose={onClose} width="max-w-md">
+    <ModalShell title={i18n._({ id: "Delete Files", message: "Delete Files" })} onClose={onClose} width="max-w-md">
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-start gap-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
           <Icon name="warning" size="sm" className="text-rose-500 shrink-0 mt-0.5" />
@@ -306,7 +350,7 @@ export const DeleteDialog: React.FC<DeleteDialogProps> = ({ paths, onClose, onSu
           disabled={busy}
           className="px-4 py-1.5 text-xs font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors"
         >
-          {_("Cancel")}
+          {i18n._({ id: "Cancel", message: "Cancel" })}
         </button>
         <button
           onClick={execute}
@@ -314,7 +358,7 @@ export const DeleteDialog: React.FC<DeleteDialogProps> = ({ paths, onClose, onSu
           className="px-4 py-1.5 text-xs font-bold rounded-lg bg-rose-500 hover:bg-rose-600 text-white disabled:opacity-40 transition-colors flex items-center gap-1.5"
         >
           {busy && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-          {_("Delete")} {paths.length}{" "}{paths.length !== 1 ? _("items") : _("item")}
+          {i18n._({ id: "Delete", message: "Delete" })} {paths.length}{" "}{paths.length !== 1 ? i18n._({ id: "items", message: "items" }) : i18n._({ id: "item", message: "item" })}
         </button>
       </div>
     </ModalShell>
@@ -329,7 +373,7 @@ export interface ShareDialogProps {
 export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState<StatusMsg | null>(null);
-  const { _ } = useLingui();
+  useLingui();
 
   const filename = path.split("/").pop() ?? path;
 
@@ -337,10 +381,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
     try {
       await navigator.clipboard.writeText(path);
       setCopied(true);
-      setStatus({ kind: "success", text: _("Path copied to clipboard.") });
+      setStatus({ kind: "success", text: i18n._({ id: "Path copied to clipboard.", message: "Path copied to clipboard." }) });
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setStatus({ kind: "error", text: _("Clipboard not available.") });
+      setStatus({ kind: "error", text: i18n._({ id: "Clipboard not available.", message: "Clipboard not available." }) });
     }
   };
 
@@ -361,7 +405,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
   };
 
   return (
-    <ModalShell title={_("Share File")} onClose={onClose} width="max-w-sm">
+    <ModalShell title={i18n._({ id: "Share File", message: "Share File" })} onClose={onClose} width="max-w-sm">
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center gap-2 px-2 py-1.5 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg">
           <Icon name="file" size="xs" className="text-[var(--theme-text-muted)] shrink-0" />
@@ -378,7 +422,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
             className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] text-xs font-bold transition-colors"
           >
             <Icon name="share" size="xs" />
-            {_("Share")}
+            {i18n._({ id: "Share", message: "Share" })}
           </button>
           <button
             onClick={copyPath}
@@ -387,7 +431,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
             }`}
           >
             <Icon name={copied ? "check" : "copy"} size="xs" />
-            {copied ? _("Copied!") : _("Copy path")}
+            {copied ? i18n._({ id: "Copied!", message: "Copied!" }) : i18n._({ id: "Copy path", message: "Copy path" })}
           </button>
         </div>
       </div>
@@ -399,7 +443,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({ path, onClose }) => {
           onClick={onClose}
           className="px-4 py-1.5 text-xs font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors"
         >
-          {_("Close")}
+          {i18n._({ id: "Close", message: "Close" })}
         </button>
       </div>
     </ModalShell>
@@ -420,7 +464,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
   const [deleteOriginals, setDelete]  = useState(false);
   const [busy, setBusy]               = useState(false);
   const [status, setStatus]           = useState<StatusMsg | null>(null);
-  const { _ } = useLingui();
+  useLingui();
 
   const execute = async () => {
     setBusy(true);
@@ -447,11 +491,11 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
   };
 
   return (
-    <ModalShell title={_("Compress Files")} onClose={onClose} width="max-w-md">
+    <ModalShell title={i18n._({ id: "Compress Files", message: "Compress Files" })} onClose={onClose} width="max-w-md">
       <div className="px-4 py-3 space-y-3">
         <div>
           <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-1.5">
-            {_("Format")}
+            {i18n._({ id: "Format", message: "Format" })}
           </p>
           <div className="space-y-1">
             {(["gz", "bz2", "zst"] as CompressFormat[]).map((f) => (
@@ -476,7 +520,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
         <div>
           <div className="flex justify-between mb-1">
             <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
-              {_("Level")}
+              {i18n._({ id: "Level", message: "Level" })}
             </p>
             <span className="text-[9px] font-mono text-[var(--theme-text-muted)]">{level}</span>
           </div>
@@ -486,8 +530,8 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
             className="w-full accent-[var(--theme-primary)]"
           />
           <div className="flex justify-between text-[9px] text-[var(--theme-text-muted)]">
-            <span>{_("1 — fastest")}</span>
-            <span>{_("9 — smallest")}</span>
+            <span>{i18n._({ id: "1 — fastest", message: "1 — fastest" })}</span>
+            <span>{i18n._({ id: "9 — smallest", message: "9 — smallest" })}</span>
           </div>
         </div>
 
@@ -498,7 +542,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
             onChange={(e) => setDelete(e.target.checked)}
             className="accent-[var(--theme-primary)]"
           />
-          <span className="text-xs text-[var(--theme-text)]">{_("Delete originals after compression")}</span>
+          <span className="text-xs text-[var(--theme-text)]">{i18n._({ id: "Delete originals after compression", message: "Delete originals after compression" })}</span>
         </label>
 
         <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-2">
@@ -510,7 +554,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
 
       <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--theme-border)]">
         <button onClick={onClose} disabled={busy} className="px-4 py-1.5 text-xs font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors">
-          {_("Cancel")}
+          {i18n._({ id: "Cancel", message: "Cancel" })}
         </button>
         <button
           onClick={execute}
@@ -518,7 +562,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({ paths, onClose, 
           className="px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-40 transition-colors flex items-center gap-1.5"
         >
           {busy && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-          {_("Compress")}
+          {i18n._({ id: "Compress", message: "Compress" })}
         </button>
       </div>
     </ModalShell>
@@ -558,7 +602,7 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
   );
   const [busy, setBusy]       = useState(false);
   const [status, setStatus]   = useState<StatusMsg | null>(null);
-  const { _ } = useLingui();
+  useLingui();
 
   const browse = async () => {
     const res = await dms.selectDirectory();
@@ -566,8 +610,8 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
   };
 
   const execute = async () => {
-    if (!name.trim()) { setStatus({ kind: "error", text: _("Archive name is required.") }); return; }
-    if (!destDir.trim()) { setStatus({ kind: "error", text: _("Destination directory is required.") }); return; }
+    if (!name.trim()) { setStatus({ kind: "error", text: i18n._({ id: "Archive name is required.", message: "Archive name is required." }) }); return; }
+    if (!destDir.trim()) { setStatus({ kind: "error", text: i18n._({ id: "Destination directory is required.", message: "Destination directory is required." }) }); return; }
 
     setBusy(true);
     setStatus(null);
@@ -596,11 +640,11 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
   };
 
   return (
-    <ModalShell title={_("Create Archive")} onClose={onClose} width="max-w-lg">
+    <ModalShell title={i18n._({ id: "Create Archive", message: "Create Archive" })} onClose={onClose} width="max-w-lg">
       <div className="px-4 py-3 space-y-3">
         <div>
           <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-1.5">
-            {_("Format")}
+            {i18n._({ id: "Format", message: "Format" })}
           </p>
           <div className="grid grid-cols-2 gap-1">
             {(["zip", "tar.gz", "tar.bz2", "tar.zst"] as ArchiveFormat[]).map((f) => (
@@ -626,13 +670,13 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
           </div>
         </div>
 
-        <PathInput label={_("Archive name (no extension)")} value={name} onChange={setName} />
+        <PathInput label={i18n._({ id: "Archive name (no extension)", message: "Archive name (no extension)" })} value={name} onChange={setName} />
 
-        <PathInput label={_("Save to directory")} value={destDir} onChange={setDestDir} onBrowse={browse} />
+        <PathInput label={i18n._({ id: "Save to directory", message: "Save to directory" })} value={destDir} onChange={setDestDir} onBrowse={browse} />
 
         <div>
           <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-1">
-            {paths.length}{" "}{paths.length !== 1 ? _("items") : _("item")}{" "}{_("to archive")}
+            {paths.length}{" "}{paths.length !== 1 ? i18n._({ id: "items", message: "items" }) : i18n._({ id: "item", message: "item" })}{" "}{i18n._({ id: "to archive", message: "to archive" })}
           </p>
           <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-2">
             <FileList paths={paths} />
@@ -644,7 +688,7 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
 
       <div className="flex justify-end gap-2 px-4 py-3 border-t border-[var(--theme-border)]">
         <button onClick={onClose} disabled={busy} className="px-4 py-1.5 text-xs font-bold rounded-lg border border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors">
-          {_("Cancel")}
+          {i18n._({ id: "Cancel", message: "Cancel" })}
         </button>
         <button
           onClick={execute}
@@ -653,7 +697,7 @@ export const ArchiveDialog: React.FC<ArchiveDialogProps> = ({
         >
           {busy && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
           <Icon name="archive" size="xs" />
-          {_("Create Archive")}
+          {i18n._({ id: "Create Archive", message: "Create Archive" })}
         </button>
       </div>
     </ModalShell>

@@ -35,10 +35,6 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
                                        saucer::modules::desktop& /*desk*/) {
     using std::string;
 
-    // ── dms_get_palettes ──────────────────────────────────────────────────────
-    // Returns: { builtin: [...], custom: [...] }
-    // builtin  — db8, db16, db32 (generated, not from DB)
-    // custom   — project + brand palettes stored in active zone DB
     wv.expose("dms_get_palettes", [&dms]() -> string {
         // Built-ins
         json builtin_arr = json::array();
@@ -76,8 +72,6 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(json{{"builtin", builtin_arr}, {"custom", custom_arr}});
     });
 
-    // ── dms_get_palette ───────────────────────────────────────────────────────
-    // id: "db8" | "db16" | "db32" | user-defined slug
     wv.expose("dms_get_palette", [&dms](string id) -> string {
         // Check built-ins first
         for (const auto& p : builtin_palettes())
@@ -105,10 +99,8 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
         return DMSHandle::ok_str(p.to_json());
     });
 
-    // ── dms_upsert_palette ────────────────────────────────────────────────────
-    // arg: JSON { id, name, kind?, description?, colors: [{r,g,b,name?},…] }
-    // Colors can also be given as a flat array: [{r,g,b},…]
-    // Returns: { ok: true, id, size }
+    /** Accepts `{ id, name, kind?, description?, colors: [{r,g,b,name?},…] }`.
+     *  Colors may also be a flat `[{r,g,b},…]` array. */
     wv.expose("dms_upsert_palette", [&dms](string arg) -> string {
         ColorPalette p;
         try {
@@ -160,7 +152,6 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
         });
     });
 
-    // ── dms_delete_palette ────────────────────────────────────────────────────
     wv.expose("dms_delete_palette", [&dms](string id) -> string {
         // Guard built-ins
         for (const auto& p : builtin_palettes())
@@ -220,4 +211,3 @@ inline void register_palette_bindings(saucer::smartview& wv, DMSHandle& dms,
 }
 
 } // namespace pce::dms
-

@@ -15,7 +15,7 @@ export const WORKSPACE_CONTEXT_META: Record<WorkspaceContext, WorkspaceContextMe
     id: "compose",
     label: "Compose",
     icon: "pencil",
-    description: "Distraction-free writing — full-width canvas, no panels",
+    description: "Flow-first writing with inline block actions beside the active block",
     shortcut: "⌘1",
   },
   layout: {
@@ -43,14 +43,14 @@ export const WORKSPACE_CONTEXT_META: Record<WorkspaceContext, WorkspaceContextMe
     id: "nlp",
     label: "NLP",
     icon: "tag",
-    description: "NLP annotation overlay: POS tags, entities, keywords",
+    description: "Interactive token inspection with POS, entities, keywords, and token details",
     shortcut: "⌘5",
   },
   export: {
     id: "export",
-    label: "Files",
+    label: "Export",
     icon: "download",
-    description: "Save, load and export files (HTML, .sdoc)",
+    description: "Save the document and export via print CSS, HTML, Markdown, or AsciiDoc",
     shortcut: "⌘6",
   },
 };

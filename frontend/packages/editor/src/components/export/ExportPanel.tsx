@@ -1,10 +1,13 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { markupToSafeHtml, type MarkupFormat } from "@syngrafo/shared";
 import { useEditor } from "../../store/editor-store";
-import { isTextBlock, PAGE_SIZE_MM, type SBlock, type SPageConfig, type SStyleClass, type Span } from "../../models/sdm";
+import { PAGE_SIZE_MM, type SBlock, type SPageConfig, type SStyleClass } from "../../models/sdm";
 import { Icon } from "../../components/Icon";
 import { ipcRawCall, parseIpcResult } from "../../services/ipc";
-import { htmlToBlocks } from "../../services/html-parser";
+import { blocksToHtml, htmlToBlocks } from "../../services/html-parser";
+import { blocksToAsciiDoc, blocksToMarkdown, blocksToPlainText } from "../../services/block-serializers";
 import { blocksFromJson, decodeDocument } from "../../models";
+import { getDocumentBaseName, getDocumentDisplayTitle } from "../../models/document-meta";
 import { loadSdocBundle, saveSdocToPath } from "../../services/sdoc-bundle";
 import { setAssetBlob, clearAssetBlobs, getAssetBlobEntries } from "../../hooks/useAssetSrc";
 
@@ -23,7 +26,7 @@ interface RecentExport {
   doc_uuid: string;
   title: string;
   path: string;
-  kind: "pdf" | "html";
+  kind: "pdf" | "html" | "sdoc" | "md" | "adoc";
   zone_name: string;
   exported_at: number;
   /** Always 0 for PDF exports — the native renderer writes the file
@@ -39,135 +42,6 @@ interface RecentDoc {
   updated_at: number;
 }
 
-function spansToHtml(spans: Span[]): string {
-  return spans
-    .map((span) => {
-      let html = span.text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      for (const mark of span.marks ?? []) {
-        switch (mark) {
-          case "bold":      html = `<strong>${html}</strong>`; break;
-          case "italic":    html = `<em>${html}</em>`; break;
-          case "underline": html = `<u>${html}</u>`; break;
-          case "strike":    html = `<s>${html}</s>`; break;
-          case "code":      html = `<code>${html}</code>`; break;
-          case "link":      html = `<a href="${span.href ?? "#"}">${html}</a>`; break;
-          case "sup":       html = `<sup>${html}</sup>`; break;
-          case "sub":       html = `<sub>${html}</sub>`; break;
-        }
-      }
-      return html;
-    })
-    .join("");
-}
-
-function blockToHtml(block: SBlock): string {
-  switch (block.type) {
-    case "p":
-      return `<p>${spansToHtml(block.spans)}</p>`;
-    case "h1":
-      return `<h1>${spansToHtml(block.spans)}</h1>`;
-    case "h2":
-      return `<h2>${spansToHtml(block.spans)}</h2>`;
-    case "h3":
-      return `<h3>${spansToHtml(block.spans)}</h3>`;
-    case "h4":
-      return `<h4>${spansToHtml(block.spans)}</h4>`;
-    case "quote":
-      return `<blockquote>${spansToHtml(block.spans)}</blockquote>`;
-    case "li":
-      return `<li>${spansToHtml(block.spans)}</li>`;
-    case "td":
-      return `<td>${spansToHtml(block.spans)}</td>`;
-    case "th":
-      return `<th>${spansToHtml(block.spans)}</th>`;
-    case "code": {
-      const escaped = block.text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      const lang = block.language ? ` class="language-${block.language}"` : "";
-      return `<pre><code${lang}>${escaped}</code></pre>`;
-    }
-    case "img": {
-      const alt = (block.alt ?? "").replace(/"/g, "&quot;");
-      const fitStyle = block.fit ? ` style="object-fit:${block.fit}"` : "";
-      const caption = block.caption
-        ? `<figcaption>${block.caption}</figcaption>`
-        : "";
-      return `<figure><img src="${block.src}" alt="${alt}"${fitStyle} />${caption}</figure>`;
-    }
-    case "hr":
-      return `<hr />`;
-    case "pagebreak":
-      return `<div style="page-break-after:always"></div>`;
-    case "ul":
-      return `<ul>${block.children
-        .map((c) => `<li>${spansToHtml(c.spans)}</li>`)
-        .join("")}</ul>`;
-    case "ol":
-      return `<ol>${block.children
-        .map((c) => `<li>${spansToHtml(c.spans)}</li>`)
-        .join("")}</ol>`;
-    case "hbox":
-      return `<div style="display:flex;gap:1rem">${block.children
-        .map(blockToHtml)
-        .join("")}</div>`;
-    case "vbox":
-      return `<div style="display:flex;flex-direction:column;gap:1rem">${block.children
-        .map(blockToHtml)
-        .join("")}</div>`;
-    case "col": {
-      const w = block.width ? `flex:0 0 ${block.width}` : "flex:1";
-      return `<div style="${w};min-width:0">${block.children
-        .map(blockToHtml)
-        .join("")}</div>`;
-    }
-    case "grid": {
-      const cols = block.columns.join(" ");
-      return `<div style="display:grid;grid-template-columns:${cols};gap:1rem">${block.children
-        .map(blockToHtml)
-        .join("")}</div>`;
-    }
-    case "table":
-      return `<table><tbody>${block.children.map(blockToHtml).join("")}</tbody></table>`;
-    case "tr":
-      return `<tr>${block.children.map(blockToHtml).join("")}</tr>`;
-    case "callout": {
-      const title = block.title ? `<strong>${block.title}</strong> ` : "";
-      return `<div class="callout callout-${block.variant}" role="note">${title}${block.children
-        .map(blockToHtml)
-        .join("")}</div>`;
-    }
-    default:
-      return "";
-  }
-}
-
-/** Recursively serialise `SBlock[]` to an HTML string. */
-function blocksToHtml(blocks: SBlock[]): string {
-  return blocks.map(blockToHtml).filter(Boolean).join("\n");
-}
-
-/** Extract all readable text from the document as plain text. */
-function blocksToPlainText(blocks: SBlock[]): string {
-  const lines: string[] = [];
-  const visit = (b: SBlock) => {
-    if (isTextBlock(b)) {
-      const t = b.spans.map((s) => s.text).join("").trim();
-      if (t) lines.push(t);
-    } else if (b.type === "code") {
-      if (b.text.trim()) lines.push(b.text.trim());
-    } else if ("children" in b) {
-      const ch = (b as unknown as Record<string, unknown>)["children"];
-      if (Array.isArray(ch)) (ch as SBlock[]).forEach(visit);
-    }
-  };
-  blocks.forEach(visit);
-  return lines.join("\n\n");
-}
 
 export interface ExportPanelProps {
   onClose?: () => void;
@@ -177,8 +51,8 @@ export interface ExportPanelProps {
    * switch to a canvas context before saucer captures the webview.
    * When omitted the panel falls back to calling dms_save_pdf directly
    * (works only if a canvas is already rendered — use onExportPDF in
-   * production to avoid capturing the Files panel UI instead of the doc).
-   */
+     * production to avoid capturing the export panel UI instead of the doc).
+    */
   onExportPDF?: () => void;
 }
 
@@ -212,10 +86,42 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
   }, []);
 
   const [importHtml, setImportHtml] = useState("");
+  const [importMarkupFormat, setImportMarkupFormat] = useState<"html" | MarkupFormat>("html");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importJson, setImportJson]       = React.useState("");
   const [importJsonMsg, setImportJsonMsg] = React.useState<string | null>(null);
   const [isPickingFile, setIsPickingFile] = React.useState(false);
+  const [copyFormatMsg, setCopyFormatMsg] = useState<string | null>(null);
+
+  const handleWriteTextExport = useCallback(async (
+    extension: string,
+    content: string,
+    label: string,
+  ) => {
+    if (!doc) return;
+    dispatch({ type: "SET_EXPORTING", value: true });
+    try {
+      const safeName = getDocumentBaseName(doc, documentPath);
+      const pickRaw = await ipcRawCall("dms_select_save_path", `${safeName}.${extension}`, extension);
+      const pickRes = parseIpcResult<{ path: string }>(pickRaw);
+      const savePath = pickRes.data?.path ?? "";
+      if (!savePath) return;
+      parseIpcResult(await ipcRawCall("dms_write_file", savePath, content));
+      await ipcRawCall("dms_record_export", savePath, doc.id, doc.meta.title, doc.meta.zone ?? "", extension);
+      dispatch({ type: "SET_STATUS", text: `${label} exported`, kind: "success" });
+      const recentRaw = await ipcRawCall("dms_get_recent_exports", 10);
+      const recentRes = parseIpcResult<RecentExport[]>(recentRaw);
+      setRecentExports(recentRes.data ?? []);
+    } catch (e) {
+      dispatch({
+        type: "SET_STATUS",
+        text: e instanceof Error ? e.message : String(e),
+        kind: "error",
+      });
+    } finally {
+      dispatch({ type: "SET_EXPORTING", value: false });
+    }
+  }, [dispatch, doc]);
 
   /**
    * Open the native OS file picker via IPC, read the selected file, then
@@ -251,7 +157,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
         dispatch({ type: "LOAD_DOCUMENT", doc: bundle.document, path, context: "layout" });
         dispatch({
           type: "SET_STATUS",
-          text: `Loaded "${bundle.document.meta.title}" — ${bundle.assets.size} asset${bundle.assets.size === 1 ? "" : "s"} embedded`,
+          text: `Loaded "${getDocumentDisplayTitle(bundle.document, path)}" — ${bundle.assets.size} asset${bundle.assets.size === 1 ? "" : "s"} embedded`,
           kind: "success",
         });
         return;
@@ -262,6 +168,24 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
 
       if (!text) {
         dispatch({ type: "SET_STATUS", text: "File is empty or binary", kind: "warning" });
+        return;
+      }
+
+      if (ext === "html" || ext === "htm" || ext === "md" || ext === "markdown" || ext === "adoc" || ext === "asciidoc") {
+        const html = ext === "html" || ext === "htm"
+          ? text
+          : markupToSafeHtml(text, ext === "adoc" || ext === "asciidoc" ? "asciidoc" : "markdown");
+        const blocks = htmlToBlocks(html);
+        if (blocks.length === 0) {
+          dispatch({ type: "SET_STATUS", text: "No blocks parsed from file", kind: "warning" });
+          return;
+        }
+        dispatch({ type: "IMPORT_BLOCKS", blocks });
+        dispatch({
+          type: "SET_STATUS",
+          text: `Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} from file`,
+          kind: "success",
+        });
         return;
       }
 
@@ -278,7 +202,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
         dispatch({ type: "LOAD_DOCUMENT", doc: sdoc, path, context: "layout" });
         dispatch({
           type: "SET_STATUS",
-          text: `Loaded "${sdoc.meta.title}" (${sdoc.blocks.length} blocks)`,
+          text: `Loaded "${getDocumentDisplayTitle(sdoc, path)}" (${sdoc.blocks.length} blocks)`,
           kind: "success",
         });
       } else {
@@ -444,7 +368,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
       });
       const loadedDoc = decodeDocument(fullJson);
       dispatch({ type: "LOAD_DOCUMENT", doc: loadedDoc, path: null, context: "layout" });
-      dispatch({ type: "SET_STATUS", text: `Opened "${loadedDoc.meta.title}"`, kind: "success" });
+      dispatch({ type: "SET_STATUS", text: `Opened "${getDocumentDisplayTitle(loadedDoc)}"`, kind: "success" });
     } catch (e) {
       dispatch({ type: "SET_STATUS", text: e instanceof Error ? e.message : "Failed to open document", kind: "error" });
     }
@@ -510,8 +434,8 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
     if (!doc) return;
     try {
       // 1. Show the native Save-As dialog with a suggested filename.
-      const safeName = (doc.meta.title || "document").replace(/[\/\\:*?"<>|]/g, "_");
-      const pickRaw  = await ipcRawCall("dms_select_save_path", safeName + ".sdoc", "sdoc");
+      const safeName = getDocumentBaseName(doc, documentPath);
+      const pickRaw  = await ipcRawCall("dms_select_save_path", safeName.endsWith(".sdoc") ? safeName : safeName + ".sdoc", "sdoc");
       const pickRes  = parseIpcResult<{ path: string }>(pickRaw);
       const savePath = pickRes.data?.path ?? "";
       if (!savePath) return; // user cancelled
@@ -640,11 +564,39 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
     }
   }, [doc, dispatch]);
 
+  const handleExportMarkdown = useCallback(async () => {
+    if (!doc) return;
+    await handleWriteTextExport("md", blocksToMarkdown(doc.blocks), "Markdown");
+  }, [doc, handleWriteTextExport]);
+
+  const handleExportAsciiDoc = useCallback(async () => {
+    if (!doc) return;
+    await handleWriteTextExport("adoc", blocksToAsciiDoc(doc.blocks), "AsciiDoc");
+  }, [doc, handleWriteTextExport]);
+
+  const handleCopyFormat = useCallback(async (label: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopyFormatMsg(`${label} copied`);
+      setTimeout(() => setCopyFormatMsg(null), 3000);
+      dispatch({ type: "SET_STATUS", text: `${label} copied to clipboard`, kind: "success" });
+    } catch (e) {
+      dispatch({
+        type: "SET_STATUS",
+        text: e instanceof Error ? e.message : String(e),
+        kind: "error",
+      });
+    }
+  }, [dispatch]);
+
   const handleImportHTML = useCallback(() => {
     if (!doc || !importHtml.trim()) return;
-    const parsed = htmlToBlocks(importHtml);
+    const html = importMarkupFormat === "html"
+      ? importHtml
+      : markupToSafeHtml(importHtml, importMarkupFormat);
+    const parsed = htmlToBlocks(html);
     if (parsed.length === 0) {
-      dispatch({ type: "SET_STATUS", text: "No blocks parsed from HTML", kind: "warning" });
+      dispatch({ type: "SET_STATUS", text: "No blocks parsed from markup", kind: "warning" });
       return;
     }
     dispatch({ type: "IMPORT_BLOCKS", blocks: parsed });
@@ -652,7 +604,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
     setImportMsg(`Imported ${parsed.length} block${parsed.length === 1 ? "" : "s"} ✓`);
     setImportHtml("");
     setTimeout(() => setImportMsg(null), 3000);
-  }, [doc, importHtml, dispatch]);
+  }, [doc, importHtml, importMarkupFormat, dispatch]);
 
   const handleImportJson = useCallback(() => {
     if (!doc || !importJson.trim()) return;
@@ -700,7 +652,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-base font-black text-[var(--theme-text)] truncate">
-            {doc.meta.title || "Untitled Document"}
+            {getDocumentDisplayTitle(doc, documentPath)}
           </h2>
           <p className="text-[10px] text-[var(--theme-text-muted)] opacity-60 mt-0.5">
             {doc.blocks.length} blocks · {doc.page.size.toUpperCase()} · {doc.page.orientation} · {doc.page.margin} margin
@@ -819,7 +771,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
                   <Icon name="file-text" size="xs" className="shrink-0 text-[var(--theme-text-muted)] opacity-40 group-hover:opacity-70" />
                   <span className="flex-1 min-w-0">
                     <span className="block text-[11px] font-medium text-[var(--theme-text)] truncate group-hover:text-[var(--theme-primary)] transition-colors">
-                      {d.title || "Untitled"}
+                      {d.title}
                     </span>
                     <span className="block text-[9px] text-[var(--theme-text-muted)] opacity-50">
                       {new Date(d.updated_at * 1000).toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" })}
@@ -834,23 +786,44 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
         )}
       </div>
 
-      {/* ── Import HTML ──────────────────────────────────────────────────── */}
+      {/* ── Import Markup ───────────────────────────────────────────────── */}
       <div className={sectionCls}>
         <div>
           <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
             <Icon name="download" size="xs" className="rotate-180" />
-            Import HTML
+            Import Markup
           </h3>
           <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">
-            Paste HTML and click Import — blocks are appended to the document.
-            Divs, sections, tables, lists, and headings are all recognised.
+            Paste HTML, GitHub-flavored Markdown, or AsciiDoc and click Import — blocks are appended to the document.
           </p>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {(["html", "markdown", "asciidoc"] as const).map((format) => (
+            <button
+              key={format}
+              onClick={() => setImportMarkupFormat(format)}
+              className={[
+                "py-1 rounded border text-[9px] font-bold uppercase tracking-wider transition-colors",
+                importMarkupFormat === format
+                  ? "bg-[var(--theme-primary)] border-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
+                  : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50",
+              ].join(" ")}
+            >
+              {format === "asciidoc" ? "AsciiDoc" : format}
+            </button>
+          ))}
         </div>
         <textarea
           value={importHtml}
           onChange={(e) => setImportHtml(e.target.value)}
           rows={6}
-          placeholder={"<h1>Title</h1>\n<p>Paragraph text...</p>\n<ul><li>Item</li></ul>"}
+          placeholder={
+            importMarkupFormat === "html"
+              ? "<h1>Title</h1>\n<p>Paragraph text...</p>\n<ul><li>Item</li></ul>"
+              : importMarkupFormat === "markdown"
+                ? "# Title\n\n- item\n- [x] task\n\n```js\nconsole.log('hello')\n```"
+                : "= Title\n\n* item\n\n[source,js]\n----\nputs 'hello'\n----"
+          }
           className="w-full resize-y rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[10px] px-2 py-1.5 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]"
           spellCheck={false}
         />
@@ -966,7 +939,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
             PDF Export
           </h3>
           <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">
-            Render to PDF via the native engine. Page size:{" "}
+            Render to PDF via the native engine and the editor's print CSS. Page size:{" "}
             <strong>{doc.page.size.toUpperCase()}</strong>, orientation:{" "}
             <strong>{doc.page.orientation}</strong>.
           </p>
@@ -986,20 +959,33 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
         <div>
           <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider mb-0.5">
             <Icon name="globe" size="xs" />
-            HTML Export
+            Text Exports
           </h3>
           <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60 leading-relaxed">
-            Generate clean semantic HTML. Save via the backend or copy to clipboard.
+            Generate semantic HTML plus Markdown and AsciiDoc from the supported block subset.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button onClick={handleExportHTML} disabled={isExporting} className={btnPrimary}>
             Export HTML
           </button>
           <button onClick={handleCopyHTML} className={btnOutline}>
             Copy HTML
           </button>
+          <button onClick={() => void handleExportMarkdown()} disabled={isExporting} className={btnPrimary}>
+            Export Markdown
+          </button>
+          <button onClick={() => void handleCopyFormat("Markdown", blocksToMarkdown(doc.blocks))} className={btnOutline}>
+            Copy Markdown
+          </button>
+          <button onClick={() => void handleExportAsciiDoc()} disabled={isExporting} className={btnPrimary}>
+            Export AsciiDoc
+          </button>
+          <button onClick={() => void handleCopyFormat("AsciiDoc", blocksToAsciiDoc(doc.blocks))} className={btnOutline}>
+            Copy AsciiDoc
+          </button>
         </div>
+        {copyFormatMsg && <p className="text-[10px] text-emerald-600 font-medium">{copyFormatMsg}</p>}
       </div>
 
       <div className={sectionCls}>
@@ -1044,7 +1030,7 @@ export function ExportPanel({ onClose, onExportPDF }: ExportPanelProps): React.R
                   {exp.kind.toUpperCase()}
                 </span>
                 <span className="flex-1 truncate text-[var(--theme-text)] opacity-80">
-                  {exp.title || "Untitled"}
+                  {exp.title}
                 </span>
                 <button
                   onClick={() => void ipcRawCall("dms_open_path", exp.path)}

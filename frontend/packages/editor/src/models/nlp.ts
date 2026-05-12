@@ -41,6 +41,8 @@ export interface NLPToken {
   keywordScore?: number;
   lemma?: string;
   synonyms?: string[];
+  vectorDistance?: number;
+  similarity?: number;
   depRel?: string;
   depHead?: number; // index of head token, -1 = root
   sentiment?: "pos" | "neg" | "neu";

@@ -11,6 +11,40 @@ import { uid, SPRING_PRESETS } from '@syngrafo/shared';
 import type { ShaderNode } from './shader.ts';
 import type { VideoOperator } from './effect.ts';
 
+// ─── Fit / Layout ─────────────────────────────────────────────────────────────
+
+/** How a clip's source is fitted into the canvas frame. */
+export type FitMode = 'contain' | 'cover' | 'fill';
+
+/**
+ * Aspect-ratio and pivot settings for a clip on the canvas.
+ * Decoupled from `scale`/`posX`/`posY` (which are artistic transforms on top
+ * of the fitted rectangle).
+ */
+export interface ClipLayout {
+  fit: FitMode;
+  /** Horizontal crop anchor [0=left … 1=right]. Default 0.5 (center). */
+  pivotX: number;
+  /** Vertical crop anchor [0=top … 1=bottom]. Default 0.5 (center). */
+  pivotY: number;
+}
+
+// ─── Render Passes ────────────────────────────────────────────────────────────
+
+/**
+ * A full-screen render pass applied either before compositing (pre)
+ * or after the full composite (post).  Passes at the same stage are
+ * executed in ascending `order`.
+ */
+export interface RenderPass {
+  id: string;
+  stage: 'pre' | 'post';
+  label: string;
+  enabled: boolean;
+  order: number;
+  nodes: ShaderNode[];
+}
+
 export type VideoClipKind = 'image' | 'video' | 'audio' | 'solid_color';
 
 export interface VideoResolution {
@@ -65,6 +99,8 @@ export interface VideoClip extends TimelineClip {
   source: VideoSource;
   /** z-ordering relative to other clips: 0 = bottom of the compositing stack. */
   layer: number;
+  /** Aspect-ratio fit and pivot for this clip on the canvas. */
+  layout: ClipLayout;
   /** Clip-level compositing opacity in [0, 1]. */
   opacity: number;
   /** Audio gain in [0, 1]. Relevant for 'audio' and 'video' clips. */
@@ -115,6 +151,10 @@ export interface VideoProject {
   durationFrames: number;
   settings: VideoProjectSettings;
   tracks: VideoTrackLane[];
+  /** Full-screen passes applied before compositing clips (e.g. background treatment). */
+  prePasses: RenderPass[];
+  /** Full-screen passes applied after the full composite (e.g. bloom, DOF, color grading). */
+  postPasses: RenderPass[];
   /** Unix epoch milliseconds. */
   createdAt: number;
   /** Unix epoch milliseconds. */
@@ -154,6 +194,8 @@ export function defaultProject(name: string, fps = 30): VideoProject {
       defaultImageDurationFrames: fps * 5,
     },
     tracks: [defaultTrack],
+    prePasses: [],
+    postPasses: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -205,6 +247,7 @@ export function clipFromSource(
     kind: source.kind,
     source,
     layer,
+    layout: { fit: 'contain', pivotX: 0.5, pivotY: 0.5 },
     opacity: 1,
     volume: 1,
     scale: 1,

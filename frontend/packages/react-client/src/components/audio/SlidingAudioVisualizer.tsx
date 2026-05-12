@@ -15,6 +15,7 @@
 
 import React, { useRef, useEffect } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import type { PlaybackVisualizationData } from "@/hooks/useAudioPlaybackWithVisualization";
 
 
@@ -46,7 +47,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
   height = 80,
   className = "",
 }) => {
-  const { _ } = useLingui();
+  useLingui();
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const rafRef     = useRef<number | null>(null);
 
@@ -244,7 +245,7 @@ const SlidingAudioVisualizer: React.FC<SlidingAudioVisualizerProps> = ({
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
               <span className="text-green-400 text-[10px] font-semibold tracking-wider">
-                {_("PLAYING")}
+                {i18n._({ id: "PLAYING", message: "PLAYING" })}
               </span>
             </>
           ) : (

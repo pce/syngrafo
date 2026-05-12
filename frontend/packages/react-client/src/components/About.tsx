@@ -1,5 +1,6 @@
 import React from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "./Icon";
 
 /**
@@ -8,41 +9,41 @@ import { Icon } from "./Icon";
  * and capabilities, featuring information cards and system specifications.
  */
 const About: React.FC = () => {
-  const { _ } = useLingui();
+  useLingui();
   const features = [
     {
-      title: _("Streaming Architecture"),
-      desc: _("Real-time Server-Sent Events (SSE) processing allows for handling massive payloads without blocking the UI thread, ensuring a fluid user experience during deep analysis."),
+      title: i18n._({ id: "Streaming Architecture", message: "Streaming Architecture" }),
+      desc: i18n._({ id: "Real-time Server-Sent Events (SSE) processing allows for handling massive payloads without blocking the UI thread, ensuring a fluid user experience during deep analysis.", message: "Real-time Server-Sent Events (SSE) processing allows for handling massive payloads without blocking the UI thread, ensuring a fluid user experience during deep analysis." }),
       icon: "analytics" as const,
       color: "blue",
     },
     {
-      title: _("Linguistic Core"),
-      desc: _("Deep POS tagging, Lemmatization, and Entity Recognition powered by the C++23 engine. Optimized for low-latency execution and high-concurrency environments."),
+      title: i18n._({ id: "Linguistic Core", message: "Linguistic Core" }),
+      desc: i18n._({ id: "Deep POS tagging, Lemmatization, and Entity Recognition powered by the C++23 engine. Optimized for low-latency execution and high-concurrency environments.", message: "Deep POS tagging, Lemmatization, and Entity Recognition powered by the C++23 engine. Optimized for low-latency execution and high-concurrency environments." }),
       icon: "tree" as const,
       color: "indigo",
     },
     {
-      title: _("Thread-Safe Models"),
-      desc: _("Atomic DataModel ensures dictionary updates and resource loading are safe across multiple concurrent requests using modern C++ memory primitives."),
+      title: i18n._({ id: "Thread-Safe Models", message: "Thread-Safe Models" }),
+      desc: i18n._({ id: "Atomic DataModel ensures dictionary updates and resource loading are safe across multiple concurrent requests using modern C++ memory primitives.", message: "Atomic DataModel ensures dictionary updates and resource loading are safe across multiple concurrent requests using modern C++ memory primitives." }),
       icon: "check" as const,
       color: "emerald",
     },
     {
-      title: _("Native Performance"),
-      desc: _("Built with LLVM/Clang and specialized SIMD instructions where available, providing raw computational speed that interpreted languages cannot match."),
+      title: i18n._({ id: "Native Performance", message: "Native Performance" }),
+      desc: i18n._({ id: "Built with LLVM/Clang and specialized SIMD instructions where available, providing raw computational speed that interpreted languages cannot match.", message: "Built with LLVM/Clang and specialized SIMD instructions where available, providing raw computational speed that interpreted languages cannot match." }),
       icon: "settings" as const,
       color: "orange",
     },
     {
-      title: _("FastAPI Bridge"),
-      desc: _("High-performance Python bindings using pybind11 provide a seamless bridge between the native C++ core and the modern asynchronous web stack."),
+      title: i18n._({ id: "FastAPI Bridge", message: "FastAPI Bridge" }),
+      desc: i18n._({ id: "High-performance Python bindings using pybind11 provide a seamless bridge between the native C++ core and the modern asynchronous web stack.", message: "High-performance Python bindings using pybind11 provide a seamless bridge between the native C++ core and the modern asynchronous web stack." }),
       icon: "copy" as const,
       color: "violet",
     },
     {
-      title: _("Safety & Toxicity"),
-      desc: _("Integrated multi-category toxicity detection and content safety filters that run locally without sending data to external third-party APIs."),
+      title: i18n._({ id: "Safety & Toxicity", message: "Safety & Toxicity" }),
+      desc: i18n._({ id: "Integrated multi-category toxicity detection and content safety filters that run locally without sending data to external third-party APIs.", message: "Integrated multi-category toxicity detection and content safety filters that run locally without sending data to external third-party APIs." }),
       icon: "document" as const,
       color: "rose",
     },
@@ -65,13 +66,13 @@ const About: React.FC = () => {
     <div className="max-w-6xl mx-auto space-y-12 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <section className="text-center space-y-4">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-          {_("Technical Specifications")}
+          {i18n._({ id: "Technical Specifications", message: "Technical Specifications" })}
         </div>
         <h1 className="text-5xl font-black tracking-tighter text-slate-900 dark:text-white">
-          {_("Under the Hood")}
+          {i18n._({ id: "Under the Hood", message: "Under the Hood" })}
         </h1>
         <p className="max-w-2xl mx-auto text-slate-500 dark:text-slate-400 text-lg font-medium leading-relaxed">
-          {_("The NLP Studio is a demonstration of modern C++23 capabilities integrated into a distributed web environment.")}
+          {i18n._({ id: "The NLP Studio is a demonstration of modern C++23 capabilities integrated into a distributed web environment.", message: "The NLP Studio is a demonstration of modern C++23 capabilities integrated into a distributed web environment." })}
         </p>
       </section>
 
@@ -111,7 +112,7 @@ const About: React.FC = () => {
               Latency
             </h2>
             <p className="text-slate-400 dark:text-slate-500 text-base leading-relaxed">
-              {_("Our engine utilizes lock-free data structures for tokenization and memory-mapped dictionaries to ensure that linguistic processing never becomes the bottleneck in your pipeline.")}
+              {i18n._({ id: "Our engine utilizes lock-free data structures for tokenization and memory-mapped dictionaries to ensure that linguistic processing never becomes the bottleneck in your pipeline.", message: "Our engine utilizes lock-free data structures for tokenization and memory-mapped dictionaries to ensure that linguistic processing never becomes the bottleneck in your pipeline." })}
             </p>
             <div className="flex flex-wrap gap-4">
               <div className="px-4 py-2 bg-slate-800 dark:bg-slate-100 rounded-xl border border-slate-700 dark:border-slate-200 font-mono text-xs">
@@ -130,25 +131,25 @@ const About: React.FC = () => {
             <div className="bg-slate-800 dark:bg-slate-100 p-6 rounded-3xl border border-slate-700 dark:border-slate-200">
               <div className="text-3xl font-black mb-1">C++23</div>
               <div className="text-[10px] font-black uppercase tracking-widest opacity-50">
-                {_("Standard Core")}
+                {i18n._({ id: "Standard Core", message: "Standard Core" })}
               </div>
             </div>
             <div className="bg-slate-800 dark:bg-slate-100 p-6 rounded-3xl border border-slate-700 dark:border-slate-200">
               <div className="text-3xl font-black mb-1">~2ms</div>
               <div className="text-[10px] font-black uppercase tracking-widest opacity-50">
-                {_("Avg Response")}
+                {i18n._({ id: "Avg Response", message: "Avg Response" })}
               </div>
             </div>
             <div className="bg-slate-800 dark:bg-slate-100 p-6 rounded-3xl border border-slate-700 dark:border-slate-200">
               <div className="text-3xl font-black mb-1">100%</div>
               <div className="text-[10px] font-black uppercase tracking-widest opacity-50">
-                {_("Local Execution")}
+                {i18n._({ id: "Local Execution", message: "Local Execution" })}
               </div>
             </div>
             <div className="bg-slate-800 dark:bg-slate-100 p-6 rounded-3xl border border-slate-700 dark:border-slate-200">
               <div className="text-3xl font-black mb-1">0.1s</div>
               <div className="text-[10px] font-black uppercase tracking-widest opacity-50">
-                {_("Startup Time")}
+                {i18n._({ id: "Startup Time", message: "Startup Time" })}
               </div>
             </div>
           </div>

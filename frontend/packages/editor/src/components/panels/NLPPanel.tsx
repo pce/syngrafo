@@ -1,5 +1,5 @@
 import React from "react";
-import { useEditor } from "../../store/editor-store";
+import { useEditor, useSelectedToken } from "../../store/editor-store";
 import { isNLPConnected } from "../../services/nlp-analyzer";
 import type { NLPVisibilityFlags } from "../../models/editor-context";
 import { POS_COLORS, NER_COLORS, posLabel } from "../../models/nlp";
@@ -7,6 +7,7 @@ import type { DocumentNLPSummary } from "../../models/nlp";
 import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 import { useNLPAnalyze } from "../../hooks/useNLPAnalyze";
+import { InlineActionRail } from "../shared/InlineActionRail";
 
 interface FlagMeta {
   key: keyof NLPVisibilityFlags;
@@ -173,6 +174,7 @@ function SummarySection({ summary }: { summary: DocumentNLPSummary }) {
 export function NLPPanel() {
   const { state, dispatch } = useEditor();
   const { nlpFlags, nlpSummary, doc } = state;
+  const selectedToken = useSelectedToken();
 
   const { analyze: handleAnalyze, isAnalyzing, error } = useNLPAnalyze(!!doc);
 
@@ -230,6 +232,63 @@ export function NLPPanel() {
 
         {/* Summary */}
         {nlpSummary && <SummarySection summary={nlpSummary} />}
+
+        {selectedToken && (
+          <div className="px-3 py-3">
+            <InlineActionRail
+              title="Selected token"
+              subtitle={selectedToken.token.text}
+              badges={[
+                selectedToken.block.type.toUpperCase(),
+                ...(selectedToken.token.pos ? [selectedToken.token.pos] : []),
+                ...(selectedToken.token.ner ? [selectedToken.token.ner] : []),
+              ]}
+              metrics={[
+                ...(selectedToken.token.lemma ? [{ label: "Lemma", value: selectedToken.token.lemma }] : []),
+                ...(selectedToken.token.keywordScore != null
+                  ? [{ label: "Keyword", value: selectedToken.token.keywordScore.toFixed(2) }]
+                  : []),
+                ...(selectedToken.token.similarity != null
+                  ? [{ label: "Similarity", value: selectedToken.token.similarity.toFixed(3) }]
+                  : []),
+                ...(selectedToken.token.vectorDistance != null
+                  ? [{ label: "Vector dist.", value: selectedToken.token.vectorDistance.toFixed(3) }]
+                  : []),
+              ]}
+              actions={[
+                {
+                  id: "focus-block",
+                  label: "Select block",
+                  icon: "layout",
+                  onClick: () => dispatch({ type: "SELECT_BLOCK", id: selectedToken.block.id }),
+                },
+                {
+                  id: "clear-token",
+                  label: "Clear",
+                  icon: "close",
+                  onClick: () => dispatch({ type: "CLEAR_SELECTED_TOKEN" }),
+                },
+              ]}
+            >
+              {selectedToken.token.synonyms?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {selectedToken.token.synonyms.slice(0, 8).map((synonym) => (
+                    <span
+                      key={synonym}
+                      className="rounded-full border border-[var(--theme-primary)]/20 bg-[var(--theme-primary)]/10 px-1.5 py-0.5 text-[8px] font-medium text-[var(--theme-primary)]"
+                    >
+                      {synonym}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[9px] text-[var(--theme-text-muted)] opacity-60">
+                  Token-level synonyms or vector distances are only shown when the analysis backend provides them.
+                </p>
+              )}
+            </InlineActionRail>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="px-3 py-3 space-y-2">

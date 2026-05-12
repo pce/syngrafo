@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useLingui } from "@lingui/react";
-import { EditorShell, type SDocument, createDocument } from "@syngrafo/editor";
-import { generateName } from "@syngrafo/shared";
+import { i18n } from "@/i18n";
+import {
+  EditorShell,
+  type SDocument,
+  createDefaultDocument,
+  getDocumentDisplayTitle,
+  normalizeDocumentMetadata,
+} from "@syngrafo/editor";
 import { Icon } from "./Icon";
+import { useSettings } from "../store/settings-store";
+import { getResolvedPaperStyle, paperStyleBackgroundCss } from "../models/paper-style";
 
 export interface EditorPortalProps {
   /** Mounts the editor subtree when true; unmounting releases all resources. */
@@ -36,8 +44,13 @@ interface ContentProps {
 }
 
 function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: ContentProps) {
-  const { _ } = useLingui();
-  const [doc] = useState<SDocument>(() => docProp ?? createDocument({ title: generateName() }));
+  useLingui();
+  const { settings } = useSettings();
+  const paper = getResolvedPaperStyle(settings.paperStyles, settings.defaultPaperStyleId);
+  const [doc] = useState<SDocument>(() => {
+    if (docProp) return normalizeDocumentMetadata(docProp, workingDir);
+    return createDefaultDocument({ title: "" });
+  });
 
   const handleClose = useCallback(() => onClose?.(), [onClose]);
 
@@ -57,12 +70,13 @@ function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: Cont
     };
   }, []);
 
-  const displayTitle = doc.meta.title;
+  const displayTitle = getDocumentDisplayTitle(doc, workingDir);
 
   return createPortal(
     <div
       id="sgf-editor-root"
       className="fixed inset-0 z-[200] flex flex-col bg-[var(--theme-bg)] text-[var(--theme-text)]"
+      style={{ background: "var(--theme-bg)" }}
       role="dialog"
       aria-modal="true"
       aria-label={`Editor: ${displayTitle}`}
@@ -76,18 +90,20 @@ function EditorPortalContent({ doc: docProp, onClose, onSave, workingDir }: Cont
           {displayTitle}
         </span>
         <span className="text-[9px] text-[var(--theme-text-muted)] hidden sm:block select-none">
-          {_("Esc to close")}
+          {i18n._({ id: "Esc to close", message: "Esc to close" })}
         </span>
         <button
           onClick={handleClose}
-          title={_("Close editor (Esc)")}
+          title={i18n._({ id: "Close editor (Esc)", message: "Close editor (Esc)" })}
           className="p-1.5 rounded-lg hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors shrink-0"
         >
           <Icon name="close" size="xs" />
         </button>
       </header>
 
+      <div className="flex-1 min-h-0" style={{ background: paperStyleBackgroundCss(paper) }}>
         <EditorShell doc={doc} onSave={onSave} initialPath={workingDir} className="flex-1 min-h-0" />
+      </div>
     </div>,
     window.document.body,
   );

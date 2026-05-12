@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <format>
 #include <string>
 #include <string_view>
@@ -24,6 +26,23 @@ namespace pce::dms {
 
 [[nodiscard]] inline std::string hash_hex(std::string_view s) {
     return std::format("{:016x}", fnv1a_64(s));
+}
+
+[[nodiscard]] inline std::string hash_file_hex(const std::filesystem::path& p) {
+    std::ifstream f{p, std::ios::binary};
+    if (!f) return {};
+    constexpr uint64_t kBasis = 14695981039346656037ULL;
+    constexpr uint64_t kPrime = 1099511628211ULL;
+    uint64_t h = kBasis;
+    char buf[8192];
+    while (f.read(buf, sizeof(buf)) || f.gcount() > 0) {
+        const auto n = static_cast<size_t>(f.gcount());
+        for (size_t i = 0; i < n; ++i) {
+            h ^= static_cast<unsigned char>(buf[i]);
+            h *= kPrime;
+        }
+    }
+    return std::format("{:016x}", h);
 }
 
 /** First @p max characters of @p content, trimming leading whitespace. */
@@ -65,4 +84,3 @@ namespace pce::dms {
 }
 
 } // namespace pce::dms
-

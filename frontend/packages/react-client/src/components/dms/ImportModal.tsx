@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { useDms } from "../../store/dms-store";
 import { dms, type Zone } from "../../services/dms-service";
 
@@ -11,7 +12,7 @@ interface ImportModalProps {
 
 export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onSuccess }) => {
   const { state, dispatch } = useDms();
-  const { _ } = useLingui();
+  useLingui();
   const [selectedZone, setSelectedZone] = useState<string>(state.zone?.name || "");
   const [scan, setScan] = useState(false);
   const [compress, setCompress] = useState(false);
@@ -26,7 +27,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
         onSuccess();
         onClose();
       } else {
-        dispatch({ type: "SET_ERROR", error: res.error || _("Import failed") });
+        dispatch({ type: "SET_ERROR", error: res.error || i18n._({ id: "Import failed", message: "Import failed" }) });
       }
     } catch (e) {
       dispatch({ type: "SET_ERROR", error: String(e) });
@@ -38,10 +39,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-bold mb-4 text-zinc-100">{_("Import to Zone")}</h2>
+        <h2 className="text-xl font-bold mb-4 text-zinc-100">{i18n._({ id: "Import to Zone", message: "Import to Zone" })}</h2>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-zinc-400 mb-1">{_("Source File")}</label>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">{i18n._({ id: "Source File", message: "Source File" })}</label>
           <div className="text-xs text-zinc-300 truncate bg-zinc-800 p-2 rounded border border-zinc-700">
             {filePath}
           </div>
@@ -49,13 +50,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
 
         <div className="mb-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">{_("Target Zone")}</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">{i18n._({ id: "Target Zone", message: "Target Zone" })}</label>
             <select
               value={selectedZone}
               onChange={(e) => setSelectedZone(e.target.value)}
               className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-zinc-200"
             >
-              <option value="">{_("Select a zone...")}</option>
+              <option value="">{i18n._({ id: "Select a zone...", message: "Select a zone..." })}</option>
               {state.zones.map((z) => (
                 <option key={z.name} value={z.name}>
                   {z.name}
@@ -73,7 +74,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
               className="rounded border-zinc-700 bg-zinc-800 text-blue-500 focus:ring-blue-500"
             />
             <label htmlFor="scan-opt" className="text-sm text-zinc-200">
-              {_("Apply Scan (ONNX Rectification)")}
+              {i18n._({ id: "Apply Scan (ONNX Rectification)", message: "Apply Scan (ONNX Rectification)" })}
             </label>
           </div>
 
@@ -86,7 +87,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
               className="rounded border-zinc-700 bg-zinc-800 text-blue-500 focus:ring-blue-500"
             />
             <label htmlFor="compress-opt" className="text-sm text-zinc-200">
-              {_("Compress Content")}
+              {i18n._({ id: "Compress Content", message: "Compress Content" })}
             </label>
           </div>
         </div>
@@ -96,7 +97,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
             onClick={onClose}
             className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
           >
-            {_("Cancel")}
+            {i18n._({ id: "Cancel", message: "Cancel" })}
           </button>
           <button
             onClick={handleImport}
@@ -107,7 +108,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ filePath, onClose, onS
                 : "bg-blue-600 text-white hover:bg-blue-500"
             }`}
           >
-            {loading ? _("Importing...") : _("Start Import")}
+            {loading ? i18n._({ id: "Importing...", message: "Importing..." }) : i18n._({ id: "Start Import", message: "Start Import" })}
           </button>
         </div>
       </div>

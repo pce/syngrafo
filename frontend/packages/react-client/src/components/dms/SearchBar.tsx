@@ -2,12 +2,13 @@ import React, { useState, useRef, useMemo } from "react";
 import { useDms } from "../../store/dms-store";
 import { dms } from "../../services/dms-service";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 
 const SearchBar: React.FC = () => {
   const { state, dispatch } = useDms();
   const [query, setQuery] = useState("");
-  const { _ } = useLingui();
+  useLingui();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Derive contextual tags from top keywords of selected doc, or general trends
@@ -45,7 +46,7 @@ const SearchBar: React.FC = () => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
-          placeholder={state.zone ? `Search in zone "${state.zone.name}"…` : _("Search global index…")}
+          placeholder={state.zone ? `Search in zone "${state.zone.name}"…` : i18n._({ id: "Search global index…", message: "Search global index…" })}
           className="w-full pl-12 pr-32 py-3 rounded-2xl bg-[var(--theme-surface)] border border-[var(--theme-border)] text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)]/30 focus:border-[var(--theme-primary)]/30 transition-all shadow-xl"
         />
         <div className="absolute inset-y-0 right-4 flex items-center gap-2">
@@ -55,9 +56,9 @@ const SearchBar: React.FC = () => {
                 ? "bg-[var(--theme-primary)]/10 border-[var(--theme-primary)]/30 text-[var(--theme-primary)]"
                 : "bg-[var(--theme-border)]/50 border-[var(--theme-border)] text-[var(--theme-text-muted)]"
             }`}
-            title={state.zone ? `Searching zone index: ${state.zone.name}` : _("Searching global user index")}
+            title={state.zone ? `Searching zone index: ${state.zone.name}` : i18n._({ id: "Searching global user index", message: "Searching global user index" })}
           >
-            {state.zone ? _("Zone") : _("Global")}
+            {state.zone ? i18n._({ id: "Zone", message: "Zone" }) : i18n._({ id: "Global", message: "Global" })}
           </span>
           <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[10px] font-medium text-[var(--theme-text-muted)] shadow-sm">
             <span className="text-xs">⌘</span>K
@@ -83,7 +84,7 @@ const SearchBar: React.FC = () => {
           <span className="text-[10px] uppercase tracking-widest font-bold text-[var(--theme-text-muted)]/50 select-none">
             {state.zone
               ? `Zone index · ${state.zone.name}`
-              : state.selectedPath ? _("Analyzing Context…") : _("Global Index Ready")}
+              : state.selectedPath ? i18n._({ id: "Analyzing Context…", message: "Analyzing Context…" }) : i18n._({ id: "Global Index Ready", message: "Global Index Ready" })}
           </span>
         )}
       </div>

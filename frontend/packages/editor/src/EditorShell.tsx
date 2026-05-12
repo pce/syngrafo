@@ -16,6 +16,8 @@ import { Icon } from "./components/Icon";
 import type { IconName } from "./components/Icon";
 import { useIsNarrow } from "./hooks/useIsNarrow";
 import { useSwipeToPan } from "./hooks/useSwipeToPan";
+import { focusBlockEditable } from "./utils/block-focus";
+import { getDocumentDisplayTitle } from "./models/document-meta";
 
 const CTX_ICONS: Record<WorkspaceContext, IconName> = {
   compose: "edit",
@@ -52,7 +54,7 @@ export function EditorShell({
       initialDoc={doc}
       initialContext={initialContext}
       initialIntent={initialIntent}
-      initialPath={initialPath}
+      {...(initialPath !== undefined ? { initialPath } : {})}
     >
       <EditorShellContent {...(onSave ? { onSave } : {})} className={className} />
     </EditorProvider>
@@ -98,11 +100,26 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
       } else if ((e.key === "z" && e.shiftKey) || e.key === "y") {
         e.preventDefault();
         dispatch({ type: "REDO" });
+      } else {
+        const contexts: WorkspaceContext[] = ["compose", "layout", "review", "stats", "nlp", "export"];
+        const idx = Number.parseInt(e.key, 10) - 1;
+        const nextContext = contexts[idx];
+        if (nextContext) {
+          e.preventDefault();
+          dispatch({ type: "SET_CONTEXT", context: nextContext });
+        }
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [dispatch]);
+
+  useEffect(() => {
+    if (context !== "compose") return;
+    const firstBlock = state.doc?.blocks[0];
+    if (!firstBlock) return;
+    requestAnimationFrame(() => focusBlockEditable(firstBlock.id, true));
+  }, [context, state.doc?.id]);
 
   // Inject editor-scoped CSS once.
   // The @media print rules for whole-page isolation (hiding the DMS shell,
@@ -123,23 +140,35 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
       "  pointer-events: none;",
       "  font-style: italic;",
       "}",
+      /* Compose mode styling: hide block boundaries for seamless flow */
+      ".sgf-editor-root[data-mode='compose'] .block-selected {",
+      "  outline: none !important;",
+      "}",
+      ".sgf-editor-root[data-mode='compose'] .sgf-editable {",
+      "  padding-top: 0 !important;",
+      "  padding-bottom: 0 !important;",
+      "}",
       /* Selection ring */
       ".block-selected {",
       "  outline: 2px solid rgba(59,130,246,0.5);",
       "  outline-offset: 2px;",
       "  border-radius: 2px;",
       "}",
+      /* Remove browser default print margins so background bleeds to the edges */
+      "@page { margin: 0; }",
       /* Editor-internal chrome — hidden in print and during export capture.
        * The outer-layer rules (DMS, portal header) are in index.css.         */
       "@media print {",
       "  .sgf-ui { display: none !important; }",
+      "  .block-selected { outline: none !important; }",
       "  .sgf-canvas-outer { overflow: visible !important; height: auto !important; background: white !important; }",
-      "  .sgf-canvas-page  { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; width: 100% !important; }",
+      "  .sgf-canvas-page  { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; max-width: none !important; min-height: auto !important; }",
       "}",
       /* Belt-and-suspenders: same rules triggered by body.sgf-exporting class */
       "body.sgf-exporting .sgf-ui { display: none !important; }",
+      "body.sgf-exporting .block-selected { outline: none !important; }",
       "body.sgf-exporting .sgf-canvas-outer { overflow: visible !important; height: auto !important; background: white !important; }",
-      "body.sgf-exporting .sgf-canvas-page  { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; width: 100% !important; }",
+      "body.sgf-exporting .sgf-canvas-page  { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; max-width: none !important; min-height: auto !important; }",
       /* Canvas is always kept in the DOM so the print engine can capture it
        * regardless of which context tab is active.  When not in a canvas
        * context the wrapper has .sgf-canvas-hidden (display:none on screen).
@@ -271,7 +300,8 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
   return (
     <div
       ref={bodyRef}
-      className={`flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden ${className}`}
+      className={`sgf-editor-root flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] overflow-hidden ${className}`}
+      data-mode={context}
     >
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="sgf-ui flex items-center gap-0.5 px-1.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0 z-20 shadow-sm">
@@ -301,12 +331,12 @@ function EditorShellContent({ onSave, className = "" }: ShellContentProps): Reac
 
         {/* Document title */}
         {state.doc && (
-          <span
-            className="text-[11px] font-medium text-[var(--theme-text-muted)] px-2 truncate max-w-[120px] sm:max-w-48 hidden xs:block"
-            title={state.doc.meta.title}
-          >
-            {state.doc.meta.title || "Untitled"}
-          </span>
+            <span
+              className="text-[11px] font-medium text-[var(--theme-text-muted)] px-2 truncate max-w-[120px] sm:max-w-48 hidden xs:block"
+              title={getDocumentDisplayTitle(state.doc, state.documentPath)}
+            >
+              {getDocumentDisplayTitle(state.doc, state.documentPath)}
+            </span>
         )}
 
         {/* Analyzing indicator */}

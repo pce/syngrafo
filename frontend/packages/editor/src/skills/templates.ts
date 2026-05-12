@@ -99,7 +99,7 @@ const freeform: DocumentTemplate = {
   description: "Blank A4 — write anything",
   category: "general",
   create() {
-    return createDocument({ title: "Untitled Document" });
+    return createDocument({ title: "" });
   },
 };
 

@@ -44,9 +44,7 @@
 
 namespace pce::media::topology {
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Primitive geometry types
-// ─────────────────────────────────────────────────────────────────────────────
 
 /// Integer 2-D point (pixel-corner coordinate).
 struct Vec2i {
@@ -60,9 +58,6 @@ struct AABB {
 };
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LabelField  (internal — input side of the transform)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Union-find connected-component label grid.
@@ -81,10 +76,6 @@ struct LabelField {
     std::vector<int>     label_of;  ///< label_of[component_id] = source label
 };
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shape / MediaTopology  (the IR — output side of the transform)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * One connected, uniform-label component with pre-extracted boundary.
@@ -118,10 +109,6 @@ struct MediaTopology {
     }
 };
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// build_label_field  (stage 1 — connected-component analysis)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Build a union-find connected-component label grid.
@@ -182,9 +169,6 @@ build_label_field(const std::vector<int>& pidx, int w, int h) {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// rdp_simplify  (geometry utility — used by build_topology)
-// ─────────────────────────────────────────────────────────────────────────────
 
 namespace detail {
 
@@ -250,9 +234,6 @@ rdp_simplify(const std::vector<Vec2i>& pts, float epsilon = 1.5f) {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// extract_rings  (boundary-edge walk for one component)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Directed boundary half-edge walk for one component in `lf`.
@@ -316,9 +297,6 @@ extract_rings(const LabelField& lf, int component_id) {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// build_topology  (stage 2 — assemble the IR)
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Build the complete `MediaTopology` from a `LabelField`.

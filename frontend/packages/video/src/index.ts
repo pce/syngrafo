@@ -10,6 +10,7 @@ export type {
   VideoProject,
 } from './types/video.ts';
 export { defaultProject, clipFromSource } from './types/video.ts';
+export type { FitMode, ClipLayout, RenderPass } from './types/video.ts';
 
 export type {
   ShaderKind,
@@ -84,6 +85,8 @@ export type {
   VideoImportClipResult,
   VideoListDirResult,
 } from './ipc/video-service.ts';
+
+export * from './engine/index.ts';
 
 export { SceneCompositor } from './gpu/SceneCompositor.ts';
 

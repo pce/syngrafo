@@ -1,6 +1,6 @@
-import type { EasingType, SpringConfig } from '../types/physics.ts';
-import { SPRING_PRESETS } from '../types/physics.ts';
-import { simulateSpring } from './spring.ts';
+import type { EasingType, SpringConfig } from "../types/physics";
+import { SPRING_PRESETS } from "../types/physics";
+import { simulateSpring } from "./spring";
 
 /** All easing functions map t ∈ [0,1] → value ∈ [0,1] */
 export type EasingFn = (t: number) => number;

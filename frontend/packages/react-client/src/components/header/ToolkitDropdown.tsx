@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 import Dropdown from "../ui/Dropdown";
 import Toggle from "../ui/Toggle";
@@ -14,7 +15,7 @@ interface ToolkitDropdownProps {
  * Includes domain-dependent presets and custom preset management.
  */
 const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
-  const { _ } = useLingui();
+  useLingui();
   const [customPresets, setCustomPresets] = useState<Record<string, any>>(
     () => {
       const saved = localStorage.getItem("nlp-custom-presets");
@@ -72,7 +73,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
   };
 
   const saveCurrentAsPreset = () => {
-    const name = prompt(_("Enter a name for this domain preset:"));
+    const name = prompt(i18n._({ id: "Enter a name for this domain preset:", message: "Enter a name for this domain preset:" }));
     if (!name) return;
     const newPresets = {
       ...customPresets,
@@ -99,8 +100,8 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
 
   return (
     <Dropdown
-      label={_("Toolkit")}
-      subLabel={_("Deduplicator")}
+      label={i18n._({ id: "Toolkit", message: "Toolkit" })}
+      subLabel={i18n._({ id: "Deduplicator", message: "Deduplicator" })}
       icon="settings"
       variant="warning"
       width="w-80"
@@ -114,7 +115,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
             className="text-[9px] font-black uppercase tracking-widest"
             style={{ color: "var(--theme-text-muted)" }}
           >
-            {_("Domain Presets")}
+            {i18n._({ id: "Domain Presets", message: "Domain Presets" })}
           </span>
           <div className="flex flex-wrap gap-1">
             {["general", "academic", "creative", "code", "strict"].map((p) => (
@@ -167,7 +168,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
               className="mb-1 group-hover:scale-110 transition-transform"
             />
             <span className="text-[8px] font-black uppercase tracking-widest">
-              {_("Find Dups")}
+              {i18n._({ id: "Find Dups", message: "Find Dups" })}
             </span>
           </button>
           <button
@@ -181,7 +182,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
               className="mb-1 group-hover:scale-110 transition-transform"
             />
             <span className="text-[8px] font-black uppercase tracking-widest">
-              {_("Delete Dups")}
+              {i18n._({ id: "Delete Dups", message: "Delete Dups" })}
             </span>
           </button>
         </div>
@@ -200,7 +201,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
               className="flex justify-between text-[9px] font-bold"
               style={{ color: "var(--theme-text-muted)" }}
             >
-              <span>{_("Min Segment Length")}</span>
+              <span>{i18n._({ id: "Min Segment Length", message: "Min Segment Length" })}</span>
               <span>{params.minLength}</span>
             </div>
             <input
@@ -221,7 +222,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
               className="text-[9px] font-black uppercase tracking-widest"
               style={{ color: "var(--theme-text-muted)" }}
             >
-              {_("Skip Words / Domain Tokens")}
+              {i18n._({ id: "Skip Words / Domain Tokens", message: "Skip Words / Domain Tokens" })}
             </span>
             <input
               type="text"
@@ -229,7 +230,7 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
               onChange={(e) =>
                 setParams({ ...params, skipWords: e.target.value })
               }
-              placeholder={_("word1,word2...")}
+              placeholder={i18n._({ id: "word1,word2...", message: "word1,word2..." })}
               className="w-full px-2 py-1.5 rounded-lg text-[10px] font-bold bg-transparent border focus:outline-none focus:border-amber-500"
               style={{
                 color: "var(--theme-text)",
@@ -240,14 +241,14 @@ const ToolkitDropdown: React.FC<ToolkitDropdownProps> = ({ onAction }) => {
 
           <div className="flex flex-col gap-3">
             <Toggle
-              label={_("Ignore Quotes")}
+              label={i18n._({ id: "Ignore Quotes", message: "Ignore Quotes" })}
               checked={params.ignoreQuotes}
               onChange={() => handleToggleParam("ignoreQuotes")}
               size="sm"
             />
 
             <Toggle
-              label={_("Ignore Punctuation")}
+              label={i18n._({ id: "Ignore Punctuation", message: "Ignore Punctuation" })}
               checked={params.ignorePunct}
               onChange={() => handleToggleParam("ignorePunct")}
               size="sm"

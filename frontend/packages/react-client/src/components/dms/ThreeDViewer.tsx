@@ -19,6 +19,7 @@ import React, {
   useEffect, useRef, useState, useCallback, useId,
 } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader }  from "three/examples/jsm/loaders/PLYLoader.js";
@@ -137,7 +138,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
   const objectRef    = useRef<THREE.Object3D | null>(null);
   const mountedRef   = useRef(true);
 
-  const { _ } = useLingui();
+  useLingui();
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   const [info,    setInfo]     = useState("");
@@ -359,7 +360,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
 
       case "spz":
         setError(
-          _("SPZ (compressed Gaussian Splat) requires an external decoder.\nConvert to .splat or .ply with antimatter15/splat tools, then re-open."),
+          i18n._({ id: "SPZ (compressed Gaussian Splat) requires an external decoder.\\nConvert to .splat or .ply with antimatter15/splat tools, then re-open.", message: "SPZ (compressed Gaussian Splat) requires an external decoder.\\nConvert to .splat or .ply with antimatter15/splat tools, then re-open." }),
         );
         setLoading(false);
         break;
@@ -383,7 +384,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
         break;
 
       default:
-        setError(_("Unsupported 3D format."));
+        setError(i18n._({ id: "Unsupported 3D format.", message: "Unsupported 3D format." }));
         setLoading(false);
     }
 
@@ -412,7 +413,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
       {!loading && !error && (
         <div className="flex items-center gap-1 px-2 py-1.5 shrink-0 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]">
           {vc.renderKind === "mesh" && (
-            <button title={vc.wireframe ? _("Solid") : _("Wireframe")}
+            <button title={vc.wireframe ? i18n._({ id: "Solid", message: "Solid" }) : i18n._({ id: "Wireframe", message: "Wireframe" })}
               onClick={() => setVc(v => ({ ...v, wireframe: !v.wireframe }))}
               className={tbBtn(vc.wireframe)}>
               {/* wireframe lattice icon */}
@@ -423,17 +424,17 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
               </svg>
             </button>
           )}
-          <button title={vc.grid ? _("Hide grid") : _("Show grid")}
+          <button title={vc.grid ? i18n._({ id: "Hide grid", message: "Hide grid" }) : i18n._({ id: "Show grid", message: "Show grid" })}
             onClick={() => setVc(v => ({ ...v, grid: !v.grid }))}
             className={tbBtn(vc.grid)}>
             <Icon name="grid" size="xs" />
           </button>
-          <button title={vc.autoRotate ? _("Stop rotation") : _("Auto-rotate")}
+          <button title={vc.autoRotate ? i18n._({ id: "Stop rotation", message: "Stop rotation" }) : i18n._({ id: "Auto-rotate", message: "Auto-rotate" })}
             onClick={() => setVc(v => ({ ...v, autoRotate: !v.autoRotate }))}
             className={tbBtn(vc.autoRotate)}>
             <Icon name="rotate" size="xs" />
           </button>
-          <button title={_("Reset camera")} onClick={resetCamera} className={tbBtn(false)}>
+          <button title={i18n._({ id: "Reset camera", message: "Reset camera" })} onClick={resetCamera} className={tbBtn(false)}>
             <Icon name="home" size="xs" />
           </button>
 
@@ -454,7 +455,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
 
           <span className="ml-auto text-[9px] text-[var(--theme-text-muted)] truncate max-w-[50%]">{info}</span>
           <span className="text-[8px] text-[var(--theme-text-muted)] opacity-40 shrink-0 ml-1 hidden sm:block">
-            {_("Drag · Scroll · Right-drag")}
+            {i18n._({ id: "Drag · Scroll · Right-drag", message: "Drag · Scroll · Right-drag" })}
           </span>
         </div>
       )}
@@ -464,7 +465,7 @@ const ThreeDViewer: React.FC<Props> = ({ filePath, className = "" }) => {
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--theme-bg)]/85 rounded-lg">
           <span className="w-8 h-8 border-2 border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)] rounded-full animate-spin" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
-            {_("Loading model…")}
+            {i18n._({ id: "Loading model…", message: "Loading model…" })}
           </span>
         </div>
       )}

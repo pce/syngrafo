@@ -6,7 +6,6 @@
  *        status, metadata, zone management, OCR redirect, file-to-zone.
  */
 
-#pragma once
 #include "../dms_handle.hh"
 
 namespace pce::dms {
@@ -115,4 +114,3 @@ inline void register_nlp_bindings(saucer::smartview& wv, DMSHandle& dms,
 }
 
 } // namespace pce::dms
-

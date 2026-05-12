@@ -9,7 +9,9 @@ import type { SBlock, SDocument, SDocMeta, SPageConfig, SStyleClass, SStyleProps
 import { isTextBlock } from "../models/sdm";
 import type { DocumentIntent, NLPVisibilityFlags, WorkspaceContext } from "../models/editor-context";
 import { DEFAULT_NLP_FLAGS } from "../models/editor-context";
-import type { DocumentNLPSummary } from "../models/nlp";
+import type { DocumentNLPSummary, NLPToken } from "../models/nlp";
+import { focusBlockEditable, focusBlockNavigationTarget } from "../utils/block-focus";
+import { normalizeDocumentMetadata } from "../models/document-meta";
 import {
   applyDocMutations,
   deleteBlock,
@@ -27,10 +29,17 @@ import { type HistoryState, createHistory, pushHistory, undoHistory, redoHistory
 
 function nowSecs(): number { return Math.floor(Date.now() / 1000); }
 
+export interface SelectedTokenRef {
+  blockId: string;
+  tokenIndex: number;
+}
+
 export interface EditorState {
   doc: SDocument | null;
   docHistory: HistoryState<SDocument | null>;
   selectedBlockId: string | null;
+  editingBlockId: string | null;
+  selectedToken: SelectedTokenRef | null;
   context: WorkspaceContext;
   intent: DocumentIntent;
   nlpFlags: NLPVisibilityFlags;
@@ -53,10 +62,16 @@ export type EditorAction =
   | { type: "SET_BLOCK_TEXT"; id: string; text: string }
   | { type: "ADD_BLOCK"; block: SBlock; afterId?: string }
   | { type: "DELETE_BLOCK"; id: string }
+  | { type: "MERGE_BLOCK_UP"; id: string }
+  | { type: "SELECT_NEIGHBOR"; direction: "up" | "down" }
   | { type: "MOVE_BLOCK"; id: string; direction: "up" | "down" }
   | { type: "DUPLICATE_BLOCK"; id: string }
   | { type: "SET_CHILDREN"; id: string; children: SBlock[] }
   | { type: "SELECT_BLOCK"; id: string | null }
+  | { type: "SELECT_TOKEN"; blockId: string; tokenIndex: number }
+  | { type: "CLEAR_SELECTED_TOKEN" }
+  | { type: "START_EDITING_BLOCK"; id: string; moveCaretToEnd?: boolean }
+  | { type: "STOP_EDITING_BLOCK"; id?: string }
   | { type: "SET_CONTEXT"; context: WorkspaceContext }
   | { type: "SET_INTENT"; intent: DocumentIntent }
   | { type: "SET_NLP_FLAGS"; flags: Partial<NLPVisibilityFlags> }
@@ -96,15 +111,20 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
      * This is the canonical action for opening / creating a document.
      */
     case "LOAD_DOCUMENT":
+      {
+        const normalizedDoc = normalizeDocumentMetadata(action.doc, action.path);
       return {
         ...state,
-        doc: action.doc,
-        docHistory: createHistory(action.doc),
+        doc: normalizedDoc,
+        docHistory: createHistory(normalizedDoc),
         documentPath: action.path ?? null,
         context: action.context ?? "layout",
         isDirty: false,
+        editingBlockId: null,
         selectedBlockId: null,
+        selectedToken: null,
       };
+      }
 
     /**
      * Block mutations
@@ -180,8 +200,77 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         doc: newDoc,
         docHistory: pushHistory(state.docHistory, newDoc),
+        selectedBlockId: state.selectedBlockId === action.id ? null : state.selectedBlockId,
+        editingBlockId: state.editingBlockId === action.id ? null : state.editingBlockId,
+        selectedToken: state.selectedToken?.blockId === action.id ? null : state.selectedToken,
         isDirty: true,
       };
+    }
+
+    case "MERGE_BLOCK_UP": {
+      if (!state.doc) return state;
+      const flat = flattenBlocks(state.doc.blocks);
+      const idx = flat.findIndex((b) => b.id === action.id);
+      if (idx <= 0) return state; // Can't merge the very first block up
+
+      const current = flat[idx];
+      const previous = flat[idx - 1];
+
+      // Ensure both are text blocks
+      if (!current || !previous || !("spans" in current) || !("spans" in previous)) return state;
+
+      // Combine spans
+      const mergedSpans = [...(previous.spans || []), ...(current.spans || [])];
+
+      // Update previous block
+      let newBlocks = updateBlock(state.doc.blocks, previous.id, (b) => ({
+        ...b,
+        spans: mergedSpans,
+      }));
+
+      // Delete current block
+      newBlocks = deleteBlock(newBlocks, current.id);
+
+      const newDoc = applyDocMutations(state.doc, () => newBlocks);
+
+      // Focus the end of the previous block
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-block-id="${previous.id}"] [contenteditable]`) as HTMLElement | null;
+        if (el) {
+          el.focus();
+          // Move caret to the end of the previous text
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      });
+
+      return {
+        ...state,
+        doc: newDoc,
+        docHistory: pushHistory(state.docHistory, newDoc),
+        selectedBlockId: previous.id,
+        isDirty: true,
+      };
+    }
+
+    case "SELECT_NEIGHBOR": {
+      if (!state.doc || !state.selectedBlockId) return state;
+      const flat = flattenBlocks(state.doc.blocks);
+      const idx = flat.findIndex((b) => b.id === state.selectedBlockId);
+      if (idx === -1) return state;
+
+      let nextIdx = idx;
+      if (action.direction === "up" && idx > 0) nextIdx = idx - 1;
+      if (action.direction === "down" && idx < flat.length - 1) nextIdx = idx + 1;
+      const nextBlock = flat[nextIdx];
+      if (!nextBlock) return state;
+      const nextId = nextBlock.id;
+      requestAnimationFrame(() => focusBlockNavigationTarget(nextId));
+      return { ...state, selectedBlockId: nextId, editingBlockId: null };
     }
 
     case "MOVE_BLOCK": {
@@ -394,10 +483,49 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
      * (no history)
      */
     case "SELECT_BLOCK":
-      return { ...state, selectedBlockId: action.id };
+      if (state.context === "layout" && action.id) {
+        const nextId = action.id;
+        requestAnimationFrame(() => focusBlockNavigationTarget(nextId));
+      }
+      return {
+        ...state,
+        selectedBlockId: action.id,
+        editingBlockId: null,
+        selectedToken: action.id && state.selectedToken?.blockId === action.id ? state.selectedToken : null,
+      };
+
+    case "SELECT_TOKEN":
+      return {
+        ...state,
+        selectedBlockId: action.blockId,
+        selectedToken: { blockId: action.blockId, tokenIndex: action.tokenIndex },
+      };
+
+    case "CLEAR_SELECTED_TOKEN":
+      return { ...state, selectedToken: null };
+
+    case "START_EDITING_BLOCK":
+      if (state.context !== "layout") return state;
+      requestAnimationFrame(() => focusBlockEditable(action.id, action.moveCaretToEnd ?? false));
+      return {
+        ...state,
+        selectedBlockId: action.id,
+        editingBlockId: action.id,
+      };
+
+    case "STOP_EDITING_BLOCK":
+      if (!action.id || state.editingBlockId === action.id) {
+        return { ...state, editingBlockId: null };
+      }
+      return state;
 
     case "SET_CONTEXT":
-      return { ...state, context: action.context };
+      return {
+        ...state,
+        context: action.context,
+        editingBlockId: action.context === "layout" ? state.editingBlockId : null,
+        selectedToken: action.context === "nlp" ? state.selectedToken : null,
+      };
 
     case "SET_INTENT":
       return { ...state, intent: action.intent };
@@ -455,10 +583,15 @@ export function EditorProvider({
   initialIntent = "freeform",
   initialPath,
 }: EditorProviderProps): React.ReactElement {
+  const normalizedInitialDoc = initialDoc
+    ? normalizeDocumentMetadata(initialDoc, initialPath ?? null)
+    : null;
   const [state, dispatch] = useReducer(editorReducer, {
-    doc: initialDoc ?? null,
-    docHistory: createHistory(initialDoc ?? null),
+    doc: normalizedInitialDoc,
+    docHistory: createHistory(normalizedInitialDoc),
     selectedBlockId: null,
+    editingBlockId: null,
+    selectedToken: null,
     context: initialContext,
     intent: initialIntent,
     nlpFlags: DEFAULT_NLP_FLAGS,
@@ -502,6 +635,21 @@ export function useSelectedBlock(): SBlock | null {
     const flat = flattenBlocks(state.doc.blocks);
     return flat.find(b => b.id === state.selectedBlockId) ?? null;
   }, [state.doc, state.selectedBlockId]);
+}
+
+export function useSelectedToken():
+  | { block: SBlock; token: NLPToken; tokenIndex: number }
+  | null {
+  const { state } = useEditor();
+  return useMemo(() => {
+    if (!state.doc || !state.selectedToken) return null;
+    const flat = flattenBlocks(state.doc.blocks);
+    const block = flat.find((candidate) => candidate.id === state.selectedToken?.blockId);
+    if (!block || !isTextBlock(block) || !block.nlp) return null;
+    const token = block.nlp.tokens[state.selectedToken.tokenIndex];
+    if (!token) return null;
+    return { block, token, tokenIndex: state.selectedToken.tokenIndex };
+  }, [state.doc, state.selectedToken]);
 }
 
 /** Returns true when there are undo steps available. */

@@ -8,13 +8,16 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
+import { dms } from "@/services/dms-service";
 import type { BlockKind, ParamValue } from "@syngrafo/audio";
 import { BLOCK_REGISTRY, BLOCK_KINDS, usePatch, patchEngine } from "@syngrafo/audio";
-import { generateName } from "@syngrafo/shared";
+import { fileService, generateName } from "@syngrafo/shared";
 import { BlockCard } from "./BlockCard";
 import { PatchMatrixView } from "./PatchMatrixView";
 import { usePatchStore } from "@/store/patch-store";
 import { ResizablePanel } from "@syngrafo/ui";
+import { exportPatchPreset, isPatchPresetFile, slugifyPresetName } from "../presets";
 
 const KIND_LABELS: Record<BlockKind, string> = {
   grainade:       "⬡ GrainadeBlock",
@@ -40,16 +43,17 @@ const ENGINE_BADGE: Record<string, string> = {
 
 export function PatchWorkstation() {
   const patchStore = usePatchStore();
-  const { _ } = useLingui();
+  useLingui();
 
   const [activePatchEntryId, setActivePatchEntryId] = useState<string | null>(null);
   const [newPatchName,       setNewPatchName]       = useState("");
   const [renamingId,         setRenamingId]         = useState<string | null>(null);
   const [renameValue,        setRenameValue]        = useState("");
+  const [patchStatus,        setPatchStatus]        = useState<string | null>(null);
 
   useEffect(() => {
     if (patchStore.patches.length === 0) {
-      const entry = patchStore.createPatch(_("Default Patch"));
+      const entry = patchStore.createPatch(i18n._({ id: "Default Patch", message: "Default Patch" }));
       setActivePatchEntryId(entry.id);
     } else if (!activePatchEntryId) {
       setActivePatchEntryId(patchStore.patches[0]!.id);
@@ -104,6 +108,49 @@ export function PatchWorkstation() {
     setNewPatchName("");
   }, [newPatchName, patchStore, loadPatch]);
 
+  const handleLoadPatchPreset = useCallback(async () => {
+    const picked = await fileService.selectFiles();
+    const path = picked.ok ? picked.data?.[0] : undefined;
+    if (!path) return;
+    const loaded = await dms.readFile(path);
+    const content = loaded.ok ? loaded.data?.content : null;
+    if (!content) {
+      setPatchStatus(i18n._({ id: "Could not read patch preset file.", message: "Could not read patch preset file." }));
+      return;
+    }
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      if (!isPatchPresetFile(parsed)) {
+        setPatchStatus(i18n._({ id: "Selected file is not a patch preset.", message: "Selected file is not a patch preset." }));
+        return;
+      }
+      const existing = patchStore.patches.find((entry) => entry.name === parsed.name);
+      const entry = existing ?? patchStore.createPatch(parsed.name);
+      patchStore.renamePatch(entry.id, parsed.name);
+      patchStore.updatePatch(entry.id, parsed.patch);
+      loadPatch(parsed.patch);
+      setActivePatchEntryId(entry.id);
+      setPatchStatus(i18n._({ id: "Loaded patch preset", message: "Loaded patch preset" }) + `: ${parsed.name}`);
+    } catch {
+      setPatchStatus(i18n._({ id: "Patch preset file is not valid JSON.", message: "Patch preset file is not valid JSON." }));
+    }
+  }, [patchStore, loadPatch]);
+
+  const handleSavePatchPreset = useCallback(async () => {
+    const activeEntry = patchStore.patches.find((entry) => entry.id === activePatchEntryId);
+    if (!activeEntry) return;
+    const save = await fileService.selectSavePath(`${slugifyPresetName(activeEntry.name)}.sygpatch.json`, "json");
+    const path = save.ok ? save.data?.path : undefined;
+    if (!path) return;
+    const preset = exportPatchPreset(activeEntry.name, activeEntry.patch, slugifyPresetName(activeEntry.name));
+    const written = await dms.writeFile(path, JSON.stringify(preset, null, 2));
+    setPatchStatus(
+      written.ok
+        ? `${i18n._({ id: "Saved patch preset", message: "Saved patch preset" })}: ${path}`
+        : (written.error ?? i18n._({ id: "Failed to save patch preset.", message: "Failed to save patch preset." }))
+    );
+  }, [activePatchEntryId, patchStore.patches]);
+
   const handleRemovePatch = useCallback((entryId: string) => {
     patchStore.removePatch(entryId);
     if (activePatchEntryId !== entryId) return;
@@ -111,11 +158,11 @@ export function PatchWorkstation() {
     if (remaining.length > 0) {
       handleSelectPatch(remaining[0]!.id);
     } else {
-      const fresh = patchStore.createPatch(_("Default Patch"));
+      const fresh = patchStore.createPatch(i18n._({ id: "Default Patch", message: "Default Patch" }));
       loadPatch(fresh.patch);
       setActivePatchEntryId(fresh.id);
     }
-  }, [activePatchEntryId, patchStore, handleSelectPatch, loadPatch, _]);
+  }, [activePatchEntryId, patchStore, handleSelectPatch, loadPatch]);
 
   const [selectedId,  setSelectedId]  = useState<string | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -143,16 +190,16 @@ export function PatchWorkstation() {
 
       <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] shrink-0 flex-wrap gap-y-1">
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
-          {_("Patcher")}
+          {i18n._({ id: "Patcher", message: "Patcher" })}
         </span>
 
         <button
           onClick={() => setLeftTab("patches")}
           className="text-[10px] px-2 py-1 rounded border border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-text)] hover:border-[var(--theme-primary)] transition-colors flex items-center gap-1 max-w-[160px]"
-          title={_("Browse patches in the left panel")}
+          title={i18n._({ id: "Browse patches in the left panel", message: "Browse patches in the left panel" })}
         >
           <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--theme-primary)]" />
-          <span className="truncate flex-1">{activeEntry?.name ?? _("No patch")}</span>
+          <span className="truncate flex-1">{activeEntry?.name ?? i18n._({ id: "No patch", message: "No patch" })}</span>
         </button>
 
         <div className="relative">
@@ -160,7 +207,7 @@ export function PatchWorkstation() {
             onClick={() => setAddMenuOpen(v => !v)}
             className="text-[10px] px-2 py-1 rounded border border-[var(--theme-border)] bg-[var(--theme-surface)] text-[var(--theme-text)] hover:border-[var(--theme-primary)] transition-colors"
           >
-            {_("+ PatternBlock")}
+            {i18n._({ id: "+ PatternBlock", message: "+ PatternBlock" })}
           </button>
           {addMenuOpen && (
             <>
@@ -185,7 +232,7 @@ export function PatchWorkstation() {
 
         {patchStore.patches.length > 1 && (
           <span className="text-[9px] text-[var(--theme-text-muted)] hidden sm:block">
-            {patchStore.patches.length} {_("patches")}
+            {patchStore.patches.length} {i18n._({ id: "patches", message: "patches" })}
           </span>
         )}
 
@@ -201,7 +248,7 @@ export function PatchWorkstation() {
                   : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]",
               ].join(" ")}
             >
-              {tab === "matrix" ? _("Matrix") : _("XY Pads")}
+              {tab === "matrix" ? i18n._({ id: "Matrix", message: "Matrix" }) : i18n._({ id: "XY Pads", message: "XY Pads" })}
             </button>
           ))}
         </div>
@@ -216,7 +263,7 @@ export function PatchWorkstation() {
               : "bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] hover:opacity-90",
           ].join(" ")}
         >
-          {isPlaying ? `⏹ ${_("Stop")}` : `▶ ${_("Compile+Play")}`}
+          {isPlaying ? `⏹ ${i18n._({ id: "Stop", message: "Stop" })}` : `▶ ${i18n._({ id: "Compile+Play", message: "Compile+Play" })}`}
         </button>
 
         <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono ${ENGINE_BADGE[engineState] ?? ENGINE_BADGE["idle"]}`}>
@@ -227,7 +274,7 @@ export function PatchWorkstation() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         <ResizablePanel
-          label={leftTab === "patches" ? _("Patches") : _("Patterns")}
+          label={leftTab === "patches" ? i18n._({ id: "Patches", message: "Patches" }) : i18n._({ id: "Patterns", message: "Patterns" })}
           side="left"
           defaultWidth={224}
           minWidth={160}
@@ -245,7 +292,7 @@ export function PatchWorkstation() {
                       : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]",
                   ].join(" ")}
                 >
-                  {tab === "patterns" ? _("Patterns") : _("Patches")}
+                  {tab === "patterns" ? i18n._({ id: "Patterns", message: "Patterns" }) : i18n._({ id: "Patches", message: "Patches" })}
                 </button>
               ))}
             </div>
@@ -256,7 +303,7 @@ export function PatchWorkstation() {
               <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2">
                 {patch.blocks.length === 0 ? (
                   <p className="text-[10px] text-[var(--theme-text-muted)] text-center mt-8 px-2">
-                    {_("Click + PatternBlock to start patching")}
+                    {i18n._({ id: "Click + PatternBlock to start patching", message: "Click + PatternBlock to start patching" })}
                   </p>
                 ) : (
                   patch.blocks.map(block => (
@@ -277,7 +324,7 @@ export function PatchWorkstation() {
               </div>
               <div className="px-2 py-1.5 border-t border-[var(--theme-border)] shrink-0">
                 <p className="text-[9px] text-[var(--theme-text-muted)] leading-snug">
-                  {_("Add a PatchBlock track in the Sequencer and pick this patch.")}
+                  {i18n._({ id: "Add a PatchBlock track in the Sequencer and pick this patch.", message: "Add a PatchBlock track in the Sequencer and pick this patch." })}
                 </p>
               </div>
             </div>
@@ -328,7 +375,7 @@ export function PatchWorkstation() {
                         ].join(" ")}
                         onClick={() => handleSelectPatch(entry.id)}
                         onDoubleClick={() => { setRenamingId(entry.id); setRenameValue(entry.name); }}
-                        title={_("Click to load · double-click to rename")}
+                        title={i18n._({ id: "Click to load · double-click to rename", message: "Click to load · double-click to rename" })}
                       >
                         {entry.name}
                       </button>
@@ -341,15 +388,30 @@ export function PatchWorkstation() {
                     <button
                       onClick={() => handleRemovePatch(entry.id)}
                       className="text-[10px] text-[var(--theme-text-muted)] hover:text-red-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-0.5"
-                      title={_("Delete patch")}
+                      title={i18n._({ id: "Delete patch", message: "Delete patch" })}
                     >×</button>
                   </div>
                 ))}
               </div>
 
               <div className="border-t border-[var(--theme-border)] p-2 flex flex-col gap-1.5 shrink-0">
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => void handleLoadPatchPreset()}
+                    className="flex-1 text-[10px] px-2 py-1 rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:border-[var(--theme-primary)] transition-colors"
+                  >
+                    {i18n._({ id: "Load Patch", message: "Load Patch" })}
+                  </button>
+                  <button
+                    onClick={() => void handleSavePatchPreset()}
+                    disabled={!activePatchEntryId}
+                    className="flex-1 text-[10px] px-2 py-1 rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:border-[var(--theme-primary)] disabled:opacity-40 transition-colors"
+                  >
+                    {i18n._({ id: "Save Patch", message: "Save Patch" })}
+                  </button>
+                </div>
                 <input
-                  placeholder={_("New patch name\u2026")}
+                  placeholder={i18n._({ id: "New patch name\\u2026", message: "New patch name\\u2026" })}
                   value={newPatchName}
                   onChange={e => setNewPatchName(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") handleCreatePatch(); }}
@@ -359,8 +421,13 @@ export function PatchWorkstation() {
                   onClick={handleCreatePatch}
                   className="text-[10px] px-2 py-1 rounded bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] font-semibold hover:opacity-90"
                 >
-                  {_("+ New Patch")}
+                  {i18n._({ id: "+ New Patch", message: "+ New Patch" })}
                 </button>
+                {patchStatus && (
+                  <p className="text-[9px] text-[var(--theme-text-muted)] leading-snug">
+                    {patchStatus}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -378,7 +445,7 @@ export function PatchWorkstation() {
             <div className="flex flex-wrap gap-4 p-2">
               {xyBlocks.length === 0 ? (
                 <p className="text-[10px] text-[var(--theme-text-muted)]">
-                  {_("Add an XY Pad block to see it here")}
+                  {i18n._({ id: "Add an XY Pad block to see it here", message: "Add an XY Pad block to see it here" })}
                 </p>
               ) : (
                 xyBlocks.map(block => (

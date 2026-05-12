@@ -681,9 +681,9 @@ if (typeof window.__lm_error === 'undefined')
 
     pce::dms::register_dms_bindings(*webview, dms, desk, model_dl);
     pce::dms::register_pdf_bindings(*webview, dms, pdf, desk);
-    pce::dms::register_lm_bindings(*webview, lm_engine, model_dl);
-    pce::dms::register_audio_bindings(*webview);
-    pce::dms::register_video_bindings(*webview);
+    pce::dms::register_lm_bindings(*webview, lm_engine, model_dl, dms.wv_ptr);
+    pce::dms::register_audio_bindings(*webview, dms);
+    pce::dms::register_video_bindings(*webview, dms);
 
 #ifndef NDEBUG
     webview->set_dev_tools(true);
@@ -911,15 +911,14 @@ if (typeof window.__lm_error === 'undefined')
     auto quit_requested = std::make_shared<bool>(false);
 
 
-    tray.set_on_activate([win_raw, &tray] {
+    tray.set_on_activate([win_raw] {
         win_raw->show();
-        tray.hide();
     });
 
     tray.add_or_update({
         .id       = "show",
         .label    = "Show Syngrafo",
-        .on_click = [win_raw, &tray] { win_raw->show(); tray.hide(); },
+        .on_click = [win_raw] { win_raw->show(); },
     });
     tray.add_or_update({
         .id   = "sep1",
@@ -930,18 +929,21 @@ if (typeof window.__lm_error === 'undefined')
         .label    = "Quit",
         .on_click = [win_raw, quit_requested] {
             *quit_requested = true;
-            win_raw->close();   // triggers close event → handler allows it
+            win_raw->close();
         },
     });
 
-    // Close-event handler: hide to tray unless an explicit Quit was requested.
+    // Tray is always visible — activating it (click / double-click) restores
+    // the window when it is hidden.
+    tray.show();
+
+    // Suppress the OS close so the app lives in the tray until Quit is chosen.
     (*window)->on<saucer::window::event::close>(
-        [win_raw, &tray, quit_requested]() -> saucer::policy {
+        [win_raw, quit_requested]() -> saucer::policy {
             if (*quit_requested)
-                return saucer::policy::allow;  // propagate → co_await finishes
+                return saucer::policy::allow;
             win_raw->hide();
-            tray.show();
-            return saucer::policy::block;      // suppress → stay alive in tray
+            return saucer::policy::block;
         });
 
     (*window)->show();
@@ -995,7 +997,7 @@ int main(int argc, char** argv)
 
     EngineHandle nlp;
 
-    return saucer::application::create({.id = "org.pce.papiere"})
+    return saucer::application::create({.id = "org.pce.syngrafo0"})
         ->run([&nlp](saucer::application *app) -> coco::stray {
           return start(app, nlp);
         });

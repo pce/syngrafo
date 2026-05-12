@@ -3,9 +3,34 @@ import { useEditor } from "../../store/editor-store";
 import { type PageSize, type PageOrientation, type SpacingToken, type SPageBackground } from "../../models/sdm";
 import { type DocumentIntent, DOCUMENT_INTENT_META } from "../../models/editor-context";
 import { useDocumentStats } from "../../hooks/useDocumentStats";
+import { resolvePageBackgroundCss } from "../../services/page-background";
+import { slugifyDocumentFilename } from "../../models/document-meta";
 
 const PAGE_SIZES: PageSize[] = ["a4", "a5", "a3", "a6", "a0", "a1", "a2", "letter", "legal"];
 const SPACING_TOKENS: SpacingToken[] = ["none", "xs", "sm", "md", "lg", "xl", "2xl"];
+const SOLID_BACKGROUNDS: Array<{ label: string; value: string }> = [
+  { label: "White", value: "#ffffff" },
+  { label: "Warm Paper", value: "#faf7f2" },
+  { label: "Cream", value: "#fffef0" },
+  { label: "Slate", value: "#f0f4f8" },
+  { label: "Night", value: "#1a1a2e" },
+  { label: "Ink", value: "#0f172a" },
+  { label: "Transparent", value: "transparent" },
+];
+const GRADIENT_BACKGROUNDS: Array<{ label: string; value: SPageBackground }> = [
+  {
+    label: "Ivory Wash",
+    value: { gradient: { type: "linear", angle: 180, stops: [{ color: "#fffdf8", position: 0 }, { color: "#f5efe3", position: 100 }] } },
+  },
+  {
+    label: "Cool Mist",
+    value: { gradient: { type: "linear", angle: 160, stops: [{ color: "#ffffff", position: 0 }, { color: "#e8eef7", position: 100 }] } },
+  },
+  {
+    label: "Studio Dusk",
+    value: { gradient: { type: "linear", angle: 145, stops: [{ color: "#f7f1e8", position: 0 }, { color: "#e7ddff", position: 100 }] } },
+  },
+];
 
 const INPUT_CLASS =
   "w-full rounded border border-[var(--theme-border)] bg-[var(--theme-bg)] text-[var(--theme-text)] text-[11px] px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)]";
@@ -23,6 +48,21 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+function hasGradient(background?: SPageBackground): boolean {
+  return Boolean(background?.gradient?.type === "linear");
+}
+
+function sameGradientPreset(left: SPageBackground | undefined, right: SPageBackground): boolean {
+  const a = left?.gradient;
+  const b = right.gradient;
+  if (!a || !b || a.type !== "linear" || b.type !== "linear" || a.angle !== b.angle) return false;
+  if (a.stops.length !== b.stops.length) return false;
+  return a.stops.every((stop, index) => {
+    const other = b.stops[index];
+    return Boolean(other && other.color === stop.color && other.position === stop.position);
+  });
+}
+
 export function DocumentPanel() {
   const { state, dispatch } = useEditor();
   const { doc, intent } = state;
@@ -34,7 +74,7 @@ export function DocumentPanel() {
   useEffect(() => {
     setLocalTitle(doc?.meta.title ?? "");
     setLocalFilename(doc?.meta.filename ?? "");
-  }, [doc?.id]);
+  }, [doc?.id, doc?.meta.title, doc?.meta.filename]);
 
   const stats = useDocumentStats(doc);
 
@@ -64,9 +104,27 @@ export function DocumentPanel() {
               type="text"
               value={localTitle}
               onChange={(e) => setLocalTitle(e.target.value)}
-              onBlur={(e) =>
-                dispatch({ type: "UPDATE_META", meta: { title: e.target.value } })
-              }
+              onBlur={(e) => {
+                const previousTitle = (doc.meta.title ?? "").trim();
+                const nextTitle = e.target.value.trim();
+                const currentFilename = doc.meta.filename ?? "";
+                const autoFilename = slugifyDocumentFilename(previousTitle);
+                const shouldFollowTitle = !currentFilename || currentFilename === autoFilename;
+                const nextFilename = shouldFollowTitle ? slugifyDocumentFilename(nextTitle) : currentFilename;
+
+                setLocalTitle(nextTitle);
+                if (shouldFollowTitle) setLocalFilename(nextFilename);
+
+                if (nextTitle !== previousTitle || nextFilename !== currentFilename) {
+                  dispatch({
+                    type: "UPDATE_META",
+                    meta: {
+                      title: nextTitle,
+                      ...(shouldFollowTitle ? { filename: nextFilename } : {}),
+                    },
+                  });
+                }
+              }}
               className={INPUT_CLASS}
               placeholder="Document title…"
             />
@@ -77,9 +135,13 @@ export function DocumentPanel() {
               type="text"
               value={localFilename}
               onChange={(e) => setLocalFilename(e.target.value)}
-              onBlur={(e) =>
-                dispatch({ type: "UPDATE_META", meta: { filename: e.target.value } })
-              }
+              onBlur={(e) => {
+                const nextFilename = slugifyDocumentFilename(e.target.value);
+                setLocalFilename(nextFilename);
+                if (nextFilename !== (doc.meta.filename ?? "")) {
+                  dispatch({ type: "UPDATE_META", meta: { filename: nextFilename } });
+                }
+              }}
               className={INPUT_CLASS}
               placeholder="document.pdf"
             />
@@ -200,91 +262,179 @@ export function DocumentPanel() {
             Background
           </div>
 
-          {/* Color swatch presets */}
-          <div className="flex flex-wrap gap-1.5">
-            {([
-              { label: "White",       value: "#ffffff" },
-              { label: "Warm Paper",  value: "#faf7f2" },
-              { label: "Cream",       value: "#fffef0" },
-              { label: "Slate",       value: "#f0f4f8" },
-              { label: "Night",       value: "#1a1a2e" },
-              { label: "Ink",         value: "#0f172a" },
-              { label: "Transparent", value: "transparent" },
-            ] as const).map(({ label, value }) => (
+          <div
+            className="rounded border border-[var(--theme-border)] h-14"
+            style={{ background: resolvePageBackgroundCss(doc.page.background) }}
+          />
+
+          <Row label="Background Mode">
+            <div className="grid grid-cols-2 gap-1.5">
               <button
-                key={value}
-                title={label}
                 onClick={() =>
                   dispatch({
                     type: "UPDATE_PAGE",
-                    page: {
-                      background: value === "transparent"
-                        ? { color: "transparent" }
-                        : { color: value },
-                    } as Partial<import("../../models/sdm").SPageConfig>,
+                    page: { background: { color: doc.page.background?.color ?? "#ffffff" } } as Partial<import("../../models/sdm").SPageConfig>,
                   })
                 }
                 className={[
-                  "w-6 h-6 rounded border transition-transform hover:scale-110",
-                  (doc.page.background?.color ?? "#ffffff") === value
-                    ? "border-[var(--theme-primary)] ring-1 ring-[var(--theme-primary)]"
-                    : "border-[var(--theme-border)]",
-                  value === "transparent"
-                    ? "bg-[repeating-conic-gradient(#ccc_0%_25%,white_0%_50%)] bg-[length:8px_8px]"
-                    : "",
+                  "py-1 rounded border text-[9px] font-bold transition-colors",
+                  !hasGradient(doc.page.background)
+                    ? "bg-[var(--theme-primary)] border-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
+                    : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50",
                 ].join(" ")}
-                style={value !== "transparent" ? { backgroundColor: value } : {}}
-              />
-            ))}
-          </div>
-
-          {/* Custom color hex input */}
-          <Row label="Custom Color">
-            <div className="flex gap-1.5 items-center">
-              <input
-                type="color"
-                value={
-                  doc.page.background?.color?.startsWith("#")
-                    ? doc.page.background.color
-                    : "#ffffff"
-                }
-                onChange={(e) =>
+              >
+                Solid
+              </button>
+              <button
+                onClick={() =>
                   dispatch({
                     type: "UPDATE_PAGE",
-                    page: { background: { color: e.target.value } } as Partial<import("../../models/sdm").SPageConfig>,
+                    page: { background: doc.page.background?.gradient ? doc.page.background : (GRADIENT_BACKGROUNDS[0]?.value ?? { gradient: { type: "linear", angle: 180, stops: [{ color: "#fffdf8", position: 0 }, { color: "#f5efe3", position: 100 }] } }) } as Partial<import("../../models/sdm").SPageConfig>,
                   })
                 }
-                className="w-7 h-7 rounded border border-[var(--theme-border)] cursor-pointer p-0.5 bg-transparent"
-                title="Pick background color"
-              />
-              <input
-                type="text"
-                value={doc.page.background?.color ?? ""}
-                onChange={(e) =>
-                  dispatch({
-                    type: "UPDATE_PAGE",
-                    page: { background: { color: e.target.value } } as Partial<import("../../models/sdm").SPageConfig>,
-                  })
-                }
-                placeholder="#ffffff or rgba(…)"
-                className={INPUT_CLASS}
-              />
-              {doc.page.background?.color && (
-                <button
-                  onClick={() =>
-                    dispatch({
-                      type: "UPDATE_PAGE",
-                      page: { background: undefined } as unknown as Partial<import("../../models/sdm").SPageConfig>,
-                    })
-                  }
-                  title="Reset to white"
-                  className="shrink-0 text-[9px] text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
-                >
-                  ✕
-                </button>
-              )}
+                className={[
+                  "py-1 rounded border text-[9px] font-bold transition-colors",
+                  hasGradient(doc.page.background)
+                    ? "bg-[var(--theme-primary)] border-[var(--theme-primary)] text-[var(--theme-primary-fg)]"
+                    : "border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)]/50",
+                ].join(" ")}
+              >
+                Gradient
+              </button>
             </div>
           </Row>
+
+          {!hasGradient(doc.page.background) ? (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {SOLID_BACKGROUNDS.map(({ label, value }) => (
+                  <button
+                    key={value}
+                    title={label}
+                    onClick={() =>
+                      dispatch({
+                        type: "UPDATE_PAGE",
+                        page: {
+                          background: value === "transparent"
+                            ? { color: "transparent" }
+                            : { color: value },
+                        } as Partial<import("../../models/sdm").SPageConfig>,
+                      })
+                    }
+                    className={[
+                      "w-6 h-6 rounded border transition-transform hover:scale-110",
+                      (doc.page.background?.color ?? "#ffffff") === value
+                        ? "border-[var(--theme-primary)] ring-1 ring-[var(--theme-primary)]"
+                        : "border-[var(--theme-border)]",
+                      value === "transparent"
+                        ? "bg-[repeating-conic-gradient(#ccc_0%_25%,white_0%_50%)] bg-[length:8px_8px]"
+                        : "",
+                    ].join(" ")}
+                    style={value !== "transparent" ? { backgroundColor: value } : {}}
+                  />
+                ))}
+              </div>
+
+              <Row label="Custom Color">
+                <div className="flex gap-1.5 items-center">
+                  <input
+                    type="color"
+                    value={
+                      doc.page.background?.color?.startsWith("#")
+                        ? doc.page.background.color
+                        : "#ffffff"
+                    }
+                    onChange={(e) =>
+                      dispatch({
+                        type: "UPDATE_PAGE",
+                        page: { background: { color: e.target.value } } as Partial<import("../../models/sdm").SPageConfig>,
+                      })
+                    }
+                    className="w-7 h-7 rounded border border-[var(--theme-border)] cursor-pointer p-0.5 bg-transparent"
+                    title="Pick background color"
+                  />
+                  <input
+                    type="text"
+                    value={doc.page.background?.color ?? ""}
+                    onChange={(e) =>
+                      dispatch({
+                        type: "UPDATE_PAGE",
+                        page: { background: { color: e.target.value } } as Partial<import("../../models/sdm").SPageConfig>,
+                      })
+                    }
+                    placeholder="#ffffff or rgba(…)"
+                    className={INPUT_CLASS}
+                  />
+                  {doc.page.background?.color && (
+                    <button
+                      onClick={() =>
+                        dispatch({
+                          type: "UPDATE_PAGE",
+                          page: { background: undefined } as unknown as Partial<import("../../models/sdm").SPageConfig>,
+                        })
+                      }
+                      title="Reset to white"
+                      className="shrink-0 text-[9px] text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </Row>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {GRADIENT_BACKGROUNDS.map(({ label, value }) => (
+                  <button
+                    key={label}
+                    title={label}
+                    onClick={() =>
+                      dispatch({
+                        type: "UPDATE_PAGE",
+                        page: { background: value } as Partial<import("../../models/sdm").SPageConfig>,
+                      })
+                    }
+                    className={[
+                      "w-10 h-6 rounded border transition-transform hover:scale-105",
+                      sameGradientPreset(doc.page.background, value)
+                        ? "border-[var(--theme-primary)] ring-1 ring-[var(--theme-primary)]"
+                        : "border-[var(--theme-border)]",
+                    ].join(" ")}
+                    style={{ background: resolvePageBackgroundCss(value) }}
+                  />
+                ))}
+              </div>
+
+              <Row label="Gradient Angle">
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={doc.page.background?.gradient?.angle ?? 135}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "UPDATE_PAGE",
+                      page: {
+                        background: {
+                          ...doc.page.background,
+                          gradient: {
+                            type: "linear",
+                            angle: Number(e.target.value),
+                            stops: doc.page.background?.gradient?.stops ?? [
+                              { color: "#fffdf8", position: 0 },
+                              { color: "#f5efe3", position: 100 },
+                            ],
+                          },
+                        },
+                      } as Partial<import("../../models/sdm").SPageConfig>,
+                    })
+                  }
+                />
+              </Row>
+            </>
+          )}
         </div>
 
         {/* Quick stats */}

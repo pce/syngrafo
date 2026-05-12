@@ -35,7 +35,10 @@ export async function analyzeText(
   const rawTokens = tokRes.ok && tokRes.data
     ? tokRes.data
     : text.split(/\s+/).filter(Boolean);
-  const tokens: NLPToken[] = rawTokens.map((t) => ({ text: t }));
+  const tokens: NLPToken[] = rawTokens.map((t) => ({
+    text: t,
+    lemma: t.toLowerCase(),
+  }));
 
   // POS tagging (opt-in)
   if (options?.pos) {

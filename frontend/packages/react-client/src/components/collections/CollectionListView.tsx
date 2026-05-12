@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import type { CollectionConfig } from "../../services/collection-service";
 import type { IconName } from "../Icon";
 import ConfirmDialog from "./ConfirmDialog";
@@ -42,7 +43,7 @@ function CollectionListView<T extends { id: number }>({
   title,
   className = "",
 }: Props<T>) {
-  const { _ } = useLingui();
+  useLingui();
   const [rows,          setRows]          = useState<T[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState<string | null>(null);
@@ -151,14 +152,14 @@ function CollectionListView<T extends { id: number }>({
           {config.create && (
             <button
               onClick={addRow}
-              title={_("Add row")}
+              title={i18n._({ id: "Add row", message: "Add row" })}
               className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold
                          bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]
                          border border-[var(--theme-primary)]/30
                          hover:bg-[var(--theme-primary)]/20 transition-colors"
             >
               <Icon name="plus" size="xs" />
-              {_("Add")}
+              {i18n._({ id: "Add", message: "Add" })}
             </button>
           )}
         </div>
@@ -184,7 +185,7 @@ function CollectionListView<T extends { id: number }>({
           </span>
         ))}
         <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] text-right">
-          {_("Actions")}
+          {i18n._({ id: "Actions", message: "Actions" })}
         </span>
       </div>
 
@@ -192,13 +193,13 @@ function CollectionListView<T extends { id: number }>({
         {loading && (
           <div className="flex items-center justify-center py-12 text-[var(--theme-text-muted)] text-xs">
             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-            {_("Loading…")}
+            {i18n._({ id: "Loading…", message: "Loading…" })}
           </div>
         )}
 
         {!loading && rows.length === 0 && (
           <div className="px-4 py-12 text-center text-[var(--theme-text-muted)] text-xs italic">
-            {config.emptyMessage ?? _("No items")}
+            {config.emptyMessage ?? i18n._({ id: "No items", message: "No items" })}
           </div>
         )}
 
@@ -240,7 +241,7 @@ function CollectionListView<T extends { id: number }>({
                           if (!editable) return;
                           setEditCell({ id: row.id, key: col.key, value: String(rawVal ?? "") });
                         }}
-                        title={editable ? _("Click to edit") : undefined}
+                        title={editable ? i18n._({ id: "Click to edit", message: "Click to edit" }) : undefined}
                         className={`flex-1 text-[11px] truncate text-[var(--theme-text)]
                           ${editable ? "cursor-text hover:text-[var(--theme-primary)] transition-colors" : ""}
                           ${col.type === "readonly" ? "text-[var(--theme-text-muted)]" : ""}
@@ -282,7 +283,7 @@ function CollectionListView<T extends { id: number }>({
                     : `#${row.id}`;
                   setDeletePending({ id: row.id, label });
                 }}
-                title={_("Delete")}
+                title={i18n._({ id: "Delete", message: "Delete" })}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded
                            text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)]
                            transition-all"
@@ -296,14 +297,14 @@ function CollectionListView<T extends { id: number }>({
 
       {deletePending && (
         <ConfirmDialog
-          title={_("Delete item")}
+          title={i18n._({ id: "Delete item", message: "Delete item" })}
           message={
             <>
               Delete <strong className="text-[var(--theme-text)]">"{deletePending.label}"</strong>?
-              <br />{_("This action cannot be undone.")}
+              <br />{i18n._({ id: "This action cannot be undone.", message: "This action cannot be undone." })}
             </>
           }
-          confirmLabel={_("Delete")}
+          confirmLabel={i18n._({ id: "Delete", message: "Delete" })}
           onConfirm={confirmDelete}
           onCancel={() => setDeletePending(null)}
         />

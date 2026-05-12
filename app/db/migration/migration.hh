@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file migration.hh
  * @brief Core migration descriptor — no SQLite dependency.
@@ -12,8 +13,6 @@
  * @see apply()       runner that stamps applied versions into `schema_migrations`
  */
 
-#ifndef SYNGRAFO_MIGRATION_HH
-#define SYNGRAFO_MIGRATION_HH
 #include <string_view>
 #include <cstdint>
 
@@ -26,4 +25,3 @@ namespace pce::db::migration {
     };
 
 }
-#endif //SYNGRAFO_MIGRATION_HH

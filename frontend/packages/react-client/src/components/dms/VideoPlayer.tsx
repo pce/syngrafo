@@ -14,7 +14,14 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
+import {
+  focusElementWithoutScroll,
+  isCoarsePointerEnvironment,
+  shouldHandleOwnedShortcut,
+  shouldPreserveTargetFocus,
+} from "@/utils/keyboard";
 
 
 function fmtTime(s: number): string {
@@ -34,10 +41,12 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchGestureRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const suppressNextClickRef = useRef(false);
   // Guard: never call setState after unmount (stops WebKit from throwing
   // "Attempted to assign to readonly property" on the media element).
   const mountedRef   = useRef(true);
-  const { _ } = useLingui();
+  useLingui();
 
   const [playing,     setPlaying]     = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -116,6 +125,11 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     scheduleHide();
   }, [scheduleHide]);
 
+  const claimKeyboardFocus = useCallback((target: EventTarget | null) => {
+    if (shouldPreserveTargetFocus(target)) return;
+    focusElementWithoutScroll(containerRef.current);
+  }, []);
+
   const seek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current;
     if (!v || !duration || !mountedRef.current) return;
@@ -176,12 +190,12 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
     if (!mountedRef.current) return;
     const code = (e.currentTarget.error?.code ?? 0);
     const msgs: Record<number, string> = {
-      1: _("Playback aborted"), 2: _("Network error"),
-      3: _("Decode error"),     4: _("Format not supported"),
+      1: i18n._({ id: "Playback aborted", message: "Playback aborted" }), 2: i18n._({ id: "Network error", message: "Network error" }),
+      3: i18n._({ id: "Decode error", message: "Decode error" }),     4: i18n._({ id: "Format not supported", message: "Format not supported" }),
     };
-    setError(msgs[code] ?? _("Playback failed"));
+    setError(msgs[code] ?? i18n._({ id: "Playback failed", message: "Playback failed" }));
     setPlaying(false); setStalled(false);
-  }, [_]);
+  }, []);
 
   const retry = useCallback(() => {
     const v = videoRef.current;
@@ -192,25 +206,71 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
   }, []);
 
   useEffect(() => {
+    focusElementWithoutScroll(containerRef.current);
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!mountedRef.current) return;
-      if (!containerRef.current?.contains(document.activeElement) &&
-          document.activeElement !== document.body) return;
+      const active = document.activeElement;
+      if (!shouldHandleOwnedShortcut(containerRef.current, active)) return;
       const v = videoRef.current;
       if (e.code === "Space")      { e.preventDefault(); togglePlay(); }
       // Guard currentTime writes — WebKit throws if the element is torn down
-      if (e.code === "ArrowRight" && v && isFinite(v.duration))
-        { try { v.currentTime = Math.min(v.currentTime + 5, v.duration); } catch { /* ignore */ } }
-      if (e.code === "ArrowLeft"  && v && isFinite(v.duration))
-        { try { v.currentTime = Math.max(v.currentTime - 5, 0); } catch { /* ignore */ } }
-      if (e.code === "KeyF")  { toggleFullscreen(); }
-      if (e.code === "KeyM")  { toggleMute(); }
+      if (e.code === "ArrowRight") {
+        e.preventDefault();
+        if (v && isFinite(v.duration)) {
+          try { v.currentTime = Math.min(v.currentTime + 5, v.duration); } catch { /* ignore */ }
+        }
+      }
+      if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        if (v && isFinite(v.duration)) {
+          try { v.currentTime = Math.max(v.currentTime - 5, 0); } catch { /* ignore */ }
+        }
+      }
+      if (e.code === "KeyF")  { e.preventDefault(); toggleFullscreen(); }
+      if (e.code === "KeyM")  { e.preventDefault(); toggleMute(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, toggleFullscreen, toggleMute]);
 
   const progress = duration > 0 ? (currentTime / duration) * 10000 : 0;
+  const touchTargetStyle = isCoarsePointerEnvironment() ? { minWidth: 44, minHeight: 44 } : undefined;
+
+  const handlePointerDownCapture = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    claimKeyboardFocus(e.target);
+    if (e.pointerType === "touch" && !shouldPreserveTargetFocus(e.target)) {
+      touchGestureRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+      };
+    }
+  }, [claimKeyboardFocus]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const touch = touchGestureRef.current;
+    if (!touch || touch.pointerId !== e.pointerId) return;
+    touchGestureRef.current = null;
+    const dx = e.clientX - touch.startX;
+    const dy = e.clientY - touch.startY;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.2 || shouldPreserveTargetFocus(e.target)) {
+      return;
+    }
+    const v = videoRef.current;
+    if (!v || !isFinite(v.duration)) return;
+    suppressNextClickRef.current = true;
+    window.setTimeout(() => { suppressNextClickRef.current = false; }, 0);
+    try {
+      v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + (dx > 0 ? 10 : -10)));
+      setCurrentTime(v.currentTime);
+      scheduleHide();
+    } catch {
+      // WebKit readonly during teardown.
+    }
+  }, [scheduleHide]);
 
   return (
     <div
@@ -220,6 +280,8 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
       style={{ cursor: showControls ? "default" : "none" }}
       onMouseMove={scheduleHide}
       onMouseEnter={scheduleHide}
+      onPointerDownCapture={handlePointerDownCapture}
+      onPointerUp={handlePointerUp}
     >
       {/* NEVER keyed: src is swapped via DOM ref to avoid decoder/A-V desyncs. */}
       <video
@@ -240,7 +302,13 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
           setMuted(e.currentTarget.muted);
         }}
         onError={onError}
-        onClick={togglePlay}
+        onClick={() => {
+          if (suppressNextClickRef.current) {
+            suppressNextClickRef.current = false;
+            return;
+          }
+          togglePlay();
+        }}
       />
 
       {stalled && !error && (
@@ -253,12 +321,13 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 text-white p-6">
           <Icon name="warning" size="lg" className="opacity-50" />
           <p className="text-sm font-bold">{error}</p>
-          <p className="text-[10px] opacity-60">{_("The format may not be supported by the system WebView.")}</p>
+          <p className="text-[10px] opacity-60">{i18n._({ id: "The format may not be supported by the system WebView.", message: "The format may not be supported by the system WebView." })}</p>
           <button
             onClick={retry}
             className="mt-1 text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition-colors"
+            style={touchTargetStyle}
           >
-            {_("Retry")}
+            {i18n._({ id: "Retry", message: "Retry" })}
           </button>
         </div>
       )}
@@ -303,7 +372,7 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
               value={Math.round(progress)}
               onChange={seek}
               className="absolute inset-0 w-full opacity-0 cursor-pointer"
-              aria-label={_("Seek")}
+              aria-label={i18n._({ id: "Seek", message: "Seek" })}
             />
           </div>
 
@@ -311,7 +380,8 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
             <button
               onClick={togglePlay}
               className="p-1 hover:opacity-80 shrink-0"
-              aria-label={playing ? _("Pause") : _("Play")}
+              style={touchTargetStyle}
+              aria-label={playing ? i18n._({ id: "Pause", message: "Pause" }) : i18n._({ id: "Play", message: "Play" })}
             >
               {playing ? (
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -325,7 +395,7 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
               )}
             </button>
 
-            <button onClick={toggleMute} className="p-1 hover:opacity-80 shrink-0" aria-label={_("Toggle mute")}>
+            <button onClick={toggleMute} className="p-1 hover:opacity-80 shrink-0" style={touchTargetStyle} aria-label={i18n._({ id: "Toggle mute", message: "Toggle mute" })}>
               {muted || volume === 0 ? (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -349,7 +419,7 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
               value={muted ? 0 : Math.round(volume * 100)}
               onChange={changeVolume}
               className="w-14 h-1 accent-white cursor-pointer shrink-0"
-              aria-label={_("Volume")}
+              aria-label={i18n._({ id: "Volume", message: "Volume" })}
             />
 
             <span className="text-[10px] font-mono ml-1 tabular-nums whitespace-nowrap">
@@ -360,7 +430,8 @@ const VideoPlayer: React.FC<Props> = ({ src, className = "" }) => {
             <button
               onClick={toggleFullscreen}
               className="ml-auto p-1 hover:opacity-80 shrink-0"
-              aria-label={_("Fullscreen")}
+              style={touchTargetStyle}
+              aria-label={i18n._({ id: "Fullscreen", message: "Fullscreen" })}
             >
               {isFullscreen ? (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

@@ -265,22 +265,9 @@ inline void register_pdf_bindings(
                 .size        = {.w = w_in, .h = h_in},
                 .orientation = layout,
             });
-            const auto now = pce::db::now_unix();
-            {
-                std::lock_guard lk{dms.db_mutex};
-                const int inserted = dms.db.insert_into("dms_recent_exports")
-                      .value("doc_uuid",    doc_uuid)
-                      .value("title",       title)
-                      .value("path",        out.string())
-                      .value("kind",        string{"pdf"})
-                      .value("zone_name",   zone_name)
-                      .value("exported_at", now)
-                      .value("file_size",   int64_t{0})
-                      .execute();
-                if (inserted <= 0)
-                    throw std::runtime_error("failed to record pdf export for: " + doc_uuid);
-            }
-            return DMSHandle::ok_str(json{{"path", out.string()}, {"exported_at", now}});
+            return DMSHandle::ok_str(
+                dms.record_recent_export(out.string(), doc_uuid, title, zone_name, "pdf", int64_t{0})
+            );
         } catch (const std::exception& e) {
             return DMSHandle::err_str(e.what());
         }
@@ -305,26 +292,9 @@ inline void register_pdf_bindings(
             }
             std::error_code ec;
             const auto file_size = static_cast<int64_t>(fs::file_size(out, ec));
-            const auto now = pce::db::now_unix();
-            {
-                std::lock_guard lk{dms.db_mutex};
-                const int inserted = dms.db.insert_into("dms_recent_exports")
-                      .value("doc_uuid",    doc_uuid)
-                      .value("title",       title)
-                      .value("path",        out.string())
-                      .value("kind",        string{"html"})
-                      .value("zone_name",   zone_name)
-                      .value("exported_at", now)
-                      .value("file_size",   file_size)
-                      .execute();
-                if (inserted <= 0)
-                    throw std::runtime_error("failed to record html export for: " + doc_uuid);
-            }
-            return DMSHandle::ok_str(json{
-                {"path",        out.string()},
-                {"file_size",   file_size},
-                {"exported_at", now},
-            });
+            return DMSHandle::ok_str(
+                dms.record_recent_export(out.string(), doc_uuid, title, zone_name, "html", file_size)
+            );
         } catch (const std::exception& e) {
             return DMSHandle::err_str(e.what());
         }
@@ -379,35 +349,7 @@ inline void register_pdf_bindings(
         // so the outer Expected<json> is produced by try_invoke itself — never
         // nest Expected<Expected<T>> by returning Expected from inside.
         return try_invoke([&]() -> json {
-            std::error_code ec;
-            // file_size returns uintmax_t(-1) on error; clamp to 0 so the
-            // audit row is still written even if the stat fails (e.g. network FS).
-            const auto raw_size = fs::file_size(fs::path{path}, ec);
-            const auto file_size = ec ? int64_t{0}
-                                       : static_cast<int64_t>(raw_size);
-            const auto now = pce::db::now_unix();
-
-            std::lock_guard lk{dms.db_mutex};
-
-            const int rows = dms.db.insert_into("dms_recent_exports")
-                .value("doc_uuid",    doc_uuid)
-                .value("title",       title)
-                .value("path",        path)
-                .value("kind",        kind)
-                .value("zone_name",   zone_name)
-                .value("exported_at", now)
-                .value("file_size",   file_size)
-                .execute();
-
-            if (rows <= 0)
-                throw std::runtime_error(
-                    std::format("failed to record export: {}", path));
-
-            return json{
-                {"path",        path},
-                {"exported_at", now},
-                {"file_size",   file_size},
-            };
+            return dms.record_recent_export(path, doc_uuid, title, zone_name, kind);
         })
         .transform([](const json& j) { return DMSHandle::ok_str(j); })
         .value_or(DMSHandle::err_str("record export failed"));

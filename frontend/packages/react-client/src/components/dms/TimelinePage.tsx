@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { useDms } from "../../store/dms-store";
 import { dms, isImageFile, isDocFile, isAudioFile, isTextFile, isSvgFile } from "../../services/dms-service";
-import type { FsEntry } from "../../services/dms-service";
+import type { FsEntry, ZoneWorkflow } from "../../services/dms-service";
 import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
 
@@ -70,15 +71,22 @@ function groupByDay(entries: FsEntry[]): Map<string, FsEntry[]> {
 
 type FilterKind = "all" | "files" | "images" | "docs" | "audio";
 
+interface TimelinePageProps {
+  /** Called when the user clicks a workflow state link or the "Workflow Schema" button. */
+  onNavigateToWorkflows?: (stateFilter?: string) => void;
+}
 
-const TimelinePage: React.FC = () => {
+
+const TimelinePage: React.FC<TimelinePageProps> = ({ onNavigateToWorkflows }) => {
   const { state, dispatch } = useDms();
-  const { _ } = useLingui();
+  useLingui();
 
   const [entries,  setEntries]  = useState<FsEntry[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [filter,   setFilter]   = useState<FilterKind>("all");
   const [scanPath, setScanPath] = useState<string>("");
+  const [workflow, setWorkflow] = useState<ZoneWorkflow | null>(null);
+  const [wfCounts, setWfCounts] = useState<Map<string, number>>(new Map());
 
   const load = useCallback(async (path: string) => {
     if (!path) return;
@@ -102,6 +110,23 @@ const TimelinePage: React.FC = () => {
     }
   }, [state.zone, state.currentPath, scanPath, load]);
 
+  useEffect(() => {
+    if (!state.zone?.name) { setWorkflow(null); setWfCounts(new Map()); return; }
+    dms.lifecycle.workflow(state.zone.name).then((r) => {
+      if (r.ok && r.data) setWorkflow(r.data);
+    });
+    const inPath = state.zone.in_path;
+    if (inPath) {
+      dms.lifecycle.folderDashboard(inPath, 50).then((r) => {
+        if (r.ok && r.data) {
+          const m = new Map<string, number>();
+          for (const c of r.data.workflowCounts) m.set(c.stateKey, c.count);
+          setWfCounts(m);
+        }
+      });
+    }
+  }, [state.zone?.name, state.zone?.in_path]);
+
   const filtered = entries.filter((e) => {
     if (filter === "all")    return true;
     if (filter === "images") return isImageFile(e.path);
@@ -120,7 +145,7 @@ const TimelinePage: React.FC = () => {
 
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0">
         <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text)]">
-          {_("Timeline")}
+          {i18n._({ id: "Timeline", message: "Timeline" })}
         </span>
 
         {activePath && (
@@ -153,7 +178,7 @@ const TimelinePage: React.FC = () => {
         <button
           onClick={() => activePath && load(activePath)}
           disabled={loading}
-          title={_("Reload")}
+          title={i18n._({ id: "Reload", message: "Reload" })}
           className="p-1 rounded hover:bg-[var(--theme-bg)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors disabled:opacity-40"
         >
           <svg
@@ -167,21 +192,71 @@ const TimelinePage: React.FC = () => {
         </button>
       </div>
 
-      {state.zone && (
-        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]/60 shrink-0">
-          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 shrink-0 mr-1">
-            {_("Zone")}
-          </span>
-          <span
-            title={`${state.zone.in_path} → ${state.zone.out_path}`}
-            className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] border-[var(--theme-primary)]"
-          >
-            {state.zone.name}
-          </span>
-        </div>
-      )}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {state.zone && (
+          <aside className="w-44 shrink-0 border-r border-[var(--theme-border)] bg-[var(--theme-surface)] flex flex-col overflow-y-auto">
+            <div className="px-3 py-2.5 border-b border-[var(--theme-border)]">
+              <p className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 mb-1">
+                Zone
+              </p>
+              <span className="text-xs font-bold text-[var(--theme-text)] truncate block">
+                {state.zone.name}
+              </span>
+            </div>
+
+            {workflow && workflow.states.length > 0 && (
+              <div className="px-3 py-2.5 flex flex-col gap-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] opacity-60 mb-1">
+                  Workflows
+                </p>
+                {workflow.states
+                  .slice()
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((s) => {
+                    const count = wfCounts.get(s.key) ?? 0;
+                    return (
+                      <button
+                        key={s.key}
+                        onClick={() => onNavigateToWorkflows?.(s.key)}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded text-left w-full hover:bg-[var(--theme-bg)] transition-colors group"
+                        title={`View ${s.label} documents`}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ background: s.color || "var(--theme-primary)" }}
+                        />
+                        <span className="flex-1 text-[10px] font-semibold text-[var(--theme-text)] truncate">
+                          {s.label}
+                        </span>
+                        {count > 0 && (
+                          <span className="text-[9px] font-bold text-[var(--theme-text-muted)] bg-[var(--theme-bg)] rounded-full px-1 shrink-0">
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+
+            {onNavigateToWorkflows && (
+              <div className="mt-auto px-3 py-2.5 border-t border-[var(--theme-border)]">
+                <button
+                  onClick={() => onNavigateToWorkflows(undefined)}
+                  className="flex items-center gap-1 w-full text-[10px] font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] transition-colors"
+                >
+                  <Icon name="layers" size="xs" />
+                  <span>Workflow Schema</span>
+                  <Icon name="chevron-right" size="xs" className="ml-auto opacity-50" />
+                </button>
+              </div>
+            )}
+          </aside>
+        )}
+
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto px-4 py-3">
 
         {!activePath && !loading && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
@@ -191,9 +266,9 @@ const TimelinePage: React.FC = () => {
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
             </svg>
-            <p className="text-sm font-bold text-[var(--theme-text)]">{_("No active zone")}</p>
+            <p className="text-sm font-bold text-[var(--theme-text)]">{i18n._({ id: "No active zone", message: "No active zone" })}</p>
             <p className="text-xs text-[var(--theme-text-muted)] max-w-xs leading-relaxed">
-              {_("Open a zone from the header to see its file activity timeline here.")}
+              {i18n._({ id: "Open a zone from the header to see its file activity timeline here.", message: "Open a zone from the header to see its file activity timeline here." })}
             </p>
           </div>
         )}
@@ -201,14 +276,14 @@ const TimelinePage: React.FC = () => {
         {loading && (
           <div className="flex items-center justify-center py-16 gap-2 text-[var(--theme-text-muted)]">
             <span className="w-4 h-4 border-2 border-[var(--theme-primary)]/20 border-t-[var(--theme-primary)] rounded-full animate-spin" />
-            <span className="text-xs font-bold uppercase tracking-widest">{_("Scanning…")}</span>
+            <span className="text-xs font-bold uppercase tracking-widest">{i18n._({ id: "Scanning…", message: "Scanning…" })}</span>
           </div>
         )}
 
         {!loading && activePath && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
             <Icon name="folder" size="lg" className="opacity-20 text-[var(--theme-text)]" />
-            <p className="text-sm text-[var(--theme-text-muted)]">{_("No files found")}</p>
+            <p className="text-sm text-[var(--theme-text-muted)]">{i18n._({ id: "No files found", message: "No files found" })}</p>
           </div>
         )}
 
@@ -289,7 +364,7 @@ const TimelinePage: React.FC = () => {
                         )}
                         {entry.indexed && (
                           <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]">
-                            {_("indexed")}
+                            {i18n._({ id: "indexed", message: "indexed" })}
                           </span>
                         )}
                       </div>
@@ -300,6 +375,8 @@ const TimelinePage: React.FC = () => {
             </div>
           );
         })}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -23,7 +23,6 @@
  *   dms_share_file            path
  */
 
-#pragma once
 #include "../dms_handle.hh"
 #include "../dms_monadic.hh"
 #include "../internal/encoding.hh"
@@ -34,8 +33,236 @@
 
 #include <algorithm>
 #include <fstream>
+#include <map>
+#include <set>
+#include <thread>
+
+#if defined(__APPLE__)
+#  include <sys/clonefile.h>
+#elif defined(_WIN32)
+#  define NOMINMAX
+#  include <windows.h>
+#endif
 
 namespace pce::dms {
+
+namespace {
+
+struct TransferDisplayItem {
+    std::string source_path;
+    std::string target_path;
+    std::string name;
+    bool        is_dir{false};
+    int64_t     size_bytes{0};
+};
+
+struct TransferFileItem {
+    fs::path source;
+    fs::path target;
+    fs::path source_root;
+    int64_t  size_bytes{0};
+};
+
+struct TransferPlan {
+    std::vector<TransferDisplayItem> display_items;
+    std::vector<TransferFileItem>    file_items;
+    std::vector<fs::path>            directories;
+    std::vector<std::string>         source_roots;
+    std::vector<std::string>         source_parent_dirs;
+    int64_t                          total_bytes{0};
+    int64_t                          total_files{0};
+    int64_t                          skipped{0};
+};
+
+inline int64_t path_size_bytes(const fs::path& path) {
+    std::error_code ec;
+    if (fs::is_regular_file(path, ec))
+        return static_cast<int64_t>(fs::file_size(path, ec));
+    if (!fs::is_directory(path, ec)) return 0;
+
+    int64_t total = 0;
+    const auto skip = fs::directory_options::skip_permission_denied;
+    for (const auto& entry : fs::recursive_directory_iterator(path, skip, ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        if (entry.is_regular_file(ec))
+            total += static_cast<int64_t>(entry.file_size(ec));
+    }
+    return total;
+}
+
+inline fs::path unique_target_path(const fs::path& dest_dir,
+                                   const fs::path& desired_name,
+                                   bool is_dir) {
+    fs::path candidate = dest_dir / desired_name.filename();
+    std::error_code ec;
+    if (!fs::exists(candidate, ec)) return candidate;
+
+    const auto stem = is_dir ? candidate.filename().string() : candidate.stem().string();
+    const auto ext = is_dir ? std::string{} : candidate.extension().string();
+    for (int suffix = 1;; ++suffix) {
+        candidate = dest_dir / std::format("{} ({}){}", stem, suffix, ext);
+        if (!fs::exists(candidate, ec)) return candidate;
+    }
+}
+
+inline TransferPlan build_transfer_plan(const std::vector<std::string>& sources,
+                                        const fs::path&                dest_dir,
+                                        std::string_view               conflict) {
+    TransferPlan plan;
+    std::error_code ec;
+    const auto skip = fs::directory_options::skip_permission_denied;
+    for (const auto& source_str : sources) {
+        fs::path source{source_str};
+        if (!fs::exists(source, ec)) continue;
+
+        const bool is_dir = fs::is_directory(source, ec);
+        fs::path target_root = dest_dir / source.filename();
+        if (fs::exists(target_root, ec)) {
+            if (conflict == "skip") {
+                ++plan.skipped;
+                continue;
+            }
+            if (conflict == "keep")
+                target_root = unique_target_path(dest_dir, source.filename(), is_dir);
+        }
+
+        const auto size_bytes = path_size_bytes(source);
+        plan.display_items.push_back(TransferDisplayItem{
+            .source_path = source.string(),
+            .target_path = target_root.string(),
+            .name = target_root.filename().string(),
+            .is_dir = is_dir,
+            .size_bytes = size_bytes,
+        });
+        plan.source_roots.push_back(source.string());
+        plan.source_parent_dirs.push_back(source.parent_path().string());
+
+        if (is_dir) {
+            plan.directories.push_back(target_root);
+            for (const auto& entry : fs::recursive_directory_iterator(source, skip, ec)) {
+                if (ec) {
+                    ec.clear();
+                    continue;
+                }
+                const auto relative = fs::relative(entry.path(), source, ec);
+                if (ec) {
+                    ec.clear();
+                    continue;
+                }
+                const auto target = target_root / relative;
+                if (entry.is_directory(ec)) {
+                    plan.directories.push_back(target);
+                    continue;
+                }
+                if (!entry.is_regular_file(ec)) continue;
+                const auto bytes = static_cast<int64_t>(entry.file_size(ec));
+                plan.file_items.push_back(TransferFileItem{
+                    .source = entry.path(),
+                    .target = target,
+                    .source_root = source,
+                    .size_bytes = bytes,
+                });
+                plan.total_bytes += bytes;
+                ++plan.total_files;
+            }
+            continue;
+        }
+
+        const auto bytes = static_cast<int64_t>(fs::file_size(source, ec));
+        plan.file_items.push_back(TransferFileItem{
+            .source = source,
+            .target = target_root,
+            .source_root = source,
+            .size_bytes = bytes,
+        });
+        plan.total_bytes += bytes;
+        ++plan.total_files;
+    }
+    return plan;
+}
+
+inline bool maybe_fast_copy_file(const fs::path& source,
+                                 const fs::path& target,
+                                 int64_t         size_bytes) {
+    if (size_bytes < 64LL * 1024LL * 1024LL) return false;
+#if defined(__APPLE__)
+    return ::clonefile(source.c_str(), target.c_str(), 0) == 0;
+#elif defined(_WIN32)
+    return ::CopyFileW(source.wstring().c_str(), target.wstring().c_str(), FALSE) != 0;
+#else
+    (void)source;
+    (void)target;
+    return false;
+#endif
+}
+
+template <typename ProgressFn, typename StopFn>
+inline Expected<int64_t> copy_file_chunked(const fs::path& source,
+                                           const fs::path& target,
+                                           int64_t         size_bytes,
+                                           ProgressFn&&    on_progress,
+                                           StopFn&&        should_stop) {
+    std::error_code ec;
+    if (target.has_parent_path()) fs::create_directories(target.parent_path(), ec);
+    if (ec)
+        return std::unexpected(std::format("create '{}': {}", target.parent_path().string(), ec.message()));
+
+    if (!should_stop() && maybe_fast_copy_file(source, target, size_bytes)) {
+        std::forward<ProgressFn>(on_progress)(size_bytes);
+        return size_bytes;
+    }
+
+    std::ifstream in(source, std::ios::binary);
+    if (!in) return std::unexpected(std::format("cannot open '{}' for reading", source.string()));
+    std::ofstream out(target, std::ios::binary | std::ios::trunc);
+    if (!out) return std::unexpected(std::format("cannot open '{}' for writing", target.string()));
+
+    constexpr size_t kChunkSize = 4u * 1024u * 1024u;
+    std::vector<char> buffer(kChunkSize);
+    int64_t copied = 0;
+    while (in) {
+        if (should_stop()) {
+            out.close();
+            in.close();
+            fs::remove(target, ec);
+            return std::unexpected("cancelled");
+        }
+        in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const auto got = in.gcount();
+        if (got <= 0) break;
+        out.write(buffer.data(), got);
+        if (!out) {
+            out.close();
+            in.close();
+            fs::remove(target, ec);
+            return std::unexpected(std::format("write failed for '{}'", target.string()));
+        }
+        copied += static_cast<int64_t>(got);
+        std::forward<ProgressFn>(on_progress)(static_cast<int64_t>(got));
+    }
+
+    out.close();
+    in.close();
+    fs::last_write_time(target, fs::last_write_time(source, ec), ec);
+    return copied;
+}
+
+inline json make_transfer_event(std::string_view kind,
+                                std::string_view task_id,
+                                std::string_view operation,
+                                std::string_view phase) {
+    return json{
+        {"kind", kind},
+        {"task_id", task_id},
+        {"operation", operation},
+        {"phase", phase},
+    };
+}
+
+} // namespace
 
 inline Expected<json> DMSHandle::collect_svgs(std::string_view folder_path) noexcept {
     try {
@@ -237,6 +464,25 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
                 newly=true;
             } catch (...) {}
         }
+        int64_t doc_id = 0;
+        {
+            std::lock_guard lk{dms.db_mutex};
+            auto row = dms.active_db().from("dms_documents")
+                         .select({"id"})
+                         .where("path = ?", path_str)
+                         .first();
+            doc_id = row ? row->try_get<int64_t>("id").value_or(0) : 0;
+        }
+        discard(dms.lifecycle_svc_.ensure_document(DocumentRegistration{
+            .doc_id = doc_id,
+            .path = path_str,
+            .source_path = "",
+            .zone_name = dms.active_zone_name,
+            .kind = kind,
+            .mime_type = mime,
+            .size_bytes = fsize,
+            .mtime = mtime,
+        }, "system", "register_file"));
         return DMSHandle::ok_str(json{
             {"registered",newly},{"kind",kind},{"size",fsize},{"mtime",mtime}});
     });
@@ -326,6 +572,201 @@ inline void register_file_bindings(saucer::smartview& wv, DMSHandle& dms,
         })
         .transform([](const json& j) { return DMSHandle::ok_str(j); })
         .value_or(DMSHandle::err_str("save dialog failed"));
+    });
+
+    wv.expose("dms_transfer_files_start",
+              [&dms](string sources_json, string dest_dir, string conflict, string operation) -> string {
+        std::vector<std::string> sources;
+        try {
+            for (auto& item : json::parse(sources_json))
+                sources.push_back(item.get<std::string>());
+        } catch (...) {
+            return DMSHandle::err_str("Invalid sources JSON");
+        }
+        if (sources.empty())
+            return DMSHandle::err_str("At least one source is required");
+        if (operation != "copy" && operation != "move")
+            return DMSHandle::err_str("operation must be 'copy' or 'move'");
+
+        fs::path dest{dest_dir};
+        std::error_code ec;
+        if (!fs::exists(dest, ec)) fs::create_directories(dest, ec);
+        if (!fs::is_directory(dest, ec))
+            return DMSHandle::err_str(std::format("'{}' is not a directory", dest_dir));
+
+        for (const auto& source : sources) {
+            if (!fs::exists(fs::path{source}, ec))
+                return DMSHandle::err_str(std::format("'{}' not found", source));
+        }
+
+        const auto plan = build_transfer_plan(sources, dest, conflict);
+        const auto task_id = std::format("transfer_{}", dms.transfer_task_seq.fetch_add(1) + 1);
+        auto task = std::make_shared<DMSHandle::AsyncTransferTask>();
+        task->operation = operation;
+        task->dest_dir = dest_dir;
+        task->sources = sources;
+
+        {
+            std::lock_guard lk{dms.transfer_tasks_mutex};
+            dms.transfer_tasks.emplace(task_id, task);
+        }
+
+        json start_event = make_transfer_event("transfer", task_id, operation, "start");
+        start_event["dest_dir"] = dest_dir;
+        start_event["sources"] = sources;
+        start_event["entries"] = json::array();
+        for (const auto& item : plan.display_items) {
+            start_event["entries"].push_back(json{
+                {"source_path", item.source_path},
+                {"target_path", item.target_path},
+                {"name", item.name},
+                {"is_dir", item.is_dir},
+                {"size_bytes", item.size_bytes},
+            });
+        }
+        start_event["done_bytes"] = int64_t{0};
+        start_event["total_bytes"] = plan.total_bytes;
+        start_event["done_files"] = int64_t{0};
+        start_event["total_files"] = plan.total_files;
+        start_event["errors"] = int64_t{0};
+        start_event["skipped"] = plan.skipped;
+        dms.push_progress_(std::move(start_event));
+
+        std::thread{
+            [&dms, task, task_id, operation, conflict, plan = std::move(plan)]() mutable {
+                int64_t done_bytes = 0;
+                int64_t done_files = 0;
+                int64_t error_count = 0;
+                json errors = json::array();
+                std::error_code ec;
+                std::map<std::string, int64_t> root_totals;
+                std::map<std::string, int64_t> root_successes;
+                for (const auto& item : plan.file_items)
+                    ++root_totals[item.source_root.string()];
+
+                auto emit_progress = [&](std::string_view phase,
+                                         std::string_view source_path = {},
+                                         std::string_view target_path = {}) {
+                    json ev = make_transfer_event("transfer", task_id, operation, phase);
+                    ev["dest_dir"] = task->dest_dir;
+                    ev["done_bytes"] = done_bytes;
+                    ev["total_bytes"] = plan.total_bytes;
+                    ev["done_files"] = done_files;
+                    ev["total_files"] = plan.total_files;
+                    ev["errors"] = error_count;
+                    ev["skipped"] = plan.skipped;
+                    if (!source_path.empty()) ev["source_path"] = std::string{source_path};
+                    if (!target_path.empty()) ev["target_path"] = std::string{target_path};
+                    if (!errors.empty()) ev["error_messages"] = errors;
+                    if (!plan.source_parent_dirs.empty()) ev["source_parent_dirs"] = plan.source_parent_dirs;
+                    dms.push_progress_(std::move(ev));
+                };
+
+                auto should_stop = [&]() {
+                    return task->cancel_requested.load(std::memory_order_acquire);
+                };
+
+                for (const auto& dir : plan.directories) {
+                    if (should_stop()) break;
+                    fs::create_directories(dir, ec);
+                    ec.clear();
+                }
+
+                for (const auto& item : plan.file_items) {
+                    if (should_stop()) break;
+
+                    if (operation == "move") {
+                        if (conflict == "replace" && fs::exists(item.target, ec)) {
+                            if (fs::is_directory(item.target, ec)) discard(fs::remove_all(item.target, ec));
+                            else discard(fs::remove(item.target, ec));
+                            ec.clear();
+                        }
+                        fs::create_directories(item.target.parent_path(), ec);
+                        ec.clear();
+                        fs::rename(item.source, item.target, ec);
+                        if (!ec) {
+                            done_bytes += item.size_bytes;
+                            ++done_files;
+                            ++root_successes[item.source_root.string()];
+                            emit_progress("progress", item.source.string(), item.target.string());
+                            continue;
+                        }
+                        ec.clear();
+                    } else if (conflict == "replace" && fs::exists(item.target, ec)) {
+                        if (fs::is_directory(item.target, ec)) discard(fs::remove_all(item.target, ec));
+                        else discard(fs::remove(item.target, ec));
+                        ec.clear();
+                    }
+
+                    auto copied = copy_file_chunked(
+                        item.source,
+                        item.target,
+                        item.size_bytes,
+                        [&](int64_t delta) {
+                            done_bytes += delta;
+                            emit_progress("progress", item.source.string(), item.target.string());
+                        },
+                        should_stop
+                    );
+                    if (!copied) {
+                        if (copied.error() != "cancelled") {
+                            ++error_count;
+                            errors.push_back(std::format("{} '{}': {}",
+                                                         operation,
+                                                         item.source.string(),
+                                                         copied.error()));
+                        }
+                        continue;
+                    }
+
+                    ++done_files;
+                    ++root_successes[item.source_root.string()];
+                    if (operation == "move") {
+                        if (fs::is_directory(item.source, ec)) discard(fs::remove_all(item.source, ec));
+                        else discard(fs::remove(item.source, ec));
+                        ec.clear();
+                    }
+                }
+
+                if (operation == "move" && !should_stop()) {
+                    for (const auto& root : plan.source_roots) {
+                        fs::path source_root{root};
+                        const auto total_for_root = root_totals[root];
+                        if (total_for_root > 0 && root_successes[root] < total_for_root)
+                            continue;
+                        if (!fs::exists(source_root, ec)) continue;
+                        if (fs::is_directory(source_root, ec)) discard(fs::remove_all(source_root, ec));
+                        ec.clear();
+                        ec.clear();
+                    }
+                }
+
+                emit_progress(should_stop() ? "cancelled" : "complete");
+                {
+                    std::lock_guard lk{dms.transfer_tasks_mutex};
+                    dms.transfer_tasks.erase(task_id);
+                }
+            }
+        }.detach();
+
+        return DMSHandle::ok_str(json{
+            {"task_id", task_id},
+            {"operation", operation},
+            {"dest_dir", dest_dir},
+            {"total_bytes", plan.total_bytes},
+            {"total_files", plan.total_files},
+            {"skipped", plan.skipped},
+        });
+    });
+
+    wv.expose("dms_transfer_cancel",
+              [&dms](string task_id) -> string {
+        std::lock_guard lk{dms.transfer_tasks_mutex};
+        auto it = dms.transfer_tasks.find(task_id);
+        if (it == dms.transfer_tasks.end())
+            return DMSHandle::err_str("transfer task not found");
+        it->second->cancel_requested.store(true, std::memory_order_release);
+        return DMSHandle::ok_str(json{{"cancelled", true}, {"task_id", task_id}});
     });
 
     wv.expose("dms_copy_files",

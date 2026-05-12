@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
+import { MarkupPreview } from "@syngrafo/shared";
 import { dms } from "../../services/dms-service";
 import { Icon } from "../Icon";
+import { useSettings } from "../../store/settings-store";
+import { getResolvedPaperStyle, paperStyleBackgroundCss } from "../../models/paper-style";
 
 
 interface KanbanComment {
@@ -108,7 +112,7 @@ const STARTER_LANES = [
 interface DragState { laneIdx: number; cardId: string; }
 
 const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
-  const { _ } = useLingui();
+  useLingui();
   const [lanes,       setLanes]       = useState<KanbanLane[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [addingLane,  setAddingLane]  = useState(false);
@@ -287,7 +291,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
   if (loading) return (
     <div className="flex items-center justify-center h-full gap-2 text-[var(--theme-text-muted)]">
       <Icon name="refresh" size="md" className="animate-spin" />
-      <span className="text-sm">{_("Loading board…")}</span>
+      <span className="text-sm">{i18n._({ id: "Loading board…", message: "Loading board…" })}</span>
     </div>
   );
 
@@ -296,13 +300,13 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
       <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-surface)]">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Icon name="rows" size="xs" className="text-[var(--theme-text-muted)] shrink-0" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">{_("Kanban")}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Kanban", message: "Kanban" })}</span>
           <div className="h-3 w-px bg-[var(--theme-border)] mx-0.5" />
-          <span className="text-[10px] text-[var(--theme-text-muted)] tabular-nums">{doneCards}/{totalCards} {_("done")}</span>
+          <span className="text-[10px] text-[var(--theme-text-muted)] tabular-nums">{doneCards}/{totalCards} {i18n._({ id: "done", message: "done" })}</span>
         </div>
-        <button onClick={() => setAddingLane(true)} title={_("Add lane")}
+        <button onClick={() => setAddingLane(true)} title={i18n._({ id: "Add lane", message: "Add lane" })}
           className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] hover:text-[var(--theme-primary)] hover:bg-[var(--theme-primary)]/10 transition-colors">
-          <Icon name="plus" size="xs" />{_("Lane")}
+          <Icon name="plus" size="xs" />{i18n._({ id: "Lane", message: "Lane" })}
         </button>
       </div>
 
@@ -321,17 +325,17 @@ const KanbanView: React.FC<KanbanViewProps> = ({ kanbanDir }) => {
             <div className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-xl p-3 shadow-sm">
               <input autoFocus
                 className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] mb-2"
-                placeholder={_("Lane name…")} value={newLaneName} onChange={(e) => setNewLaneName(e.target.value)}
+                placeholder={i18n._({ id: "Lane name…", message: "Lane name…" })} value={newLaneName} onChange={(e) => setNewLaneName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") void addLane(); if (e.key === "Escape") { setAddingLane(false); setNewLaneName(""); } }} />
               <div className="flex gap-2">
-                <button onClick={() => void addLane()} className="flex-1 py-1.5 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">{_("Add")}</button>
-                <button onClick={() => { setAddingLane(false); setNewLaneName(""); }} className="flex-1 py-1.5 bg-[var(--theme-border)] text-[var(--theme-text)] rounded-lg text-xs hover:bg-[var(--theme-bg)] transition-colors">{_("Cancel")}</button>
+                <button onClick={() => void addLane()} className="flex-1 py-1.5 bg-[var(--theme-primary)] text-[var(--theme-primary-fg)] rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">{i18n._({ id: "Add", message: "Add" })}</button>
+                <button onClick={() => { setAddingLane(false); setNewLaneName(""); }} className="flex-1 py-1.5 bg-[var(--theme-border)] text-[var(--theme-text)] rounded-lg text-xs hover:bg-[var(--theme-bg)] transition-colors">{i18n._({ id: "Cancel", message: "Cancel" })}</button>
               </div>
             </div>
           ) : (
             <button onClick={() => setAddingLane(true)}
               className="flex items-center gap-2 px-3 py-2.5 w-full rounded-xl border border-dashed border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-[var(--theme-primary)] hover:text-[var(--theme-primary)] transition-colors text-sm">
-              <Icon name="plus" size="sm" />{_("Add lane")}
+              <Icon name="plus" size="sm" />{i18n._({ id: "Add lane", message: "Add lane" })}
             </button>
           )}
         </div>
@@ -365,7 +369,7 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
   onToggleCard, onDeleteCard, onAddCard, onDeleteLane, onRenameLane,
   onDragStart, onDrop, onOpenCard,
 }) => {
-  const { _ } = useLingui();
+  useLingui();
   const [renaming,      setRenaming]      = useState(false);
   const [nameInput,     setNameInput]     = useState(lane.name);
   const [addingCard,    setAddingCard]    = useState(false);
@@ -398,18 +402,18 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
         ) : confirmDelete ? (
           <>
             <span className="flex-1 text-[10px] text-red-500 truncate">Delete "{lane.name}"?</span>
-            <button onClick={() => { void onDeleteLane(laneIdx); setConfirmDelete(false); }} className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">{_("Yes")}</button>
-            <button onClick={() => setConfirmDelete(false)} className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">{_("No")}</button>
+            <button onClick={() => { void onDeleteLane(laneIdx); setConfirmDelete(false); }} className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white hover:bg-red-600 transition-colors shrink-0">{i18n._({ id: "Yes", message: "Yes" })}</button>
+            <button onClick={() => setConfirmDelete(false)} className="px-2 py-0.5 text-[10px] rounded border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] transition-colors shrink-0">{i18n._({ id: "No", message: "No" })}</button>
           </>
         ) : (
           <>
             <h3 className="flex-1 font-bold text-sm text-[var(--theme-text)] truncate" title={lane.name}>{lane.name}</h3>
             <span className="text-[11px] text-[var(--theme-text-muted)] tabular-nums min-w-[1.25rem] text-right">{lane.cards.length}</span>
-            <button onClick={() => { setRenaming(true); setNameInput(lane.name); }} title={_("Rename lane")}
+            <button onClick={() => { setRenaming(true); setNameInput(lane.name); }} title={i18n._({ id: "Rename lane", message: "Rename lane" })}
               className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors">
               <Icon name="edit" size="xs" />
             </button>
-            <button onClick={() => setConfirmDelete(true)} title={_("Delete lane")}
+            <button onClick={() => setConfirmDelete(true)} title={i18n._({ id: "Delete lane", message: "Delete lane" })}
               className="p-1 rounded text-[var(--theme-text-muted)] hover:text-red-500 hover:bg-[var(--theme-bg)] transition-colors">
               <Icon name="close" size="xs" />
             </button>
@@ -425,7 +429,7 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
         {lane.cards.length === 0 && (
           <div className={`mx-1 my-2 rounded-lg border-2 border-dashed flex items-center justify-center min-h-[40px] transition-opacity ${isDragOver ? "opacity-60" : "opacity-20"}`}
             style={{ borderColor: color.border }}>
-            {!isDragOver && <span className="text-[var(--theme-text-muted)] text-xs">{_("No cards")}</span>}
+            {!isDragOver && <span className="text-[var(--theme-text-muted)] text-xs">{i18n._({ id: "No cards", message: "No cards" })}</span>}
           </div>
         )}
         {lane.cards.map((card) => (
@@ -446,16 +450,16 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
           <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-2 mt-1">
             <input autoFocus value={newCardTitle} onChange={(e) => setNewCardTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") commitCard(); if (e.key === "Escape") { setAddingCard(false); setNewCardTitle(""); } }}
-              placeholder={_("Card title…")} className="w-full bg-transparent text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none mb-2" />
+              placeholder={i18n._({ id: "Card title…", message: "Card title…" })} className="w-full bg-transparent text-sm text-[var(--theme-text)] placeholder-[var(--theme-text-muted)] focus:outline-none mb-2" />
             <div className="flex gap-1.5">
-              <button onClick={commitCard} className="flex-1 py-1 text-xs rounded-md font-semibold text-[var(--theme-primary-fg)] bg-[var(--theme-primary)] hover:opacity-90 transition-opacity">{_("Add")}</button>
-              <button onClick={() => { setAddingCard(false); setNewCardTitle(""); }} className="flex-1 py-1 text-xs rounded-md text-[var(--theme-text-muted)] bg-[var(--theme-border)] hover:bg-[var(--theme-surface)] transition-colors">{_("Cancel")}</button>
+              <button onClick={commitCard} className="flex-1 py-1 text-xs rounded-md font-semibold text-[var(--theme-primary-fg)] bg-[var(--theme-primary)] hover:opacity-90 transition-opacity">{i18n._({ id: "Add", message: "Add" })}</button>
+              <button onClick={() => { setAddingCard(false); setNewCardTitle(""); }} className="flex-1 py-1 text-xs rounded-md text-[var(--theme-text-muted)] bg-[var(--theme-border)] hover:bg-[var(--theme-surface)] transition-colors">{i18n._({ id: "Cancel", message: "Cancel" })}</button>
             </div>
           </div>
         ) : (
           <button onClick={() => setAddingCard(true)}
             className="flex w-full items-center gap-1.5 px-2 py-1.5 mt-0.5 rounded-lg text-xs text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg)] hover:text-[var(--theme-text)] transition-colors">
-            <Icon name="plus" size="xs" />{_("Add card")}
+            <Icon name="plus" size="xs" />{i18n._({ id: "Add card", message: "Add card" })}
           </button>
         )}
       </div>
@@ -469,7 +473,7 @@ interface CardItemProps {
 }
 
 const CardItem: React.FC<CardItemProps> = ({ card, color, onToggle, onDelete, onDragStart, onOpen }) => {
-  const { _ } = useLingui();
+  useLingui();
   const [hovered, setHovered] = useState(false);
   const hasDesc = Boolean(card.description.trim());
   const commentCount = card.comments.length;
@@ -488,7 +492,7 @@ const CardItem: React.FC<CardItemProps> = ({ card, color, onToggle, onDelete, on
 
         <button onClick={(e) => { e.stopPropagation(); onToggle(); }}
           className={`mt-0.5 w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${card.done ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]" : "border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-primary)]"}`}
-          title={card.done ? _("Mark as todo") : _("Mark as done")}>
+          title={card.done ? i18n._({ id: "Mark as todo", message: "Mark as todo" }) : i18n._({ id: "Mark as done", message: "Mark as done" })}>
           {card.done && <Icon name="check" size="xs" className="text-[var(--theme-primary-fg)]" />}
         </button>
 
@@ -499,7 +503,7 @@ const CardItem: React.FC<CardItemProps> = ({ card, color, onToggle, onDelete, on
 
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className={`shrink-0 mt-0.5 p-0.5 rounded text-[var(--theme-text-muted)] hover:text-red-500 transition-all ${hovered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-          title={_("Delete card")}>
+          title={i18n._({ id: "Delete card", message: "Delete card" })}>
           <Icon name="close" size="xs" />
         </button>
       </div>
@@ -510,7 +514,7 @@ const CardItem: React.FC<CardItemProps> = ({ card, color, onToggle, onDelete, on
             <span
               className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-semibold
                          text-[var(--theme-text-muted)] bg-[var(--theme-surface)] border border-[var(--theme-border)]"
-              title={_("Has description")}
+              title={i18n._({ id: "Has description", message: "Has description" })}
             >
               <Icon name="edit" size="xs" />
             </span>
@@ -541,11 +545,16 @@ interface CardDetailModalProps {
 const CardDetailModal: React.FC<CardDetailModalProps> = ({
   card, laneIdx, laneName, laneColor, onClose, onToggle, onUpdateDescription, onAddComment,
 }) => {
-  const { _ } = useLingui();
+  useLingui();
+  const { settings } = useSettings();
   const [descDraft,    setDescDraft]    = useState(card.description);
   const [commentDraft, setCommentDraft] = useState("");
   const [saving,       setSaving]       = useState(false);
   const descTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paperStyle = useMemo(
+    () => getResolvedPaperStyle(settings.paperStyles, settings.defaultPaperStyleId),
+    [settings.defaultPaperStyleId, settings.paperStyles],
+  );
 
   // Sync description draft when the card is updated externally.
   useEffect(() => { setDescDraft(card.description); }, [card.description]);
@@ -580,7 +589,7 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({
           <div className="flex items-start gap-2 flex-1 min-w-0">
             <button onClick={() => onToggle(laneIdx, card.id)}
               className={`mt-1 shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${card.done ? "border-[var(--theme-primary)] bg-[var(--theme-primary)]" : "border-[var(--theme-border)] bg-transparent hover:border-[var(--theme-primary)]"}`}
-              title={card.done ? _("Mark as todo") : _("Mark as done")}>
+              title={card.done ? i18n._({ id: "Mark as todo", message: "Mark as todo" }) : i18n._({ id: "Mark as done", message: "Mark as done" })}>
               {card.done && <Icon name="check" size="xs" className="text-[var(--theme-primary-fg)]" />}
             </button>
             <h2 className={`flex-1 text-base font-semibold leading-snug ${card.done ? "line-through opacity-60" : "text-[var(--theme-text)]"}`}>{card.title}</h2>
@@ -593,29 +602,47 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({
 
         <div className="flex-1 overflow-y-auto">
           <div className="px-5 py-4">
-            <label className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] block mb-2">{_("Description")}</label>
+            <label className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] block mb-2">{i18n._({ id: "Description", message: "Description" })}</label>
             <textarea value={descDraft} onChange={handleDescChange}
-              placeholder={_("Add a more detailed description…")} rows={4}
+              placeholder={i18n._({ id: "Add a more detailed description… Supports Markdown.", message: "Add a more detailed description… Supports Markdown." })} rows={4}
               className="w-full bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-xl px-3 py-2 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] transition-shadow" />
+            {descDraft.trim() && (
+              <div className="mt-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface)] overflow-hidden">
+                <div className="px-3 py-1.5 border-b border-[var(--theme-border)] text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">
+                  {i18n._({ id: "Preview", message: "Preview" })}
+                </div>
+                <MarkupPreview
+                  source={descDraft}
+                  format="markdown"
+                  className="p-3 text-sm text-[var(--theme-text)] leading-relaxed"
+                  style={{ background: paperStyleBackgroundCss(paperStyle) }}
+                />
+              </div>
+            )}
           </div>
 
           <div className="mx-5 border-t border-[var(--theme-border)]" />
 
           <div className="px-5 py-4">
             <label className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] block mb-3">
-              {_("Comments")}
+              {i18n._({ id: "Comments", message: "Comments" })}
               {card.comments.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[var(--theme-surface)] text-[var(--theme-text-muted)] text-[9px] font-bold">{card.comments.length}</span>
               )}
             </label>
             {card.comments.length === 0
-              ? <p className="text-[11px] text-[var(--theme-text-muted)] italic">{_("No comments yet.")}</p>
+              ? <p className="text-[11px] text-[var(--theme-text-muted)] italic">{i18n._({ id: "No comments yet.", message: "No comments yet." })}</p>
               : (
                 <div className="flex flex-col gap-2">
                   {[...card.comments].reverse().map((c) => (
-                    <div key={c.id} className="rounded-xl bg-[var(--theme-surface)] border border-[var(--theme-border)] px-3 py-2.5">
+                   <div key={c.id} className="rounded-xl bg-[var(--theme-surface)] border border-[var(--theme-border)] px-3 py-2.5">
                       <div className="text-[10px] text-[var(--theme-text-muted)] mb-1 tabular-nums">{fmtDate(c.date)}</div>
-                      <p className="text-sm text-[var(--theme-text)] whitespace-pre-wrap leading-relaxed">{c.text}</p>
+                      <MarkupPreview
+                        source={c.text}
+                        format="markdown"
+                        className="text-sm text-[var(--theme-text)] leading-relaxed"
+                        style={{ background: paperStyleBackgroundCss(paperStyle) }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -627,11 +654,11 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({
         <div className="shrink-0 px-5 pb-4 pt-3 border-t border-[var(--theme-border)] bg-[var(--theme-surface)]">
           <textarea value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void handlePostComment(); }}
-            placeholder={_("Write a comment… (Cmd+Enter to post)")} rows={2}
+            placeholder={i18n._({ id: "Write a comment… Supports Markdown. (Cmd+Enter to post)", message: "Write a comment… Supports Markdown. (Cmd+Enter to post)" })} rows={2}
             className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl px-3 py-2 text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)] transition-shadow mb-2" />
           <button onClick={() => void handlePostComment()} disabled={!commentDraft.trim() || saving}
             className="px-4 py-1.5 text-xs font-bold text-[var(--theme-primary-fg)] bg-[var(--theme-primary)] rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity select-none">
-            {saving ? _("Posting…") : _("Post comment")}
+            {saving ? i18n._({ id: "Posting…", message: "Posting…" }) : i18n._({ id: "Post comment", message: "Post comment" })}
           </button>
         </div>
       </div>

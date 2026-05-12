@@ -1,4 +1,3 @@
-
 //
 // Document Management System — saucer expose() bindings.
 //
@@ -11,302 +10,69 @@
 
 import type { NlpEnvelope } from "./nlp-service";
 
-// DMS payload types (TS-canonical, component-friendly)
+import type {
+  FsEntry,
+  DirTree,
+  ReadFileResult,
+  IndexResult,
+  BulkIndexResult,
+  AsyncTransferStartResult,
+  SearchResult,
+  SearchResults,
+  IndexStatus,
+  DocMetadata,
+  WorkflowState,
+  WorkflowTransition,
+  ZoneWorkflow,
+  DocumentLink,
+  DocumentLifecycle,
+  FolderDashboardItem,
+  FolderDashboardData,
+  Zone,
+  ZoneHistoryItem,
+  OcrResult,
+  BookmarkRoot,
+  BookmarkKind,
+  Bookmark,
+  BookmarkResolveResult,
+  DiskUsageInfo,
+  ZoneDiskUsage,
+  PaletteEntry,
+  RgbHistogram,
+  ImageAnalysis,
+  SvgPalette,
+  SvgConvertOpts,
+  GltfMode,
+  GltfConvertOpts,
+  MeshConvertResult,
+  Keyword,
+  Entity,
+  ProgressPhase,
+  DmsProgressEvent,
+} from "./dms-types";
 
-export type FsEntryKind = "file" | "dir" | "symlink";
+import {
+  mapEntry,
+  mapDirTree,
+  mapKeyword,
+  mapEntity,
+  mapKeywords,
+  mapEntities,
+  mapReadFile,
+  mapIndexResult,
+  mapSearchResult,
+  mapSearchResults,
+  mapIndexStatus,
+  mapDocMetadata,
+  mapWorkflowState,
+  mapWorkflowTransition,
+  mapDocumentLink,
+  mapDocumentLifecycle,
+  mapZoneWorkflow,
+  mapFolderDashboard,
+} from "./dms-mappers";
 
-export interface FsEntry {
-  name:      string;
-  path:      string;        // absolute path
-  kind:      FsEntryKind;
-  size?:     number;        // bytes
-  modified?: number;        // Unix ms
-  mime?:     string;        // guessed from extension
-  indexed?:  boolean;       // has a record in the DMS index
-}
-
-export interface DirTree {
-  path:    string;
-  entries: FsEntry[];
-}
-
-export interface ReadFileResult {
-  path:       string;
-  filename:   string;
-  content:    string | null;  // null for binary files
-  size:       number;
-  mtime:      number;
-  mimeType:   string;
-  lineCount:  number;
-  truncated:  boolean;
-  binary:     boolean;
-}
-
-export interface IndexResult {
-  docId:         number;
-  path:          string;
-  filename:      string;
-  mimeType:      string;
-  snippet:       string;
-  keywords:      Keyword[];
-  entities:      Entity[];
-  sentiment:     number;
-  sentimentLabel:string;
-  lang:          string;
-  dimensions:    number;
-  indexedAt:     number;
-  unchanged:     boolean;
-}
-
-export interface BulkIndexResult {
-  taskId:     string;
-  totalFiles: number;
-}
-
-export interface SearchResult {
-  docId:     number;
-  path:      string;
-  filename:  string;
-  score:     number;
-  /** How the document was matched: "filename" | "snippet" | "keyword" | "fulltext" | "semantic" | "hybrid" */
-  match:     string;
-  snippet:   string;
-  mimeType:  string;
-  keywords:  Keyword[];
-  sentiment: number;
-  lang:      string;
-}
-
-export interface SearchResults {
-  strategy: "semantic" | "keyword";
-  query:    string;
-  results:  SearchResult[];
-}
-
-export interface IndexStatus {
-  totalDocs:     number;
-  bulkActive:    boolean;
-  lastIndexedAt: number;
-}
-
-export interface DocMetadata {
-  docId:          number;
-  path:           string;
-  filename:       string;
-  extension:      string;
-  mimeType:       string;
-  sizeBytes:      number;
-  mtime:          number;
-  indexedAt:      number;
-  snippet:        string;
-  keywords:       Keyword[];
-  entities:       Entity[];
-  sentiment:      number;
-  sentimentLabel: string;
-  lang:           string;
-  hasEmbedding:   boolean;
-  dimensions:     number;
-}
-
-/** A Zone is a named project workspace.
- *  `in_path`  = source folder (user's original documents)
- *  `out_path` = workspace folder (Papiere index + processed files)
- */
-export interface Zone {
-  in_path:         string;
-  out_path:        string;
-  name:            string;
-  description:     string;
-  taxonomy_domain: string;
-}
-
-export interface ZoneHistoryItem {
-  name:            string;
-  in_path:         string;
-  out_path:        string;
-  last_visited:    number;
-  description:     string;
-  taxonomy_domain: string;
-  /** True when the zone DB is AES-256 encrypted via SQLCipher. */
-  is_encrypted?:   boolean;
-}
-
-export interface OcrResult {
-  text:   string;
-  cached: boolean;
-  quality?: "ok" | "low" | "garbage";
-}
-
-/** Target kind for a bookmark — a folder or anything else (file, image, …). */
-export type BookmarkKind = "file" | "folder";
-
-/**
- * A Bookmark is a named quick-jump target that lives inside a Zone.
- *
- * `target` is a zone-relative materialized path, e.g.:
- *   - `path/to/file.py`        → whole file
- *   - `path/to/file.py?10:12`  → line range 10–12 (inclusive)
- *   - `path/to/file.py?10:`    → from line 10 to EOF
- *   - `path/to/folder/`        → directory (trailing slash)
- *   - `path/to/image.png`      → image file (kind = "file")
- *
- * Canonical URI:  `/#<zoneName>/<target>`
- */
-export interface Bookmark {
-  id:         number;
-  zone_name:  string;
-  label:      string;
-  /** Zone-relative path, optionally with `?<from>:<to>` suffix. */
-  target:     string;
-  kind:       BookmarkKind;
-  line_from:  number;   // 0 = not specified
-  line_to:    number;   // 0 = not specified (open range)
-  sort_order: number;
-  created_at: number;
-  updated_at: number;
-}
-
-export interface BookmarkResolveResult {
-  abs_path:  string;
-  line_from: number;
-  line_to:   number;
-  kind:      BookmarkKind;
-  exists:    boolean;
-  zone_name: string;
-  target:    string;
-}
-
-
-
-
-/** Disk-usage figures for one filesystem path (volume). */
-export interface DiskUsageInfo {
-  path:       string;
-  capacity:   number;   // bytes
-  free:       number;   // bytes (including reserved blocks)
-  available:  number;   // bytes usable by the process
-  used:       number;   // capacity − free
-  usedRatio:  number;   // 0.0 – 1.0
-}
-
-/** Zone disk-usage report returned by dms_zone_disk_usage. */
-export interface ZoneDiskUsage {
-  zone:     string;
-  in_path:  DiskUsageInfo;
-  out_path?: DiskUsageInfo;   // only present when out_path is on a different volume
-}
-
-
-/**
- * Build the canonical display URI for a bookmark:
- *   `/#<zoneName>/<target>`
- */
-export function bookmarkUri(zoneName: string, target: string): string {
-  return `/#${zoneName}/${target}`;
-}
-
-/**
- * Parse a canonical bookmark URI (`/#<zone>/<target>`) back into its parts.
- * Returns `null` if the string is not a valid bookmark URI.
- */
-export function parseBookmarkUri(uri: string): { zone: string; target: string } | null {
-  if (!uri.startsWith("/#")) return null;
-  const rest = uri.slice(2);               // "<zone>/<target>"
-  const slash = rest.indexOf("/");
-  if (slash < 0) return null;
-  return { zone: rest.slice(0, slash), target: rest.slice(slash + 1) };
-}
-
-/**
- * Parse the `?<from>:<to>` suffix out of a zone-relative target string.
- * Returns the bare path and (optionally) the line numbers.
- */
-export function parseBookmarkTarget(target: string): {
-  path:      string;
-  lineFrom?: number;
-  lineTo?:   number;
-} {
-  const q = target.lastIndexOf("?");
-  if (q < 0) return { path: target };
-  const spec  = target.slice(q + 1);
-  const colon = spec.indexOf(":");
-  if (colon < 0) return { path: target }; // no colon → treat whole string as path
-  const fromStr = spec.slice(0, colon);
-  const toStr   = spec.slice(colon + 1);
-  const lineFrom = fromStr ? parseInt(fromStr, 10) : undefined;
-  const lineTo   = toStr   ? parseInt(toStr,   10) : undefined;
-  if (lineFrom !== undefined && isNaN(lineFrom)) return { path: target };
-  return { path: target.slice(0, q), lineFrom, lineTo };
-}
-
-export interface PaletteEntry {
-  r: number; g: number; b: number;
-  hex: string;
-  count: number;
-  pct: number;
-}
-export interface RgbHistogram { r: number[]; g: number[]; b: number[]; }
-export interface ImageAnalysis {
-  width: number; height: number;
-  palette: PaletteEntry[];
-  histogram: RgbHistogram;
-}
-export type SvgPalette =
-  | "db8" | "db16" | "db32"
-  | "spectrum14" | "spectrum16"
-  | "auto8" | "auto16" | "auto32";
-export interface SvgConvertOpts {
-  palette?: SvgPalette;
-  smooth?: boolean;
-  gridSize?: number;
-}
-
-export type GltfMode = "solid" | "wireframe" | "pixelperfect";
-
-export interface GltfConvertOpts {
-  palette?: SvgPalette;
-  smooth?:  boolean;
-  mode?:    GltfMode;
-  gridSize?: number;
-  depthScale?: number;
-  useVertexColors?: boolean;
-  maxDim?: number;
-  blurSigma?: number;
-}
-
-export interface MeshConvertResult {
-  outPath:    string;
-  sizeBytes:  number;
-  mode:       string;
-  gridSize:   number;
-  depthScale: number;
-  sourceSize?: { w: number; h: number };
-}
-
-export interface Keyword {
-  term:       string;
-  frequency:  number;
-  tfidfScore: number;
-  pos:        string;
-}
-
-export interface Entity {
-  text:       string;
-  type:       string;
-  position:   number;
-  confidence: number;
-}
-
-
-export type ProgressPhase = "start" | "indexing" | "complete";
-
-export interface DmsProgressEvent {
-  phase:   ProgressPhase;
-  file?:   string;
-  done:    number;
-  total:   number;
-  errors:  number;
-}
+import type { FileStats } from "./file-utils";
 
 // Saucer call helper
 //
@@ -333,154 +99,6 @@ async function call<T>(
     return { ok: false, error: String(e) };
   }
 }
-
-// C++ → TS shape mappers
-// C++ uses snake_case and some field names differ from our TS conventions.
-// All translation happens here so components never see raw C++ shapes.
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapEntry(raw: any): FsEntry {
-  return {
-    name:     String(raw.name ?? ""),
-    path:     String(raw.path ?? ""),
-    kind:     raw.is_dir ? "dir" : "file",
-    size:     typeof raw.size === "number" ? raw.size : undefined,
-    modified: typeof raw.mtime === "number" ? raw.mtime * 1000 : undefined,
-    mime:     typeof raw.mime_type === "string" ? raw.mime_type : undefined,
-    indexed:  !!raw.indexed,
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapDirTree(raw: any): DirTree {
-  return {
-    path:    String(raw.path ?? ""),
-    entries: Array.isArray(raw.items) ? raw.items.map(mapEntry) : [],
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapKeyword(raw: any): Keyword {
-  return {
-    term:       String(raw.term ?? ""),
-    frequency:  Number(raw.frequency ?? 0),
-    tfidfScore: Number(raw.tfidf_score ?? 0),
-    pos:        String(raw.pos ?? ""),
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapEntity(raw: any): Entity {
-  return {
-    text:       String(raw.text ?? ""),
-    type:       String(raw.type ?? ""),
-    position:   Number(raw.position ?? 0),
-    confidence: Number(raw.confidence ?? 0),
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapKeywords(raw: any): Keyword[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map(mapKeyword);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapEntities(raw: any): Entity[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map(mapEntity);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapReadFile(raw: any): ReadFileResult {
-  return {
-    path:      String(raw.path ?? ""),
-    filename:  String(raw.filename ?? ""),
-    content:   raw.binary ? null : (typeof raw.content === "string" ? raw.content : null),
-    size:      Number(raw.size ?? 0),
-    mtime:     Number(raw.mtime ?? 0),
-    mimeType:  String(raw.mime_type ?? ""),
-    lineCount: Number(raw.line_count ?? 0),
-    truncated: !!raw.truncated,
-    binary:    !!raw.binary,
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapIndexResult(raw: any): IndexResult {
-  return {
-    docId:          Number(raw.doc_id ?? 0),
-    path:           String(raw.path ?? ""),
-    filename:       String(raw.filename ?? ""),
-    mimeType:       String(raw.mime_type ?? ""),
-    snippet:        String(raw.snippet ?? ""),
-    keywords:       mapKeywords(raw.keywords),
-    entities:       mapEntities(raw.entities),
-    sentiment:      Number(raw.sentiment ?? 0),
-    sentimentLabel: String(raw.sentiment_label ?? "neutral"),
-    lang:           String(raw.lang ?? "en"),
-    dimensions:     Number(raw.dimensions ?? 0),
-    indexedAt:      Number(raw.indexed_at ?? 0),
-    unchanged:      !!raw.unchanged,
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSearchResult(raw: any): SearchResult {
-  return {
-    docId:     Number(raw.doc_id ?? 0),
-    path:      String(raw.path ?? ""),
-    filename:  String(raw.filename ?? ""),
-    score:     Number(raw.score ?? 0),
-    match:     String(raw.match ?? ""),
-    snippet:   String(raw.snippet ?? ""),
-    mimeType:  String(raw.mime_type ?? ""),
-    keywords:  mapKeywords(raw.keywords),
-    sentiment: Number(raw.sentiment ?? 0),
-    lang:      String(raw.lang ?? "en"),
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSearchResults(raw: any): SearchResults {
-  return {
-    strategy: raw.strategy === "semantic" ? "semantic" : "keyword",
-    query:    String(raw.query ?? ""),
-    results:  Array.isArray(raw.results) ? raw.results.map(mapSearchResult) : [],
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapIndexStatus(raw: any): IndexStatus {
-  return {
-    totalDocs:     Number(raw.total_docs ?? 0),
-    bulkActive:    !!raw.bulk_active,
-    lastIndexedAt: Number(raw.last_indexed_at ?? 0),
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapDocMetadata(raw: any): DocMetadata {
-  return {
-    docId:          Number(raw.doc_id ?? 0),
-    path:           String(raw.path ?? ""),
-    filename:       String(raw.filename ?? ""),
-    extension:      String(raw.extension ?? ""),
-    mimeType:       String(raw.mime_type ?? ""),
-    sizeBytes:      Number(raw.size_bytes ?? 0),
-    mtime:          Number(raw.mtime ?? 0),
-    indexedAt:      Number(raw.indexed_at ?? 0),
-    snippet:        String(raw.snippet ?? ""),
-    keywords:       mapKeywords(raw.keywords),
-    entities:       mapEntities(raw.entities),
-    sentiment:      Number(raw.sentiment ?? 0),
-    sentimentLabel: String(raw.sentiment_label ?? "neutral"),
-    lang:           String(raw.lang ?? "en"),
-    hasEmbedding:   !!raw.has_embedding,
-    dimensions:     Number(raw.dimensions ?? 0),
-  };
-}
-
 
 export const dms = {
 
@@ -738,31 +356,6 @@ export const dms = {
 
 
   /**
-   * Copy one or more files/dirs into `destDir`.
-   * Calls C++ binding `dms_copy_files(sources_json, destDir, conflict)`.
-   * `conflict` = "replace" | "keep" | "skip"  (default "keep")
-   */
-  copyFiles: async (
-    sources: string[],
-    destDir: string,
-    conflict: "replace" | "keep" | "skip" = "keep",
-  ): Promise<NlpEnvelope<{ copied: number; skipped: number; errors: string[] }>> => {
-    return call(binding("dms_copy_files"), JSON.stringify(sources), destDir, conflict);
-  },
-
-  /**
-   * Move one or more files/dirs into `destDir`.
-   * Calls C++ binding `dms_move_files(sources_json, destDir, conflict)`.
-   */
-  moveFiles: async (
-    sources: string[],
-    destDir: string,
-    conflict: "replace" | "keep" | "skip" = "keep",
-  ): Promise<NlpEnvelope<{ moved: number; skipped: number; errors: string[] }>> => {
-    return call(binding("dms_move_files"), JSON.stringify(sources), destDir, conflict);
-  },
-
-  /**
    * Permanently delete files/dirs.
    * Calls C++ binding `dms_delete_files(paths_json)`.
    */
@@ -837,19 +430,147 @@ export const dms = {
   /** True when running inside the saucer webview (C++ bindings present). */
   isConnected: (): boolean => typeof window.saucer?.call === "function",
 
+  /** Lifecycle/workflow APIs for documents and folder summaries. */
+  lifecycle: {
+    snapshot: async (ref: string): Promise<NlpEnvelope<DocumentLifecycle>> => {
+      const res = await call<unknown>(binding("dms_document_lifecycle"), ref);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: mapDocumentLifecycle(res.data) };
+    },
+
+    timeline: async (ref: string, limit = 50): Promise<NlpEnvelope<Array<Record<string, unknown>>>> => {
+      const res = await call<any>(binding("dms_document_timeline"), ref, limit);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: Array.isArray(res.data.events) ? res.data.events : [] };
+    },
+
+    workflow: async (zoneName = ""): Promise<NlpEnvelope<ZoneWorkflow>> => {
+      const res = await call<unknown>(binding("dms_zone_workflow"), zoneName);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: mapZoneWorkflow(res.data) };
+    },
+
+    saveWorkflow: async (zoneName: string, workflow: ZoneWorkflow): Promise<NlpEnvelope<ZoneWorkflow>> => {
+      const res = await call<unknown>(binding("dms_save_zone_workflow"), zoneName, JSON.stringify(workflow));
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: mapZoneWorkflow(res.data) };
+    },
+
+    transition: async (
+      ref: string,
+      nextState: string,
+      actor = "user",
+      reason = "",
+    ): Promise<NlpEnvelope<{ documentUid: string; workflowId: string; workflowState: string; updatedAt: number }>> => {
+      const res = await call<any>(binding("dms_document_workflow_transition"), ref, nextState, actor, reason);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return {
+        ok: true,
+        data: {
+          documentUid: String(res.data.document_uid ?? ""),
+          workflowId: String(res.data.workflow_id ?? ""),
+          workflowState: String(res.data.workflow_state ?? ""),
+          updatedAt: Number(res.data.updated_at ?? 0),
+        },
+      };
+    },
+
+    links: async (ref: string, limit = 20): Promise<NlpEnvelope<DocumentLink[]>> => {
+      const res = await call<unknown[]>(binding("dms_document_links"), ref, limit);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: res.data.map(mapDocumentLink) };
+    },
+
+    addLink: async (
+      sourceRef: string,
+      targetRef: string,
+      linkType: string,
+      note = "",
+    ): Promise<NlpEnvelope<DocumentLink>> => {
+      const res = await call<unknown>(binding("dms_add_document_link"), sourceRef, targetRef, linkType, note);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: mapDocumentLink(res.data) };
+    },
+
+    folderDashboard: async (path: string, limit = 12): Promise<NlpEnvelope<FolderDashboardData>> => {
+      const res = await call<unknown>(binding("dms_folder_dashboard"), path, limit);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return { ok: true, data: mapFolderDashboard(res.data) };
+    },
+  },
+
+  /** Transfer and file-mutation APIs with background-task support. */
+  transfer: {
+    copy: async (
+      sources: string[],
+      destDir: string,
+      conflict: "replace" | "keep" | "skip" = "keep",
+    ): Promise<NlpEnvelope<{ copied: number; skipped: number; errors: string[] }>> => {
+      return call(binding("dms_copy_files"), JSON.stringify(sources), destDir, conflict);
+    },
+
+    move: async (
+      sources: string[],
+      destDir: string,
+      conflict: "replace" | "keep" | "skip" = "keep",
+    ): Promise<NlpEnvelope<{ moved: number; skipped: number; errors: string[] }>> => {
+      return call(binding("dms_move_files"), JSON.stringify(sources), destDir, conflict);
+    },
+
+    start: async (
+      operation: "copy" | "move",
+      sources: string[],
+      destDir: string,
+      conflict: "replace" | "keep" | "skip" = "keep",
+    ): Promise<NlpEnvelope<AsyncTransferStartResult>> => {
+      const res = await call<any>(
+        binding("dms_transfer_files_start"),
+        JSON.stringify(sources),
+        destDir,
+        conflict,
+        operation,
+      );
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return {
+        ok: true,
+        data: {
+          taskId: String(res.data.task_id ?? ""),
+          operation,
+          destDir: String(res.data.dest_dir ?? destDir),
+          totalBytes: Number(res.data.total_bytes ?? 0),
+          totalFiles: Number(res.data.total_files ?? 0),
+          skipped: Number(res.data.skipped ?? 0),
+        },
+      };
+    },
+
+    cancel: async (taskId: string): Promise<NlpEnvelope<{ cancelled: boolean; taskId: string }>> => {
+      const res = await call<any>(binding("dms_transfer_cancel"), taskId);
+      if (!res.ok || !res.data) return { ok: res.ok, error: res.error };
+      return {
+        ok: true,
+        data: {
+          cancelled: !!res.data.cancelled,
+          taskId: String(res.data.task_id ?? taskId),
+        },
+      };
+    },
+  },
+
 
   /**
    * Add a bookmark to a zone.
-   * `target` is a zone-relative path (e.g. `"reports/q1.py?5:20"`).
+   * `root` selects the base area and `target` is relative to it.
    * Returns the newly created Bookmark.
    */
   bookmark: {
     add: async (
       zoneName: string,
+      root: BookmarkRoot,
       label: string,
       target: string,
     ): Promise<NlpEnvelope<Bookmark>> => {
-      return call<Bookmark>(binding("dms_bookmark_add"), zoneName, label, target);
+      return call<Bookmark>(binding("dms_bookmark_add"), zoneName, root, label, target);
     },
 
     /**
@@ -867,27 +588,29 @@ export const dms = {
     },
 
     /**
-     * Update label, target, and sort_order of a bookmark.
+     * Update root, label, target, and sort_order of a bookmark.
      * Returns the updated Bookmark.
      */
     update: async (
       id: number,
+      root: BookmarkRoot,
       label: string,
       target: string,
       sortOrder: number,
     ): Promise<NlpEnvelope<Bookmark>> => {
-      return call<Bookmark>(binding("dms_bookmark_update"), id, label, target, sortOrder);
+      return call<Bookmark>(binding("dms_bookmark_update"), id, root, label, target, sortOrder);
     },
 
     /**
-     * Resolve a zone-relative target to an absolute filesystem path.
+     * Resolve a typed bookmark target to an absolute filesystem path.
      * Parses `?<from>:<to>` line-range suffixes and determines `kind`.
      */
     resolve: async (
       zoneName: string,
+      root: BookmarkRoot,
       target: string,
     ): Promise<NlpEnvelope<BookmarkResolveResult>> => {
-      return call<BookmarkResolveResult>(binding("dms_bookmark_resolve"), zoneName, target);
+      return call<BookmarkResolveResult>(binding("dms_bookmark_resolve"), zoneName, root, target);
     },
   },
 
@@ -947,202 +670,8 @@ export function onDmsProgress(listener: ProgressListener): () => void {
   };
 }
 
-//  MIME helpers
-const TEXT_EXTS  = new Set([
-  ".txt", ".md", ".markdown", ".rst", ".csv", ".json", ".xml",
-  ".html", ".htm", ".log", ".yaml", ".yml", ".toml", ".ini",
-  ".cfg", ".conf", ".env",
-]);
-const IMAGE_EXTS = new Set([
-  ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp",
-  ".heic", ".heif", ".avif", ".tga", ".gif", ".svg",
-]);
-
-const VIDEO_EXTS = new Set([
-  ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".ogv", ".flv", ".wmv",
-]);
-const DOC_EXTS   = new Set([".pdf", ".docx", ".odt", ".rtf", ".doc"]);
-const CODE_EXTS  = new Set([
-  ".cpp", ".cc", ".cxx", ".c", ".h", ".hh", ".hpp",
-  ".py", ".js", ".ts", ".jsx", ".tsx", ".rs", ".go",
-  ".java", ".swift", ".kt", ".rb", ".sh", ".bash",
-  ".zsh", ".sql", ".r", ".tex",
-]);
-const AUDIO_EXTS = new Set([
-  ".mp3", ".wav", ".flac", ".m4a", ".ogg", ".aac", ".opus", ".wma",
-]);
-const MODEL3D_EXTS = new Set([
-  ".ply", ".obj", ".gltf", ".glb", ".stl",
-  ".splat", ".spz",           // Gaussian Splat formats
-  ".xyz", ".pcd",             // Point cloud formats
-]);
-const ARCHIVE_EXTS = new Set([
-  ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".tbz2",
-]);
-export const CSS_EXTS = new Set([".css", ".scss", ".sass", ".less"]);
-
-/** True for any 3D / Gaussian-Splat / point-cloud file. */
-export function is3DModelFile(path: string): boolean { return MODEL3D_EXTS.has(extOf(path)); }
-/** Alias used by the viewer – single canonical name across the codebase. */
-export const is3DFile = is3DModelFile;
-
-// Canonical file-kind taxonomy — mirrors kind_for_extension() in dms_bindings.hh.
-export type FileKind =
-  | "image" | "vector" | "audio" | "video" | "document"
-  | "markup" | "style" | "data" | "code"
-  | "archive" | "text" | "model3d" | "other";
-
-// Icon name subset used for FileKind badges — avoids importing from Icon.tsx (circular).
-export type KindIconName =
-  | "image" | "music" | "video" | "document" | "code" | "style"
-  | "database" | "archive" | "file" | "cube";
-
-// Human-readable label + SVG icon name for each kind (used in the AnalysisPanel).
-export const KIND_LABEL: Record<FileKind, string> = {
-  image:    "Image",
-  vector:   "Vector",
-  audio:    "Audio",
-  video:    "Video",
-  document: "Document",
-  markup:   "Markup",
-  style:    "Style",
-  data:     "Data",
-  code:     "Code",
-  archive:  "Archive",
-  text:     "Text",
-  model3d:  "3D Model",
-  other:    "File",
-};
-
-/** Maps each FileKind to an SVG icon name (see Icon.tsx). */
-export const KIND_ICON: Record<FileKind, KindIconName> = {
-  image:    "image",
-  vector:   "image",
-  audio:    "music",
-  video:    "video",
-  document: "document",
-  markup:   "code",
-  style:    "style",
-  data:     "database",
-  code:     "code",
-  archive:  "archive",
-  text:     "document",
-  model3d:  "cube",
-  other:    "file",
-};
-
-/** FileStats — always available for any selected file, DB-first then FS fallback. */
-export interface FileStats {
-  path:    string;
-  name:    string;
-  ext:     string;    // lowercase, no leading dot (e.g. "mp3")
-  kind:    FileKind;
-  mime:    string;
-  size:    number;    // bytes
-  mtime:   number;    // unix seconds
-  indexed: boolean;   // full NLP analysis available
-  inDb:    boolean;   // basic stats are in the DB
-}
-
-export function extOf(path: string): string {
-  const i = path.lastIndexOf(".");
-  return i >= 0 ? path.slice(i).toLowerCase() : "";
-}
-
-export function isTextFile(path: string):    boolean { return TEXT_EXTS.has(extOf(path));    }
-export function isImageFile(path: string):   boolean { return IMAGE_EXTS.has(extOf(path));   }
-export function isDocFile(path: string):     boolean { return DOC_EXTS.has(extOf(path));     }
-export function isCodeFile(path: string):    boolean { return CODE_EXTS.has(extOf(path));    }
-export function isAudioFile(path: string):   boolean { return AUDIO_EXTS.has(extOf(path));   }
-export function isVideoFile(p: string): boolean { return VIDEO_EXTS.has(extOf(p)); }
-export function isSvgFile(path: string):     boolean { return extOf(path) === ".svg";         }
-export function isArchiveFile(path: string): boolean { return ARCHIVE_EXTS.has(extOf(path)); }
-export function isCssFile(path: string):     boolean { return CSS_EXTS.has(extOf(path));     }
-export function isHtmlFile(path: string):    boolean {
-  return new Set([".html", ".htm", ".xhtml"]).has(extOf(path));
-}
-
-/** Derive the FileKind for a path purely from its extension. */
-export function fileKind(path: string): FileKind {
-  const ext = extOf(path);
-  if (isSvgFile(path))         return "vector";
-  if (isImageFile(path))       return "image";
-  if (isAudioFile(path))       return "audio";
-  if (VIDEO_EXTS.has(ext))     return "video";
-  if (is3DModelFile(path))     return "model3d";
-  if (isDocFile(path))         return "document";
-  if (CSS_EXTS.has(ext))       return "style";
-  if (isHtmlFile(path))        return "markup";
-  const DATA = new Set([".json",".yaml",".yml",".toml",".csv",".sql",".ini",".env",".conf",".cfg"]);
-  if (DATA.has(ext))           return "data";
-  if (ARCHIVE_EXTS.has(ext))   return "archive";
-  if (isCodeFile(path))        return "code";
-  if (isTextFile(path))        return "text";
-  return "other";
-}
-
-export function isSupportedFile(path: string): boolean {
-  return isTextFile(path)  || isImageFile(path) || isDocFile(path)  ||
-         isCodeFile(path)  || isAudioFile(path) || isVideoFile(path) ||
-         isArchiveFile(path) || isCssFile(path) || is3DModelFile(path);
-}
-
-/** Mirrors saucer::model_downloader::ModelInfo (C++ struct). */
-export interface LlmModelInfo {
-  id:          string;
-  name:        string;
-  description: string;
-  filename:    string;
-  size_bytes:  number;
-  downloaded:  boolean;
-}
-
-export type LlmDownloadStatus =
-  | "idle" | "downloading" | "completed" | "failed" | "cancelled";
-
-export interface LlmDownloadProgress {
-  download_id:      string;
-  model_id:         string;
-  bytes_downloaded: number;
-  total_bytes:      number;
-  status:           LlmDownloadStatus;
-  error_message:    string;
-}
-
-export const models = {
-  /** List all catalog entries with their current download state. */
-  list: async (): Promise<LlmModelInfo[]> => {
-    const raw = await window.saucer!.call<string>("model_list", []);
-    try { return JSON.parse(raw) as LlmModelInfo[]; } catch { return []; }
-  },
-
-  /** Start downloading a model.  Returns download_id or "error:…". */
-  start: (modelId: string) =>
-    window.saucer!.call<string>("model_start", [modelId]),
-
-  /** Poll progress for an active download. */
-  progress: async (downloadId: string): Promise<LlmDownloadProgress> => {
-    const raw = await window.saucer!.call<string>("model_progress", [downloadId]);
-    return JSON.parse(raw) as LlmDownloadProgress;
-  },
-
-  /** Cancel an active download.  Returns true if the cancellation was registered. */
-  cancel: (downloadId: string) =>
-    window.saucer!.call<boolean>("model_cancel", [downloadId]),
-
-  /** Delete a downloaded model file from disk. */
-  remove: (modelId: string) =>
-    window.saucer!.call<boolean>("model_delete", [modelId]),
-
-  /** Get the absolute path to a downloaded model file, or "" if absent. */
-  path: (modelId: string) =>
-    window.saucer!.call<string>("model_path", [modelId]),
-
-  /** Get the current LLM models directory. */
-  getModelsDir: () =>
-    window.saucer!.call<string>("model_get_models_dir", []),
-
-  /** Persist a new LLM models directory.  Takes effect on next launch. */
-  setModelsDir: (path: string) =>
-    window.saucer!.call<string>("model_set_models_dir", [path]),
-};
+// Re-exports — keep all existing import paths working
+export * from "./dms-types";
+export * from "./file-utils";
+export { models } from "./model-service";
+export type { LlmModelInfo, LlmDownloadStatus, LlmDownloadProgress } from "./model-service";

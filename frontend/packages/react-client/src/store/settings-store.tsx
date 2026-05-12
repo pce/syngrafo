@@ -24,6 +24,11 @@ import {
   LOCALES,
   type SupportedLocale,
 } from "../i18n";
+import {
+  DEFAULT_PAPER_STYLES,
+  ensurePaperStyles,
+  type PaperStylePreset,
+} from "../models/paper-style";
 
 
 export interface AppSettings {
@@ -33,6 +38,12 @@ export interface AppSettings {
    * Default: 10 485 760 (10 MB).
    */
   svgPreviewMaxBytes: number;
+
+  /**
+   * Files at or above this threshold are copied/moved in the background instead
+   * of blocking the UI.
+   */
+  asyncCopyThresholdBytes: number;
 
   /**
    * When true, closing the main window hides it to the system tray instead of
@@ -52,13 +63,25 @@ export interface AppSettings {
    * Default: detected from navigator.languages, falls back to "en".
    */
   locale: SupportedLocale;
+
+  /**
+   * Saved paper appearance presets used by lightweight document surfaces and as
+   * the default page background for newly created editor documents.
+   */
+  paperStyles: PaperStylePreset[];
+
+  /** The preset applied to new documents and paper-like previews by default. */
+  defaultPaperStyleId: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   svgPreviewMaxBytes: 10 * 1024 * 1024, // 10 MB
+  asyncCopyThresholdBytes: 512 * 1024 * 1024, // 512 MB
   closeToSystray:     true,
   autoUpdate:         true,
   locale:             detectLocale(),
+  paperStyles:        DEFAULT_PAPER_STYLES,
+  defaultPaperStyleId: DEFAULT_PAPER_STYLES[0]?.id ?? "paper-classic",
 };
 
 const SETTINGS_KEY = "syngrafo_settings";
@@ -79,6 +102,16 @@ interface SettingsCtx {
 
 const SettingsContext = createContext<SettingsCtx | null>(null);
 
+function normaliseSettings(stored?: Partial<AppSettings>): AppSettings {
+  const merged = { ...DEFAULT_SETTINGS, ...stored };
+  const paper = ensurePaperStyles(stored?.paperStyles, stored?.defaultPaperStyleId);
+  return {
+    ...merged,
+    paperStyles: paper.styles,
+    defaultPaperStyleId: paper.activeId,
+  };
+}
+
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -92,7 +125,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       if (val) {
         try {
           const stored = JSON.parse(val) as Partial<AppSettings>;
-          next = { ...DEFAULT_SETTINGS, ...stored };
+          next = normaliseSettings(stored);
           setSettingsState(next);
         } catch { /* ignore */ }
       }
@@ -115,7 +148,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, [settings.locale, settingsLoaded]);
 
   const setSetting = useCallback((partial: Partial<AppSettings>) => {
-    setSettingsState((prev) => ({ ...prev, ...partial }));
+    setSettingsState((prev) => normaliseSettings({ ...prev, ...partial }));
   }, []);
 
   const saveSettings = useCallback(async () => {

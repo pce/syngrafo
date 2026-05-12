@@ -21,11 +21,38 @@
  */
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
 
 namespace pce::dms {
+
+enum class BookmarkRoot : uint8_t {
+    Source,
+    Workspace,
+    Notes,
+    Kanban,
+};
+
+[[nodiscard]] constexpr std::string_view bookmark_root_name(BookmarkRoot root) noexcept {
+    switch (root) {
+        case BookmarkRoot::Source:    return "source";
+        case BookmarkRoot::Workspace: return "workspace";
+        case BookmarkRoot::Notes:     return "notes";
+        case BookmarkRoot::Kanban:    return "kanban";
+    }
+    return "workspace";
+}
+
+[[nodiscard]] inline std::optional<BookmarkRoot>
+bookmark_root_from_string(std::string_view raw) noexcept {
+    if (raw == "source")    return BookmarkRoot::Source;
+    if (raw == "workspace") return BookmarkRoot::Workspace;
+    if (raw == "notes")     return BookmarkRoot::Notes;
+    if (raw == "kanban")    return BookmarkRoot::Kanban;
+    return std::nullopt;
+}
 
 /// Pure value type representing a DMS workspace (zone).
 /// No database dependencies — add/remove/query zones through DMSHandle.
@@ -45,7 +72,7 @@ struct Zone {
 // ─────────────────────────────────────────────────────────────────────────────
 /// A Bookmark is a named quick-jump target that lives *inside* a Zone.
 ///
-/// @par Target format (zone-relative materialized path)
+/// @par Target format (root-relative materialized path)
 ///
 ///   path/to/file.py           → whole file
 ///   path/to/file.py?10:12     → line range 10–12 (inclusive)
@@ -53,17 +80,19 @@ struct Zone {
 ///   path/to/folder/           → directory (trailing slash)
 ///   path/to/image.png         → image file (kind="image")
 ///
-/// The target is **zone-relative** (no leading slash, no absolute component).
-/// To obtain the absolute filesystem path, prepend `zone.in_path + "/"`.
+/// The target is relative to a typed bookmark root (`source`, `workspace`,
+/// `notes`, or `kanban`).
 ///
 /// When expressing a bookmark as a URI (e.g. for display or clipboard), use
-/// the canonical form:  `/#zone/<target>`  where `<zone>` is the zone name.
-/// Example:  `/#invoices/reports/q1.py?5:20`
+/// the canonical form:  `/#zone/<root>/<target>`  where `<zone>` is the zone
+/// name and `<root>` is `source`, `workspace`, `notes`, or `kanban`.
+/// Example:  `/#invoices/workspace/reports/q1.py?5:20`
 // ─────────────────────────────────────────────────────────────────────────────
 struct Bookmark {
     int64_t     id{0};
     std::string zone_name;          ///< Zone this bookmark belongs to
     std::string label;              ///< User-provided display name
+    BookmarkRoot root{BookmarkRoot::Workspace}; ///< Base area inside the zone
     /// Zone-relative path + optional `?<from>:<to>` suffix.
     /// Trailing `/` denotes a directory target.
     std::string target;
@@ -77,14 +106,15 @@ struct Bookmark {
 
     /// True when the bookmark has been fully initialised.
     [[nodiscard]] bool valid() const noexcept {
-        return !zone_name.empty() && !target.empty();
+        return !zone_name.empty();
     }
 
     // ── URI helpers ──────────────────────────────────────────────────────────
 
-    /// Return the canonical display URI:  `/#<zone>/<target>`
+    /// Return the canonical display URI:  `/#<zone>/<root>/<target>`
     [[nodiscard]] std::string uri() const {
-        return "/#" + zone_name + "/" + target;
+        const std::string prefix = "/#" + zone_name + "/" + std::string{bookmark_root_name(root)};
+        return target.empty() ? prefix : prefix + "/" + target;
     }
 
     /// Parse a `?<from>:<to>` suffix from `raw_target` and return the bare path.
@@ -116,6 +146,7 @@ struct Bookmark {
 
     /// Derive kind from a bare (no `?…`) target path.
     static std::string infer_kind(std::string_view bare_path) {
+        if (bare_path.empty()) return "folder";
         if (!bare_path.empty() && bare_path.back() == '/') return "folder";
         const auto dot = bare_path.rfind('.');
         if (dot == std::string_view::npos) return "file";
@@ -129,4 +160,3 @@ struct Bookmark {
 };
 
 } // namespace pce::dms
-

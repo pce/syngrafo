@@ -37,14 +37,16 @@ def run(
     cwd: Optional[Path] = None,
     check: bool = True,
     capture_to_log: bool = True,
+    env: Optional[dict[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """Run a subprocess, streaming output to the terminal (and log file if set)."""
     cmd = list(cmd)
     logging.info("Running: %s", " ".join(cmd))
+    proc_env = None if env is None else {**os.environ, **env}
 
     if _LOG_FILE is None or not capture_to_log:
         # Simple path – inherit stdout/stderr so the user sees live output.
-        return subprocess.run(cmd, cwd=(str(cwd) if cwd else None), check=check)
+        return subprocess.run(cmd, cwd=(str(cwd) if cwd else None), check=check, env=proc_env)
 
     # Tee subprocess output to the log file AND stdout simultaneously.
     import threading
@@ -62,6 +64,7 @@ def run(
         proc = subprocess.Popen(
             cmd,
             cwd=(str(cwd) if cwd else None),
+            env=proc_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
@@ -89,6 +92,39 @@ def clean_cmake_cache(build_dir: Path) -> None:
     if cmake_files.is_dir():
         shutil.rmtree(cmake_files)
         logging.info("Cleaned %s/", cmake_files)
+
+
+def _find_lingui_packages(frontend_root: Path) -> List[Path]:
+    packages: List[Path] = []
+    for cfg in frontend_root.glob("**/lingui.config.*"):
+        pkg_dir = cfg.parent
+        if (pkg_dir / "package.json").exists():
+            packages.append(pkg_dir)
+    return sorted(set(packages))
+
+
+def _run_lingui(frontend_root: Path, mode: str) -> None:
+    if mode == "off":
+        logging.info("Lingui catalogs: skipped (--lingui off)")
+        return
+
+    packages = _find_lingui_packages(frontend_root)
+    if not packages:
+        logging.info("Lingui catalogs: no packages with lingui.config.* found")
+        return
+
+    steps = ["compile"] if mode == "compile" else ["extract", "compile"]
+    for pkg in packages:
+        cli = pkg / "node_modules" / "@lingui" / "cli" / "dist" / "lingui.js"
+        if not cli.exists():
+            logging.warning("Lingui CLI not found in %s; skipping", pkg)
+            continue
+        for step in steps:
+            cmd = ["bun", str(cli.resolve()), step]
+            if step == "compile":
+                cmd.append("--typescript")
+            logging.info("Lingui %s in %s...", step, pkg.relative_to(frontend_root.parent))
+            run(cmd, cwd=pkg, env={"CI": "1"})
 
 
 
@@ -346,6 +382,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_debug.add_argument("--deps-mode",
         choices=["auto", "system", "vcpkg", "fetch"], default="auto")
     p_debug.add_argument("--vcpkg-root", type=Path, default=None, metavar="PATH")
+    p_debug.add_argument(
+        "--lingui",
+        choices=["off", "compile", "sync"],
+        default="sync",
+        help="Frontend Lingui step before building: off, compile only, or extract+compile (sync).",
+    )
 
     # release
     p_rel = sub.add_parser("release", help="Build Release target for a platform")
@@ -382,6 +424,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_rel.add_argument(
         "--vcpkg-root", type=Path, default=None, metavar="PATH",
         help="Path to vcpkg root dir (overrides VCPKG_ROOT env var).")
+    p_rel.add_argument(
+        "--lingui",
+        choices=["off", "compile", "sync"],
+        default="compile",
+        help="Frontend Lingui step before configuring release builds.",
+    )
 
     # deploy
     p_dep = sub.add_parser("deploy", help="Package and prepare release for a platform")
@@ -460,7 +508,9 @@ def _cmake_configure_with_retry(
 def _cmd_debug(args: argparse.Namespace) -> int:
     bd: Path = args.build_dir
     sd: Path = args.source_dir
-    frontend_pkg = sd / "frontend" / "packages" / "react-client"
+    frontend_root = sd / "frontend"
+    frontend_pkg = frontend_root / "packages" / "react-client"
+    _run_lingui(frontend_root, args.lingui)
     logging.info("Building frontend...")
     run(["bun", "run", "build.ts", "--minify"], cwd=frontend_pkg)
     logging.info("Configuring CMake (debug)...")
@@ -475,6 +525,7 @@ def _cmd_debug(args: argparse.Namespace) -> int:
 def _cmd_release(args: argparse.Namespace) -> int:
     bd: Path = args.build_dir
     sd: Path = args.source_dir
+    _run_lingui(sd / "frontend", args.lingui)
     logging.info("Configuring Release build for %s in %s", args.platform, bd)
     _cmake_configure_with_retry(
         sd, bd, build_type="Release",

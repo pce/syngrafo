@@ -3,7 +3,7 @@
 # Detection / build order:
 #   1. pkg-config        — covers apt, vcpkg, Homebrew, MacPorts automatically
 #   2. Manual prefix search — Apple Silicon / Intel Homebrew, /usr/local, /usr
-#   3. FetchContent build — SQLite3MultipleCiphers v2.3.3
+#   3. FetchContent build — SQLite3MultipleCiphers v2.3.4
 #      Self-contained: ships its own sqlite3.c amalgamation and all crypto.
 #      Zero external deps on every platform — no OpenSSL, no CommonCrypto,
 #      no BCrypt required.  Supports sqlite3_key()/sqlite3_rekey() for full
@@ -87,7 +87,7 @@ else()
     # sqlite3.c amalgamation and all crypto code — zero external deps on every
     # platform (no OpenSSL, no CommonCrypto, no BCrypt required).
     # Supports sqlite3_key() / sqlite3_rekey() for full SQLCipher API compat.
-    message(STATUS "[syngrafo] No system SQLCipher — fetching SQLite3MultipleCiphers v2.3.3")
+    message(STATUS "[syngrafo] No system SQLCipher — fetching SQLite3MultipleCiphers v2.3.4")
 
     set(SQLITE3MC_BUILD_SHELL OFF CACHE BOOL "" FORCE)
     set(SQLITE3MC_STATIC      ON  CACHE BOOL "" FORCE)
@@ -95,7 +95,7 @@ else()
 
     FetchContent_Declare(
         sqlite3mc
-        URL      https://github.com/utelle/SQLite3MultipleCiphers/archive/refs/tags/v2.3.3.tar.gz
+        URL      https://github.com/utelle/SQLite3MultipleCiphers/archive/refs/tags/v2.3.4.tar.gz
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(sqlite3mc)

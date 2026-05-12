@@ -24,7 +24,13 @@ import React, {
 import type { AudioTrack, Note } from "@/types/audio";
 import { InstrumentType } from "@/types/audio";
 import { usePatchStore } from "@/store/patch-store";
+import {
+  focusElementWithoutScroll,
+  shouldIgnoreShortcutTarget,
+  shouldPreserveTargetFocus,
+} from "@/utils/keyboard";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 
 
 const NOTE_NAMES = [
@@ -32,7 +38,7 @@ const NOTE_NAMES = [
 ] as const;
 
 const INSTRUMENTS = Object.values(InstrumentType);
-const STEP_LENGTHS = [8, 16, 32] as const;
+const STEP_LENGTHS = [3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 16, 20, 24, 32] as const;
 
 const LOOKAHEAD_S = 0.1;  // schedule up to 100 ms ahead
 const TICK_MS     = 25;   // scheduler tick interval
@@ -77,6 +83,8 @@ function playNote(
 
 interface AudioTimelineProps {
   tracks:              AudioTrack[];
+  bpm:                 number;
+  onBpmChange:         (bpm: number) => void;
   onAddTrack:          () => void;
   onTrackModeToggle:   (trackId: string) => void;
   onTrackLengthChange: (trackId: string, length: number) => void;
@@ -100,6 +108,8 @@ interface AudioTimelineProps {
 
 const AudioTimeline: React.FC<AudioTimelineProps> = ({
   tracks,
+  bpm,
+  onBpmChange,
   onAddTrack,
   onTrackLengthChange,
   onTrackMute,
@@ -116,10 +126,10 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
   onPatchIdChange,
 }) => {
   const patchStore = usePatchStore();
-  const { _ } = useLingui();
+  useLingui();
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
-  const [bpm,         setBpm]         = useState(120);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Refs that the scheduler closure reads without re-creating the interval
   const ctxRef      = useRef<AudioContext | null>(null);
@@ -195,8 +205,17 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
     setIsPlaying(false);
   }, []);
 
+  const togglePlayback = useCallback(() => {
+    if (isPlaying) stop();
+    else void start();
+  }, [isPlaying, start, stop]);
+
   useEffect(() => () => {
     if (timerRef.current !== null) clearInterval(timerRef.current);
+  }, []);
+
+  useEffect(() => {
+    focusElementWithoutScroll(containerRef.current);
   }, []);
 
 
@@ -219,33 +238,59 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
 
   const maxSteps = Math.max(...tracks.map(t => t.length), 16);
 
+  const claimKeyboardFocus = useCallback((target: EventTarget | null) => {
+    if (shouldPreserveTargetFocus(target)) return;
+    focusElementWithoutScroll(containerRef.current);
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (shouldIgnoreShortcutTarget(e.target)) return;
+
+    switch (e.code) {
+      case "Space":
+        if (e.repeat) return;
+        e.preventDefault();
+        togglePlayback();
+        return;
+      default:
+        if (e.key.length === 1 || e.key.startsWith("Arrow")) e.preventDefault();
+    }
+  }, [togglePlayback]);
+
 
   return (
-    <div className="flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] select-none overflow-hidden">
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onPointerDownCapture={e => claimKeyboardFocus(e.target)}
+      className="flex flex-col h-full bg-[var(--theme-bg)] text-[var(--theme-text)] select-none overflow-hidden outline-none"
+    >
 
       <div className="flex items-center gap-3 px-3 py-2 bg-[var(--theme-surface)] border-b border-[var(--theme-border)] flex-shrink-0 flex-wrap gap-y-1.5">
 
         <button
-          onClick={isPlaying ? stop : start}
+          onClick={togglePlayback}
+          title={isPlaying ? i18n._({ id: "Stop (Space)", message: "Stop (Space)" }) : i18n._({ id: "Play (Space)", message: "Play (Space)" })}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
             isPlaying
               ? "bg-[var(--theme-danger)]/15 hover:bg-[var(--theme-danger)]/25 text-[var(--theme-danger)]"
               : "bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)]"
           }`}
         >
-          {isPlaying ? _("⏹ Stop") : _("▶ Play")}
+          {isPlaying ? i18n._({ id: "⏹ Stop", message: "⏹ Stop" }) : i18n._({ id: "▶ Play", message: "▶ Play" })}
         </button>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--theme-text-muted)]">{_("BPM")}</span>
+          <span className="text-xs text-[var(--theme-text-muted)]">{i18n._({ id: "BPM", message: "BPM" })}</span>
           <input
             type="range" min={40} max={220} step={1} value={bpm}
-            onChange={e => setBpm(Number(e.target.value))}
+            onChange={e => onBpmChange(Number(e.target.value))}
             className="w-24 accent-[var(--theme-primary)]"
           />
           <input
             type="number" min={40} max={220} value={bpm}
-            onChange={e => { const v = Number(e.target.value); if (v >= 40 && v <= 220) setBpm(v); }}
+            onChange={e => { const v = Number(e.target.value); if (v >= 40 && v <= 220) onBpmChange(v); }}
             className="w-12 text-xs bg-[var(--theme-bg)] border border-[var(--theme-border)]
                        rounded px-1 py-0.5 text-center text-[var(--theme-text)] tabular-nums"
           />
@@ -260,6 +305,10 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
           </>
         )}
 
+        <span className="text-[10px] text-[var(--theme-text-muted)] hidden sm:block">
+          {i18n._({ id: "Space play/pause", message: "Space play/pause" })}
+        </span>
+
         <div className="flex-1" />
 
         <button
@@ -268,7 +317,7 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
                      bg-[var(--theme-surface)] hover:bg-[var(--theme-bg)]
                      text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
         >
-          {_("+ Track")}
+          {i18n._({ id: "+ Track", message: "+ Track" })}
         </button>
       </div>
 
@@ -282,13 +331,13 @@ const AudioTimeline: React.FC<AudioTimelineProps> = ({
               <circle cx="6" cy="18" r="3" />
               <circle cx="18" cy="16" r="3" />
             </svg>
-            <p className="text-sm">{_("No tracks yet.")}</p>
+            <p className="text-sm">{i18n._({ id: "No tracks yet.", message: "No tracks yet." })}</p>
             <button
               onClick={onAddTrack}
               className="px-4 py-1.5 bg-[var(--theme-primary)] hover:opacity-90
                          text-[var(--theme-primary-fg)] text-xs font-semibold rounded-lg"
             >
-              {_("Add Track")}
+              {i18n._({ id: "Add Track", message: "Add Track" })}
             </button>
           </div>
         ) : (
@@ -346,7 +395,7 @@ const StepTrack = memo(function StepTrack({
   const octave      = 4 + (track.octaveOffset ?? 0);
   const isMuted     = track.schedulerMuted && !track.solo;
   const isPatchBlock = track.instrument === InstrumentType.PatchBlock;
-  const { _ } = useLingui();
+  useLingui();
 
   return (
     <div className={`flex border-b border-[var(--theme-border)] transition-opacity duration-150 ${
@@ -365,7 +414,7 @@ const StepTrack = memo(function StepTrack({
           </span>
           <button
             onClick={onMute}
-            title={track.mute ? _("Unmute") : _("Mute")}
+            title={track.mute ? i18n._({ id: "Unmute", message: "Unmute" }) : i18n._({ id: "Mute", message: "Mute" })}
             className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
               track.mute
                 ? "bg-yellow-500/20 text-yellow-400"
@@ -374,7 +423,7 @@ const StepTrack = memo(function StepTrack({
           >M</button>
           <button
             onClick={onSolo}
-            title={track.solo ? _("Unsolo") : _("Solo")}
+            title={track.solo ? i18n._({ id: "Unsolo", message: "Unsolo" }) : i18n._({ id: "Solo", message: "Solo" })}
             className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
               track.solo
                 ? "bg-emerald-500/20 text-emerald-400"
@@ -400,9 +449,9 @@ const StepTrack = memo(function StepTrack({
             onChange={e => onPatchChange(e.target.value)}
             className="text-[10px] bg-[var(--theme-bg)] border border-[var(--theme-primary)]/60
                        rounded px-1 py-0.5 text-[var(--theme-primary)] w-full"
-            title={_("Select which patch this track triggers")}
+            title={i18n._({ id: "Select which patch this track triggers", message: "Select which patch this track triggers" })}
           >
-            <option value="" disabled>{_("— pick patch —")}</option>
+            <option value="" disabled>{i18n._({ id: "— pick patch —", message: "— pick patch —" })}</option>
             {patchEntries.map(e => (
               <option key={e.id} value={e.id}>{e.name}</option>
             ))}
@@ -441,12 +490,12 @@ const StepTrack = memo(function StepTrack({
                        rounded px-1 py-0.5 text-[var(--theme-text)] flex-1"
           >
             {STEP_LENGTHS.map(n => (
-              <option key={n} value={n}>{n} {_("steps")}</option>
+              <option key={n} value={n}>{n} {i18n._({ id: "steps", message: "steps" })}</option>
             ))}
           </select>
           <button
             onClick={onClear}
-            title={_("Clear all steps")}
+            title={i18n._({ id: "Clear all steps", message: "Clear all steps" })}
             className="w-5 h-5 rounded text-[10px] bg-[var(--theme-bg)]
                        border border-[var(--theme-border)]
                        text-[var(--theme-text-muted)] hover:text-red-400 transition-colors"
@@ -473,7 +522,7 @@ const StepTrack = memo(function StepTrack({
                 key={step}
                 onClick={() => onToggle(step)}
                 aria-pressed={active}
-                aria-label={`${_("Step")} ${step + 1}`}
+                aria-label={`Step ${step + 1}`}
                 style={active ? { backgroundColor: track.color } : undefined}
                 className={[
                   "h-full min-h-[36px] rounded-[3px] border transition-all duration-75",

@@ -12,6 +12,7 @@
 #include "../../internal/hashing.hh"
 #include "../../internal/mime.hh"
 #include "../../internal/text_utils.hh"
+#include "../lifecycle/document_lifecycle_service.hh"
 
 #include <atomic>
 #include <filesystem>
@@ -71,19 +72,24 @@ public:
     explicit IndexService(ActiveDbFn                                     active_db,
                           std::mutex&                                    db_mutex,
                           pce::nlp::NLPEngine*                           engine,
-                          std::shared_ptr<pce::nlp::onnx::IOnnxService>  embed_svc)
+                          std::shared_ptr<pce::nlp::onnx::IOnnxService>  embed_svc,
+                          DocumentLifecycleService*                      lifecycle_svc = nullptr)
         : active_db_(std::move(active_db))
         , db_mutex_(db_mutex)
         , engine_(engine)
         , embed_svc_(std::move(embed_svc))
+        , lifecycle_svc_(lifecycle_svc)
     {}
 
 
     /** Route by MIME: read text, call index_one().  Handles PDF/HTML/SVG/text. */
-    [[nodiscard]] Expected<json> index_document(std::string_view path_str);
+    [[nodiscard]] Expected<json> index_document(std::string_view path_str,
+                                                std::string_view extractor = "text");
 
     /** Core pipeline: store → analyze → embed → return result JSON. */
-    [[nodiscard]] Expected<json> index_one(const fs::path& p, std::string_view content);
+    [[nodiscard]] Expected<json> index_one(const fs::path& p,
+                                           std::string_view content,
+                                           std::string_view extractor = "text");
 
     /** Dispatch a background bulk-index job.  Caller owns the jthread. */
     [[nodiscard]] Expected<json> bulk_index_start(std::string_view         dir_path,
@@ -107,10 +113,12 @@ private:
     std::mutex&                                   db_mutex_;
     pce::nlp::NLPEngine*                          engine_;
     std::shared_ptr<pce::nlp::onnx::IOnnxService> embed_svc_;
+    DocumentLifecycleService*                     lifecycle_svc_;
 };
 
 
-inline Expected<json> IndexService::index_document(std::string_view path_str) {
+inline Expected<json> IndexService::index_document(std::string_view path_str,
+                                                   std::string_view extractor) {
     const fs::path p{path_str};
     std::error_code ec;
     const auto mime = mime_for_extension(p.extension().string());
@@ -132,7 +140,7 @@ inline Expected<json> IndexService::index_document(std::string_view path_str) {
                 if (ocr_quality(text) == "garbage")
                     return std::unexpected(std::format(
                         "'{}': PDF OCR quality too low — use dms_ocr_document.", p.filename().string()));
-                return index_one(p, text);
+                return index_one(p, text, extractor);
             }
             if (mime.starts_with("image/") && mime != "image/svg+xml")
                 return std::unexpected(std::format(
@@ -149,12 +157,14 @@ inline Expected<json> IndexService::index_document(std::string_view path_str) {
                     content = strip_html_tags(content);
                 else if (mime == "image/svg+xml")
                     content = extract_svg_text(content);
-                return index_one(p, content);
+                return index_one(p, content, extractor);
             });
         });
 }
 
-inline Expected<json> IndexService::index_one(const fs::path& p, std::string_view content) {
+inline Expected<json> IndexService::index_one(const fs::path& p,
+                                              std::string_view content,
+                                              std::string_view extractor) {
     const auto now     = pce::db::now_unix();
     const auto hash    = hash_hex(content);
     const auto snippet = make_snippet(content);
@@ -163,24 +173,60 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
     const int64_t fsize = (int64_t)fs::file_size(p, ec);
     const int64_t mtime = file_mtime_unix(p);
 
-    auto blob_res     = safe_read_binary(p);
-    auto content_blob = blob_res ? std::make_optional(std::move(*blob_res)) : std::nullopt;
+    const DocumentRegistration base_reg{
+        .doc_id      = 0,
+        .path        = p.string(),
+        .source_path = "",
+        .zone_name   = "",
+        .kind        = kind_for_extension(p.extension().string()),
+        .mime_type   = mime,
+        .size_bytes  = fsize,
+        .mtime       = mtime,
+    };
+    std::string document_uid;
+    if (lifecycle_svc_) {
+        if (auto ensured = lifecycle_svc_->ensure_document(base_reg, "system", "indexer"); ensured)
+            document_uid = std::move(*ensured);
+    }
 
+    int64_t unchanged_doc_id = 0;
+    bool unchanged_index_hit = false;
     {
         std::lock_guard lk{db_mutex_};
         const auto ex = active_db_().from("dms_documents").select({"id", "text_hash"})
                              .where("path = ?", p.string()).first();
         if (ex && ex->try_get<std::string>("text_hash").value_or("") == hash) {
-            const auto id = ex->try_get<int64_t>("id").value_or(0);
+            unchanged_doc_id = ex->try_get<int64_t>("id").value_or(0);
             discard(active_db_().update("dms_documents").set("indexed_at", now)
-                               .where("id = ?", id).execute());
-            return json{{"doc_id", id}, {"path", p.string()}, {"unchanged", true}};
+                               .where("id = ?", unchanged_doc_id).execute());
+            unchanged_index_hit = true;
         }
     }
+    if (unchanged_index_hit) {
+        if (lifecycle_svc_) {
+            DocumentRegistration existing_reg = base_reg;
+            existing_reg.doc_id = unchanged_doc_id;
+            discard(lifecycle_svc_->ensure_document(existing_reg, "system", "indexer"));
+            discard(lifecycle_svc_->record_text_extraction(
+                document_uid.empty() ? p.string() : document_uid,
+                TextContentVersion{
+                    .extractor = std::string{extractor},
+                    .text_hash = hash,
+                    .mime_type = "text/plain",
+                    .payload_json = json{{"path", p.string()}, {"unchanged", true}}.dump(),
+                },
+                "system",
+                "indexer"
+            ));
+        }
+        return json{{"doc_id", unchanged_doc_id}, {"path", p.string()}, {"unchanged", true}};
+    }
+
+    if (lifecycle_svc_ && !document_uid.empty())
+        discard(lifecycle_svc_->transition_state(document_uid, DocumentState::Processing,
+                                                 "system", "indexing started", "indexer"));
 
     return FilePayload{p, mime, std::string{content}}
-
-        // Stage 1: upsert dms_documents row
         | stage([&](FilePayload fp) -> Expected<AnalyzedPayload> {
             int64_t doc_id = 0;
             {
@@ -196,16 +242,19 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                              .value("indexed_at", now)
                              .value("text_hash", hash)
                              .value("snippet",   snippet);
-                if (content_blob) q.value("content_blob", *content_blob);
                 discard(q.on_conflict_replace().execute());
                 doc_id = active_db_().last_insert_rowid();
             }
             if (doc_id == 0)
                 return std::unexpected(std::format("DB upsert failed for '{}'", fp.path.string()));
+            if (lifecycle_svc_) {
+                DocumentRegistration reg = base_reg;
+                reg.doc_id = doc_id;
+                if (auto ensured = lifecycle_svc_->ensure_document(reg, "system", "indexer"); ensured)
+                    document_uid = *ensured;
+            }
             return AnalyzedPayload{std::move(fp), doc_id};
         })
-
-        // Stage 2: NLP — lang detected first so per-language stopwords/stemming apply everywhere
         | stage([&](AnalyzedPayload ap) -> Expected<AnalyzedPayload> {
             if (engine_) {
                 const std::string ts = pce::nlp::strip_urls(ap.file.text); // drop forge/TLD tokens
@@ -220,8 +269,6 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
             }
             return ap;
         })
-
-        // Stage 3: persist notes + embedding + FTS, return result JSON
         | stage([&](AnalyzedPayload ap) -> Expected<json> {
             const auto now2 = pce::db::now_unix();
             {
@@ -254,9 +301,7 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                     .on_conflict_replace()
                     .execute());
             }
-            // FTS5 upsert — raw text, no stopword stripping (FTS5 unicode61 handles IDF weighting)
             {
-                // flatten JSON keyword array → space-separated plain text
                 auto kw_plain = [](const std::string& kw_json) -> std::string {
                     try {
                         std::string out;
@@ -281,11 +326,9 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
                     pce::db::Database::bind(ins, 3, pce::db::to_db_value(kw_plain(ap.kw_json)));
                     pce::db::Database::bind(ins, 4, pce::db::to_db_value(std::string{ap.file.text}));
                     sqlite3_step(ins);
-                } catch (...) {}  // FTS5 not compiled in — silently skip
+                } catch (...) {}
             }
 
-            // Chunk-level indexing — populates dms_chunks with per-passage embeddings.
-            // Embeddings are computed outside the DB lock (ONNX inference is CPU-bound).
             {
                 struct ChunkData { std::string text; std::vector<float> embedding; };
                 const auto raw_chunks = split_into_chunks(ap.file.text);
@@ -322,6 +365,26 @@ inline Expected<json> IndexService::index_one(const fs::path& p, std::string_vie
             auto parse_arr = [](std::string_view s) -> json {
                 try { return json::parse(s); } catch (...) { return json::array(); }
             };
+            if (lifecycle_svc_) {
+                discard(lifecycle_svc_->record_text_extraction(
+                    document_uid.empty() ? ap.file.path.string() : document_uid,
+                    TextContentVersion{
+                        .extractor = std::string{extractor},
+                        .text_hash = hash,
+                        .mime_type = "text/plain",
+                        .payload_json = json{
+                            {"path", ap.file.path.string()},
+                            {"lang", ap.lang},
+                            {"keywords", parse_arr(ap.kw_json)},
+                            {"entities", parse_arr(ap.ents_json)},
+                            {"sentiment", ap.sentiment},
+                            {"sentiment_label", ap.sent_label},
+                        }.dump(),
+                    },
+                    "system",
+                    "indexer"
+                ));
+            }
             return json{
                 {"doc_id",          ap.doc_id},
                 {"path",            ap.file.path.string()},

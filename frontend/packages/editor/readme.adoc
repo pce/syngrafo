@@ -5,10 +5,7 @@
 == Overview
 
 `@syngrafo/editor` is a self-contained React component library that provides a
-block-based document editor built on the Syngrafo Document Model (SDM).  It has
-no framework dependency beyond React 19 and communicates with the native host
-via a thin IPC service (`services/ipc.ts`).
-
+block-based document editor built on the Syngrafo Document Model (SDM).
 == Architecture
 
 ----

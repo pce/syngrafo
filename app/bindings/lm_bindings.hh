@@ -34,6 +34,7 @@
 #include <saucer/webview.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <format>
 #include <print>
 #include <string>
@@ -44,11 +45,12 @@ namespace pce::dms {
 /** @cond INTERNAL — lm push helpers and input validation */
 namespace lm_detail {
 
-inline void push_result(saucer::smartview& wv,
+inline void push_result(saucer::webview*   wv,
                          std::string_view   request_id,
                          std::string_view   text,
                          int32_t            prompt_tokens,
                          int32_t            completion_tokens) {
+    if (!wv) return;
     using json = nlohmann::json;
     const std::string js = std::format(
         "typeof window.__lm_result==='function'"
@@ -57,48 +59,47 @@ inline void push_result(saucer::smartview& wv,
         json(text).dump(),
         prompt_tokens,
         completion_tokens);
-    // basic_smartview::execute() hides webview::execute(cstring_view) via name
-    // hiding — cast to the base class to reach the runtime-string overload.
-    static_cast<saucer::webview&>(wv).execute(js);
+    try { wv->execute(js); } catch (...) {}
 }
 
-inline void push_error(saucer::smartview& wv,
+inline void push_error(saucer::webview*   wv,
                         std::string_view   request_id,
                         std::string_view   message) {
+    if (!wv) return;
     using json = nlohmann::json;
     const std::string js = std::format(
         "typeof window.__lm_error==='function'"
         " && window.__lm_error({},{})",
         json(request_id).dump(),
         json(message).dump());
-    static_cast<saucer::webview&>(wv).execute(js);
+    try { wv->execute(js); } catch (...) {}
 }
 
 /**
  * @brief Spawn a detached thread that blocks on @p ticket.future and pushes
  *        the result (or error) to the page when inference completes.
  *
- * Lifetime: @p wv outlives the thread because both live in the @c start()
- * coroutine frame.  The WorkQueue jthread bounds the future's lifetime to at
- * most @c max_tokens generation steps, so the thread is always finite.
+ * Uses @p wv_ptr (atomic pointer) rather than a reference so the thread can
+ * safely detect when the webview has been torn down (pointer set to null in
+ * ~DMSHandle) and skip the execute() call instead of accessing a dangling ref.
  */
-inline void watch_and_push(saucer::smartview& wv, pce::lm::InferenceTicket ticket) {
-    std::thread([&wv, t = std::move(ticket)]() mutable {
+inline void watch_and_push(std::atomic<saucer::webview*>& wv_ptr, pce::lm::InferenceTicket ticket) {
+    std::thread([&wv_ptr, t = std::move(ticket)]() mutable {
         try {
             auto result = t.future.get();
-            push_result(wv, t.cancel_id,
+            push_result(wv_ptr.load(std::memory_order_acquire), t.cancel_id,
                         result.text,
                         result.prompt_tokens,
                         result.completion_tokens);
         } catch (const std::future_error& fe) {
-            push_error(wv, t.cancel_id,
+            push_error(wv_ptr.load(std::memory_order_acquire), t.cancel_id,
                 fe.code() == std::future_errc::broken_promise
                     ? "request cancelled"
                     : fe.what());
         } catch (const std::exception& e) {
-            push_error(wv, t.cancel_id, e.what());
+            push_error(wv_ptr.load(std::memory_order_acquire), t.cancel_id, e.what());
         } catch (...) {
-            push_error(wv, t.cancel_id, "unknown inference error");
+            push_error(wv_ptr.load(std::memory_order_acquire), t.cancel_id, "unknown inference error");
         }
     }).detach();
 }
@@ -163,11 +164,14 @@ parse_messages(std::string_view json_str) {
  * @param engine    LMEngine instance (stub no-ops when SGF_WITH_LM is off).
  * @param model_dl  ModelDownloader used by @c lm_load to resolve catalog ids
  *                  to on-disk GGUF paths.
+ * @param shared_wv Atomic webview pointer from DMSHandle; used by the
+ *                  watch_and_push thread to detect teardown safely.
  */
 inline void register_lm_bindings(
     saucer::smartview&                             wv,
     pce::lm::LMEngine&                             engine,
-    saucer::model_downloader::ModelDownloader&     model_dl)
+    saucer::model_downloader::ModelDownloader&     model_dl,
+    std::atomic<saucer::webview*>&                 shared_wv)
 {
     using json   = nlohmann::json;
     using string = std::string;
@@ -199,7 +203,7 @@ inline void register_lm_bindings(
     });
 
     wv.expose("lm_chat_start",
-        [&engine, &wv](string messages_json, int max_tokens, float temperature) -> string {
+        [&engine, &shared_wv](string messages_json, int max_tokens, float temperature) -> string {
             auto msgs = lm_detail::parse_messages(messages_json);
             if (!msgs)
                 return err_json(msgs.error());
@@ -217,7 +221,7 @@ inline void register_lm_bindings(
                 return err_json(ticket_result.error());
 
             const auto rid = ticket_result->cancel_id;
-            lm_detail::watch_and_push(wv, std::move(*ticket_result));
+            lm_detail::watch_and_push(shared_wv, std::move(*ticket_result));
 
             std::print("[lm] chat_start: request_id={}\n", rid);
             return ok_json(json{{"request_id", rid}});

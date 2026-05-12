@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import type { BlockInstance, BlockTypeDef, PatchCable, ParamValue } from "@syngrafo/audio";
 import { XYPad } from "./XYPad";
 
@@ -26,7 +27,7 @@ export function BlockCard({
   onXY,
   onTrigger,
 }: BlockCardProps) {
-  const { _ } = useLingui();
+  useLingui();
   const driverOf = useCallback(
     (paramId: string): PatchCable | undefined =>
       cables.find(
@@ -64,7 +65,7 @@ export function BlockCard({
 
         {typeDef.orcTemplate && onTrigger && (
           <button
-            title={_("Trigger")}
+            title={i18n._({ id: "Trigger", message: "Trigger" })}
             onClick={e => {
               e.stopPropagation();
               onTrigger(block.id);
@@ -76,7 +77,7 @@ export function BlockCard({
         )}
 
         <button
-          title={_("Remove block")}
+          title={i18n._({ id: "Remove block", message: "Remove block" })}
           onClick={e => {
             e.stopPropagation();
             onRemove(block.id);
@@ -176,7 +177,7 @@ export function BlockCard({
                       onParam(block.id, paramId, !value);
                     }}
                   >
-                    {value ? _("ON") : _("OFF")}
+                    {value ? i18n._({ id: "ON", message: "ON" }) : i18n._({ id: "OFF", message: "OFF" })}
                   </button>
                 )}
 

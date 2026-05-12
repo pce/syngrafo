@@ -1,12 +1,20 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { FileBrowser, LazyImage } from "@syngrafo/ui";
 import type { FileBrowserEntry } from "@syngrafo/ui";
-import { KeyboardScheme, KEYBOARD_SCHEME_PREF_KEY } from "@syngrafo/shared";
+import {
+  KEYBOARD_SCHEME_PREF_KEY,
+  detectPreferredKeyboardScheme,
+  normalizeKeyboardScheme,
+  type KeyboardScheme,
+} from "@syngrafo/shared";
 import { useDms } from "../../store/dms-store.tsx";
 import {
   dms, isImageFile, isTextFile, isDocFile,
   isSvgFile, isAudioFile, isArchiveFile, isCssFile,
+  onDmsProgress,
+  type DmsProgressEvent,
 } from "@/services/dms-service.ts";
 import type { FsEntry } from "@/services/dms-service.ts";
 import { Icon } from "../Icon";
@@ -26,7 +34,7 @@ function FileIcon({ entry }: { entry: FsEntry }) {
 
 const ImportSelectBox: React.FC = () => {
   const { state, dispatch } = useDms();
-  const { _ } = useLingui();
+  useLingui();
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver,  setIsDragOver]  = useState(false);
   const [queue,       setQueue]       = useState<string[]>([]);
@@ -64,7 +72,7 @@ const ImportSelectBox: React.FC = () => {
     <>
       <div className="flex flex-col gap-2 p-3 bg-[var(--theme-bg)] border-t border-[var(--theme-border)]">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{_("Import to Zone")}</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">{i18n._({ id: "Import to Zone", message: "Import to Zone" })}</span>
         </div>
 
         <div
@@ -95,17 +103,17 @@ const ImportSelectBox: React.FC = () => {
           {isImporting ? (
             <>
               <div className="w-4 h-4 border-2 border-[var(--theme-primary)] border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">{_("Importing…")}</span>
+              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">{i18n._({ id: "Importing…", message: "Importing…" })}</span>
             </>
           ) : isDragOver ? (
             <>
               <Icon name="download" size="xs" className="text-[var(--theme-primary)]" />
-              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">{_("Drop to choose…")}</span>
+              <span className="text-xs font-bold text-[var(--theme-primary)] uppercase tracking-wide">{i18n._({ id: "Drop to choose…", message: "Drop to choose…" })}</span>
             </>
           ) : (
             <>
               <Icon name="plus" size="xs" className="text-[var(--theme-text-muted)]" />
-              <span className="text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wide">{_("Click or Drop to Import")}</span>
+              <span className="text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wide">{i18n._({ id: "Click or Drop to Import", message: "Click or Drop to Import" })}</span>
             </>
           )}
         </div>
@@ -134,24 +142,127 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
   onPathChange,
 }) => {
   const { state, dispatch } = useDms();
-  const { _ } = useLingui();
+  useLingui();
   const [loading, setLoading] = useState(false);
-  const [keyboardScheme, setKeyboardScheme] = useState<KeyboardScheme>("macos");
+  const [keyboardScheme, setKeyboardScheme] = useState<KeyboardScheme>(detectPreferredKeyboardScheme());
+  const [transferEntries, setTransferEntries] = useState<Record<string, {
+    taskId: string;
+    name: string;
+    path: string;
+    kind: "dir" | "file";
+    size?: number;
+    modified?: number;
+    transferLabel: string;
+    transferProgress: number;
+    transferOperation: "copy" | "move";
+    destDir: string;
+    sourceParentDirs: string[];
+  }>>({});
   const onPathChangeRef = useRef(onPathChange);
   useEffect(() => { onPathChangeRef.current = onPathChange; }, [onPathChange]);
 
   useEffect(() => {
     dms.loadPreference(KEYBOARD_SCHEME_PREF_KEY).then(value => {
-      if (value && ["macos", "windows", "vi"].includes(value)) {
-        setKeyboardScheme(value as KeyboardScheme);
-      }
+      setKeyboardScheme(normalizeKeyboardScheme(value));
     });
   }, []);
 
-  const handleSchemeChange = useCallback((scheme: KeyboardScheme) => {
-    setKeyboardScheme(scheme);
-    dms.savePreference(KEYBOARD_SCHEME_PREF_KEY, scheme);
-  }, []);
+  useEffect(() => {
+    const refreshCurrentPath = async () => {
+      if (!state.currentPath) return;
+      const res = await dms.scanDir(state.currentPath);
+      if (res.ok && res.data) dispatch({ type: "SET_ENTRIES", entries: res.data.entries });
+    };
+
+    const unsubscribe = onDmsProgress((event: DmsProgressEvent) => {
+      // ── indexing progress (bulk-index) ────────────────────────────────────
+      if (event.kind === "indexing" || (!event.kind && !event.task_id && !event.operation)) {
+        if (event.phase === "progress" || event.phase === "complete") {
+          dispatch({
+            type: "SET_INDEX_STATUS",
+            status: {
+              total:   event.total  ?? 0,
+              indexed: event.done   ?? 0,
+              errors:  event.errors ?? 0,
+            },
+          });
+        }
+        if (event.phase === "complete" || event.phase === "cancelled") {
+          dispatch({ type: "SET_INDEXING", indexing: false });
+        }
+        return;
+      }
+
+      // ── transfer progress (copy / move) ───────────────────────────────────
+      if (event.kind !== "transfer" || !event.task_id || !event.operation) return;
+
+      if (event.phase === "start" && Array.isArray(event.entries)) {
+        setTransferEntries((prev) => {
+          const next = { ...prev };
+          for (const entry of event.entries ?? []) {
+            next[entry.target_path] = {
+              taskId: event.task_id,
+              name: entry.name,
+              path: entry.target_path,
+              kind: entry.is_dir ? "dir" : "file",
+              size: entry.size_bytes,
+              modified: Date.now(),
+              transferLabel: event.operation === "move" ? "moving" : "copying",
+              transferProgress: 0,
+              transferOperation: event.operation,
+              destDir: event.dest_dir ?? "",
+              sourceParentDirs: event.source_parent_dirs ?? [],
+            };
+          }
+          return next;
+        });
+        return;
+      }
+
+      const progress = event.total_bytes && event.total_bytes > 0
+        ? Math.round(((event.done_bytes ?? 0) / event.total_bytes) * 100)
+        : (event.phase === "complete" ? 100 : 0);
+
+      if (event.target_path) {
+        setTransferEntries((prev) => {
+          const current = prev[event.target_path ?? ""];
+          if (!current) return prev;
+          return {
+            ...prev,
+            [event.target_path!]: {
+              ...current,
+              transferProgress: progress,
+              transferLabel: event.phase === "cancelled"
+                ? "cancelled"
+                : event.phase === "complete"
+                  ? "finalizing"
+                  : current.transferLabel,
+            },
+          };
+        });
+      }
+
+      if (event.phase === "complete" || event.phase === "cancelled") {
+        const sourceParentDirs = event.source_parent_dirs ?? [];
+        const affectsCurrentPath =
+          !!state.currentPath &&
+          ((event.dest_dir && state.currentPath === event.dest_dir) ||
+           sourceParentDirs.includes(state.currentPath));
+        if (affectsCurrentPath) void refreshCurrentPath();
+        setTransferEntries((prev) => {
+          const next = { ...prev };
+          for (const [path, entry] of Object.entries(prev)) {
+            if (entry.destDir === (event.dest_dir ?? "")) {
+              if (entry.taskId !== event.task_id) continue;
+              delete next[path];
+            }
+          }
+          return next;
+        });
+      }
+    });
+    return unsubscribe;
+  }, [dispatch, state.currentPath]);
 
   const navigate = useCallback(async (path: string) => {
     dispatch({ type: "SET_PATH", path });
@@ -225,14 +336,39 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
     ? (state.currentPath === state.zone.out_path + "/.kanban" || state.currentPath.startsWith(state.zone.out_path + "/.kanban/"))
     : false;
 
-  const entries: FileBrowserEntry[] = state.entries.map(e => ({
-    name:     e.name,
-    path:     e.path,
-    kind:     e.kind === "dir" ? "dir" : "file",
-    size:     e.size,
-    modified: e.modified,
-    indexed:  e.indexed,
-  }));
+  const entries: FileBrowserEntry[] = useMemo(() => {
+    const baseEntries = state.entries.map((entry) => {
+      const overlay = transferEntries[entry.path];
+      return {
+        name: entry.name,
+        path: entry.path,
+        kind: entry.kind === "dir" ? "dir" : "file",
+        size: entry.size,
+        modified: entry.modified,
+        indexed: entry.indexed,
+        transferLabel: overlay?.transferLabel,
+        transferProgress: overlay?.transferProgress,
+        transferOperation: overlay?.transferOperation,
+      } satisfies FileBrowserEntry;
+    });
+
+    const present = new Set(baseEntries.map((entry) => entry.path));
+    const optimistic = Object.values(transferEntries)
+      .filter((entry) => entry.destDir === state.currentPath && !present.has(entry.path))
+      .map((entry) => ({
+        name: entry.name,
+        path: entry.path,
+        kind: entry.kind,
+        size: entry.size,
+        modified: entry.modified,
+        indexed: false,
+        transferLabel: entry.transferLabel,
+        transferProgress: entry.transferProgress,
+        transferOperation: entry.transferOperation,
+      } satisfies FileBrowserEntry));
+
+    return [...baseEntries, ...optimistic];
+  }, [state.currentPath, state.entries, transferEntries]);
 
   const toolbarTop = state.zone ? (
     <>
@@ -247,7 +383,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
                 : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
             }`}
           >
-            {_("Source")}
+            {i18n._({ id: "Source", message: "Source" })}
           </button>
           <button
             onClick={goToWorkspace}
@@ -258,7 +394,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
                 : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
             }`}
           >
-            {_("Workspace")}
+            {i18n._({ id: "Workspace", message: "Workspace" })}
           </button>
         </div>
       </div>
@@ -274,7 +410,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
           }`}
         >
           <Icon name="edit" size="xs" />
-          <span>{_("Notes")}</span>
+          <span>{i18n._({ id: "Notes", message: "Notes" })}</span>
         </button>
         <button
           onClick={goToKanban}
@@ -286,7 +422,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
           }`}
         >
           <Icon name="rows" size="xs" />
-          <span>{_("Kanban")}</span>
+          <span>{i18n._({ id: "Kanban", message: "Kanban" })}</span>
         </button>
       </div>
     </>
@@ -297,7 +433,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
       onClick={selectInboxFolder}
       className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 text-[var(--theme-primary-fg)] transition-colors shrink-0"
     >
-      {_("Browse…")}
+      {i18n._({ id: "Browse…", message: "Browse…" })}
     </button>
   ) : (
     <button
@@ -306,7 +442,7 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
       title="Index all files in this folder"
       className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[var(--theme-primary)] hover:opacity-90 disabled:opacity-40 text-[var(--theme-primary-fg)] transition-colors shrink-0"
     >
-      {state.indexing ? "…" : _("Index")}
+      {state.indexing ? "…" : i18n._({ id: "Index", message: "Index" })}
     </button>
   );
 
@@ -314,9 +450,9 @@ const FileBrowserWrapper: React.FC<FileBrowserWrapperProps> = ({
     <div className="px-3 py-2 border-t border-[var(--theme-border)] text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] shrink-0 bg-[var(--theme-bg)]/50">
       <span className="text-[var(--theme-text)]">{state.indexStatus.indexed}</span>
       <span className="mx-1">/</span>
-      <span>{state.indexStatus.total}{" "}{_("indexed")}</span>
+      <span>{state.indexStatus.total}{" "}{i18n._({ id: "indexed", message: "indexed" })}</span>
       {state.indexStatus.errors > 0 && (
-        <span className="text-[var(--theme-danger)] ml-auto float-right">{state.indexStatus.errors}{" "}{_("errors")}</span>
+        <span className="text-[var(--theme-danger)] ml-auto float-right">{state.indexStatus.errors}{" "}{i18n._({ id: "errors", message: "errors" })}</span>
       )}
     </div>
   ) : undefined;

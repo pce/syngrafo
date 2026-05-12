@@ -1,6 +1,8 @@
-// In-memory store for VideoProject and VideoAsset records.
+// IPC-backed store for VideoProject records; VideoAsset is in-memory only.
 
 import type { VideoProject, VideoClipKind } from '../types/video.ts';
+import { videoService } from '../ipc/video-service.ts';
+import type { ProjectMeta } from '../ipc/video-service.ts';
 
 /** An imported media file tracked in the project asset library. */
 export interface VideoAsset {
@@ -20,37 +22,67 @@ export interface VideoAsset {
   addedAt: number;
 }
 
-let _nextProjectId = 1;
-let _nextAssetId   = 1;
+/** Name-based IPC requires a local id↔name bridge; populated on create/update/load. */
+let _cache: Map<number, VideoProject> = new Map();
+let _nameToId: Map<string, number>   = new Map();
 
-const _projects = new Map<number, VideoProject>();
-const _assets   = new Map<number, VideoAsset>();
+let _nextAssetId = 1;
+const _assets    = new Map<number, VideoAsset>();
+
+const DEFAULT_ZONE = 'global';
 
 export const videoStorage = {
   async createProject(
     data: Omit<VideoProject, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<VideoProject> {
-    const now    = Date.now();
-    const id     = _nextProjectId++;
-    const record: VideoProject = { ...data, id, createdAt: now, updatedAt: now };
-    _projects.set(id, record);
+    const now   = Date.now();
+    const draft: VideoProject = { ...data, id: 0, createdAt: now, updatedAt: now };
+    const r = await videoService.saveProject(draft.name, DEFAULT_ZONE, draft);
+    if (!r.ok) throw new Error(r.error);
+    const record: VideoProject = { ...draft, id: r.data.id };
+    _cache.set(record.id, record);
+    _nameToId.set(record.name, record.id);
     return record;
   },
 
   async getProject(id: number): Promise<VideoProject | undefined> {
-    return _projects.get(id);
+    // No round-trip possible without a name; caller should use loadProjectByName to hydrate.
+    return _cache.get(id);
   },
 
-  async listProjects(): Promise<VideoProject[]> {
-    return Array.from(_projects.values());
+  async listProjects(): Promise<ProjectMeta[]> {
+    const r = await videoService.listProjects(DEFAULT_ZONE);
+    return r.ok ? r.data : [];
   },
 
   async updateProject(project: VideoProject): Promise<void> {
-    _projects.set(project.id, { ...project, updatedAt: Date.now() });
+    const updated = { ...project, updatedAt: Date.now() };
+    const r = await videoService.saveProject(project.name, DEFAULT_ZONE, updated);
+    if (!r.ok) throw new Error(r.error);
+    _cache.set(project.id, updated);
+    _nameToId.set(project.name, project.id);
   },
 
   async deleteProject(id: number): Promise<void> {
-    _projects.delete(id);
+    const project = _cache.get(id);
+    if (!project) return;
+    const r = await videoService.deleteProject(project.name, DEFAULT_ZONE);
+    if (!r.ok) throw new Error(r.error);
+    _cache.delete(id);
+    _nameToId.delete(project.name);
+  },
+
+  /**
+   * Load a project by name from the backend and populate the local cache.
+   * Useful for restoring projects across sessions.
+   */
+  async loadProjectByName(name: string): Promise<VideoProject | undefined> {
+    const r = await videoService.loadProject(name, DEFAULT_ZONE);
+    if (!r.ok) return undefined;
+    const project = r.data.data;
+    _cache.set(project.id, project);
+    _nameToId.set(project.name, project.id);
+    return project;
   },
 
   async addAsset(data: Omit<VideoAsset, 'id' | 'addedAt'>): Promise<VideoAsset> {

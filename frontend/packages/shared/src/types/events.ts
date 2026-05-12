@@ -1,4 +1,4 @@
-import type { EasingType } from './physics.ts';
+import type { EasingType } from "./physics";
 
 export interface FadeInEvent    { clipId: string; frame: number; durationFrames: number; easing: EasingType; }
 export interface FadeOutEvent   { clipId: string; frame: number; durationFrames: number; easing: EasingType; }

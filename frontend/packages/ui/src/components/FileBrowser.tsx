@@ -7,7 +7,11 @@ import React, {
 } from "react";
 import { Icon } from "./Icon.tsx";
 import { LazyImage } from "./LazyImage.tsx";
-import type { KeyboardScheme } from "@syngrafo/shared";
+import {
+  normalizeKeyboardScheme,
+  usesCtrlMultiSelect,
+  type KeyboardScheme,
+} from "@syngrafo/shared";
 
 export type { KeyboardScheme } from "@syngrafo/shared";
 
@@ -19,6 +23,9 @@ export interface FileBrowserEntry {
   modified?: number;
   /** Highlight with a dot indicator (e.g. "indexed" in DMS). */
   indexed?: boolean;
+  transferLabel?: string;
+  transferProgress?: number;
+  transferOperation?: "copy" | "move";
 }
 
 export type FileBrowserViewMode = "list" | "details" | "grid";
@@ -71,6 +78,7 @@ export interface FileBrowserProps {
    * Keyboard navigation scheme. Defaults to `'macos'`.
    * - `'macos'`   Click selects; double-click or Enter opens. ⌘-click multi-selects.
    * - `'windows'` Click selects; double-click or Enter opens. Ctrl-click multi-selects.
+   * - `'linux'`   Click selects; double-click or Enter opens. Ctrl-click multi-selects.
    * - `'vi'`      Mouse like macOS. Keyboard: j/k move, h goes up, l/Enter opens,
    *               gg first, G last, / opens inline search.
    */
@@ -386,10 +394,17 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const normalizedKeyboardScheme = normalizeKeyboardScheme(keyboardScheme);
+  const ctrlMultiSelect = usesCtrlMultiSelect(normalizedKeyboardScheme);
 
   const [sortBy, setSortBy] = useState<FileBrowserSortBy>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [viewMode, setViewMode] = useState<FileBrowserViewMode>(defaultViewMode);
+  const coarsePointer = typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(pointer: coarse)").matches;
+  const touchButtonStyle = coarsePointer ? { minWidth: 44, minHeight: 44 } : undefined;
+  const touchRowStyle = coarsePointer ? { minHeight: 44 } : undefined;
 
   const onNavigateRef = useRef(onNavigate);
   const onFileOpenRef = useRef(onFileOpen);
@@ -457,7 +472,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
     (path: string, e?: React.MouseEvent) => {
       setSelection((prev) => {
         let next: Set<string>;
-        if (e && (e.metaKey || e.ctrlKey)) {
+        if (e && (ctrlMultiSelect ? e.ctrlKey : e.metaKey)) {
           next = new Set(prev);
           if (next.has(path)) next.delete(path);
           else next.add(path);
@@ -524,7 +539,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 
       // VI-specific key sequences run before the generic switch so that
       // `j`/`k` etc. are not misinterpreted as typeahead characters.
-      if (keyboardScheme === "vi" && !searchOpen) {
+      if (normalizedKeyboardScheme === "vi" && !searchOpen) {
         switch (e.key) {
           case "j": e.preventDefault(); moveFocus(+1); lastViKeyRef.current = null; return;
           case "k": e.preventDefault(); moveFocus(-1); lastViKeyRef.current = null; return;
@@ -588,10 +603,10 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           break;
         }
         case "a": {
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault();
-            const allFiles = all
-              .filter((en) => en.kind !== "dir")
+            if (ctrlMultiSelect ? e.ctrlKey : e.metaKey) {
+              e.preventDefault();
+              const allFiles = all
+                .filter((en) => en.kind !== "dir")
               .map((en) => en.path);
             setSelection(new Set(allFiles));
             onSelectionChangeRef.current?.(allFiles);
@@ -614,7 +629,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           if (
             e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey &&
             // In VI mode, skip navigation keys for typeahead.
-            !(keyboardScheme === "vi" && ["j", "k", "h", "l", "g", "G", "/"].includes(e.key))
+            !(normalizedKeyboardScheme === "vi" && ["j", "k", "h", "l", "g", "G", "/"].includes(e.key))
           ) {
             const next = typeaheadStr + e.key;
             setTypeaheadStr(next);
@@ -629,7 +644,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
         }
       }
     },
-    [displayEntries, focusedPath, keyboardScheme, searchOpen, typeaheadStr, handleNavigate, goUp],
+    [ctrlMultiSelect, displayEntries, focusedPath, normalizedKeyboardScheme, searchOpen, typeaheadStr, handleNavigate, goUp],
   );
 
   useEffect(() => {
@@ -684,6 +699,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                       ? "border-[var(--theme-primary)] ring-2 ring-[var(--theme-primary)]/30"
                       : "border-[var(--theme-border)] hover:border-[var(--theme-primary)]/40"
                   }`}
+                  style={touchRowStyle}
                 >
                   <div className="aspect-square bg-[var(--theme-bg)] flex items-center justify-center overflow-hidden">
                     {customThumb != null ? (
@@ -702,7 +718,20 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                     >
                       {entry.name}
                     </p>
+                    {entry.transferLabel && (
+                      <p className={`text-[8px] uppercase tracking-widest truncate ${isSelected ? "text-white/80" : "text-[var(--theme-primary)]"}`}>
+                        {entry.transferLabel}
+                      </p>
+                    )}
                   </div>
+                  {typeof entry.transferProgress === "number" && (
+                    <div className="absolute left-0 right-0 bottom-0 h-1 bg-black/10">
+                      <div
+                        className="h-full bg-[var(--theme-primary)] transition-[width] duration-150"
+                        style={{ width: `${Math.max(4, Math.min(100, entry.transferProgress))}%` }}
+                      />
+                    </div>
+                  )}
                   {entry.indexed && (
                     <span
                       className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white/50"
@@ -789,6 +818,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                         ? "bg-[var(--theme-bg)] text-[var(--theme-text)]"
                         : "hover:bg-[var(--theme-bg)] text-[var(--theme-text)]"
                   }`}
+                  style={touchRowStyle}
                 >
                   <span className="shrink-0 flex items-center">
                     {iconNode !== null ? iconNode : <DefaultFileIcon entry={entry} />}
@@ -796,6 +826,11 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   <span className="flex-1 truncate font-medium text-[11px]">
                     {entry.name}
                   </span>
+                  {entry.transferLabel && (
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest ${isSelected ? "bg-white/15 text-white" : "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"}`}>
+                      {entry.transferLabel}
+                    </span>
+                  )}
                   <span
                     className={`w-10 shrink-0 text-right font-mono text-[9px] ${isSelected ? "opacity-70" : "text-[var(--theme-text-muted)]"}`}
                   >
@@ -864,16 +899,22 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                 }
                 ${isFocused && !isSelected ? "ring-1 ring-inset ring-[var(--theme-primary)]/25" : ""}
               `}
+              style={touchRowStyle}
             >
               <span className="shrink-0 flex items-center justify-center">
                 {iconNode !== null ? iconNode : <DefaultFileIcon entry={entry} />}
               </span>
-              <span className="flex-1 truncate font-medium">{entry.name}</span>
-              {entry.kind === "file" && (
-                <span
-                  className={`text-[10px] tabular-nums shrink-0 ${isSelected ? "opacity-70" : "text-[var(--theme-text-muted)]"}`}
-                >
-                  {fmtSize(entry.size)}
+                  <span className="flex-1 truncate font-medium">{entry.name}</span>
+                  {entry.transferLabel && (
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest ${isSelected ? "bg-white/15 text-white" : "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"}`}>
+                      {entry.transferLabel}
+                    </span>
+                  )}
+                  {entry.kind === "file" && (
+                    <span
+                      className={`text-[10px] tabular-nums shrink-0 ${isSelected ? "opacity-70" : "text-[var(--theme-text-muted)]"}`}
+                    >
+                      {fmtSize(entry.size)}
                 </span>
               )}
               {entry.indexed && (
@@ -881,6 +922,14 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSelected ? "bg-white" : "bg-emerald-500"}`}
                   title="Indexed"
                 />
+              )}
+              {typeof entry.transferProgress === "number" && (
+                <span className={`w-12 h-1.5 rounded-full overflow-hidden shrink-0 ${isSelected ? "bg-white/20" : "bg-[var(--theme-border)]"}`}>
+                  <span
+                    className={`block h-full ${isSelected ? "bg-white" : "bg-[var(--theme-primary)]"} transition-[width] duration-150`}
+                    style={{ width: `${Math.max(4, Math.min(100, entry.transferProgress))}%` }}
+                  />
+                </span>
               )}
             </li>
           );
@@ -903,6 +952,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
             title="Up one level"
             disabled={isAtRoot}
             className="p-1.5 rounded hover:bg-[var(--theme-bg)] disabled:opacity-30 transition-colors text-[var(--theme-text-muted)]"
+            style={touchButtonStyle}
           >
             <Icon name="chevron-up" size="xs" />
           </button>
@@ -926,6 +976,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                       ? "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]"
                       : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)]"
                   }`}
+                  style={touchButtonStyle}
                 >
                   {k}
                   {sortIcon(k)}
@@ -939,12 +990,13 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                 key={m}
                 onClick={() => setViewMode(m)}
                 title={`${m.charAt(0).toUpperCase()}${m.slice(1)} view`}
-                className={`p-1 rounded transition-colors ${
+                  className={`p-1 rounded transition-colors ${
                   viewMode === m
                     ? "text-[var(--theme-primary)] bg-[var(--theme-primary)]/10"
                     : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)]"
-                }`}
-              >
+                  }`}
+                  style={touchButtonStyle}
+                >
                 <Icon
                   name={
                     m === "list" ? "list" : m === "details" ? "columns" : "grid"

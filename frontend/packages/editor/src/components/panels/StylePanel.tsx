@@ -6,6 +6,7 @@ import {
   type CalloutVariant,
   type AlignH,
   type AlignV,
+  type ImgFit,
   type SpacingToken,
   type SStyleProps,
   type FontToken,
@@ -16,6 +17,7 @@ import {
 } from "../../models/sdm";
 import { Icon } from "../Icon";
 import type { IconName } from "../Icon";
+import { ipcRawCall, parseIpcResult } from "../../services/ipc";
 
 
 
@@ -75,6 +77,7 @@ function StylePanelContent() {
   const { doc } = state;
 
   const [showAllStyles, setShowAllStyles] = useState(false);
+  const [isPickingImage, setIsPickingImage] = useState(false);
 
   const styles = doc?.styles ?? {};
   const styleIds = Object.keys(styles);
@@ -96,6 +99,7 @@ function StylePanelContent() {
 
   const isText = isTextBlock(block);
   const textValue = isText ? block.spans.map((s) => s.text).join("") : "";
+  const imageBlock = block.type === "img" ? block : null;
 
 
 
@@ -518,6 +522,110 @@ function StylePanelContent() {
     </Section>
   );
 
+  const imageSection = imageBlock && (
+    <Section title="Image">
+      <FieldLabel>Source</FieldLabel>
+      <input
+        type="text"
+        value={imageBlock.src}
+        onChange={(e) =>
+          dispatch({
+            type: "UPDATE_BLOCK",
+            id: block.id,
+            patch: { src: e.target.value } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+          })
+        }
+        className={SELECT_CLASS}
+        placeholder="asset://image.png · local:///path/file.png · https://…"
+      />
+
+      <div className="flex gap-1">
+        <button
+          onClick={async () => {
+            if (isPickingImage) return;
+            setIsPickingImage(true);
+            try {
+              const raw = await ipcRawCall("dms_select_files");
+              const paths = parseIpcResult<{ paths: string[] }>(raw).data?.paths ?? [];
+              const nextPath = paths[0];
+              if (!nextPath) return;
+              dispatch({
+                type: "UPDATE_BLOCK",
+                id: block.id,
+                patch: { src: `local://${nextPath}` } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+              });
+            } finally {
+              setIsPickingImage(false);
+            }
+          }}
+          className="flex-1 rounded border border-[var(--theme-border)] px-2 py-1 text-[10px] font-medium text-[var(--theme-text)] hover:border-[var(--theme-primary)]/50 hover:bg-[var(--theme-bg)] transition-colors"
+        >
+          {isPickingImage ? "Picking..." : "Pick Image"}
+        </button>
+        <button
+          onClick={() =>
+            dispatch({
+              type: "UPDATE_BLOCK",
+              id: block.id,
+              patch: { src: "" } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+            })
+          }
+          className="rounded border border-[var(--theme-border)] px-2 py-1 text-[10px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg)] transition-colors"
+          title="Clear source"
+        >
+          Clear
+        </button>
+      </div>
+
+      <FieldLabel>Alt text</FieldLabel>
+      <input
+        type="text"
+        value={imageBlock.alt ?? ""}
+        onChange={(e) =>
+          dispatch({
+            type: "UPDATE_BLOCK",
+            id: block.id,
+            patch: { alt: e.target.value || undefined } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+          })
+        }
+        className={SELECT_CLASS}
+        placeholder="Describe the image"
+      />
+
+      <FieldLabel>Caption</FieldLabel>
+      <input
+        type="text"
+        value={imageBlock.caption ?? ""}
+        onChange={(e) =>
+          dispatch({
+            type: "UPDATE_BLOCK",
+            id: block.id,
+            patch: { caption: e.target.value || undefined } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+          })
+        }
+        className={SELECT_CLASS}
+        placeholder="Optional caption"
+      />
+
+      <FieldLabel>Fit</FieldLabel>
+      <select
+        value={imageBlock.fit ?? "contain"}
+        onChange={(e) =>
+          dispatch({
+            type: "UPDATE_BLOCK",
+            id: block.id,
+            patch: { fit: e.target.value as ImgFit } as unknown as Partial<Omit<SBlock, "type" | "id">>,
+          })
+        }
+        className={SELECT_CLASS}
+      >
+        <option value="contain">Contain</option>
+        <option value="cover">Cover</option>
+        <option value="fill">Fill</option>
+      </select>
+    </Section>
+  );
+
 
 
   const calloutSection = block.type === "callout" && (
@@ -676,6 +784,7 @@ function StylePanelContent() {
         {typographySection}
         {saveAsClassSection}
         {contentSection}
+        {imageSection}
         {styleSection}
         {calloutSection}
         {alignSection}

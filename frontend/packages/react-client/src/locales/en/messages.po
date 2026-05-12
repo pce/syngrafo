@@ -12,147 +12,3038 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
 
-# Navigation
-msgid "Explorer"
-msgstr "Explorer"
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+#~ msgid "Add a more detailed description…"
+#~ msgstr "Add a more detailed description…"
 
-msgid "Analysis"
-msgstr "Analysis"
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+#~ msgid "Write a comment… (Cmd+Enter to post)"
+#~ msgstr "Write a comment… (Cmd+Enter to post)"
 
-msgid "Settings"
-msgstr "Settings"
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#~ msgid "zone-relative/path or .notes"
+#~ msgstr "zone-relative/path or .notes"
 
-msgid "About"
-msgstr "About"
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "— pick patch —"
+msgstr "— pick patch —"
 
-# FileBrowser
-msgid "Name"
-msgstr "Name"
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "(none)"
+msgstr "(none)"
 
-msgid "Type"
-msgstr "Type"
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "(root — no collection)"
+msgstr "(root — no collection)"
 
-msgid "Size"
-msgstr "Size"
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "(stored)"
+msgstr "(stored)"
 
-msgid "Modified"
-msgstr "Modified"
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "↓ Download"
+msgstr "↓ Download"
 
-msgid "Sort ascending"
-msgstr "Sort ascending"
-
-msgid "Sort descending"
-msgstr "Sort descending"
-
-msgid "List view"
-msgstr "List view"
-
-msgid "Details view"
-msgstr "Details view"
-
-msgid "Grid view"
-msgstr "Grid view"
-
-msgid "Loading…"
-msgstr "Loading…"
-
-msgid "Empty folder"
-msgstr "Empty folder"
-
-# DocumentViewer
-msgid "Run OCR"
-msgstr "Run OCR"
-
-msgid "Running OCR…"
-msgstr "Running OCR…"
-
-msgid "No document selected"
-msgstr "No document selected"
-
-# AnalysisPanel
-msgid "Keywords"
-msgstr "Keywords"
-
-msgid "Sentiment"
-msgstr "Sentiment"
-
-msgid "Entities"
-msgstr "Entities"
-
-msgid "Extracted Text"
-msgstr "Extracted Text"
-
-msgid "Image Info"
-msgstr "Image Info"
-
-msgid "Positive"
-msgstr "Positive"
-
-msgid "Negative"
-msgstr "Negative"
-
-# OCR / processing
-msgid "Indexing…"
-msgstr "Indexing…"
-
-msgid "No results"
-msgstr "No results"
-
-# PatchWorkstation
-msgid "Patcher"
-msgstr "Patcher"
-
-msgid "Browse patches in the left panel"
-msgstr "Browse patches in the left panel"
-
-msgid "No patch"
-msgstr "No patch"
-
-msgid "+ PatternBlock"
-msgstr "+ PatternBlock"
-
-msgid "Patterns"
-msgstr "Patterns"
-
-msgid "Patches"
-msgstr "Patches"
-
-msgid "Matrix"
-msgstr "Matrix"
-
-msgid "XY Pads"
-msgstr "XY Pads"
-
-msgid "Stop"
-msgstr "Stop"
-
-msgid "Compile+Play"
-msgstr "Compile+Play"
-
-msgid "Default Patch"
-msgstr "Default Patch"
-
-msgid "Click + PatternBlock to start patching"
-msgstr "Click + PatternBlock to start patching"
-
-msgid "Add a PatchBlock track in the Sequencer and pick this patch."
-msgstr "Add a PatchBlock track in the Sequencer and pick this patch."
-
-msgid "Click to load · double-click to rename"
-msgstr "Click to load · double-click to rename"
-
-msgid "Delete patch"
-msgstr "Delete patch"
-
-msgid "patches"
-msgstr "patches"
-
-msgid "New patch name…"
-msgstr "New patch name…"
-
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
 msgid "+ New Patch"
 msgstr "+ New Patch"
 
+#~ msgid "+ New Patch"
+#~ msgstr "+ New Patch"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "+ PatternBlock"
+msgstr "+ PatternBlock"
+
+#~ msgid "+ PatternBlock"
+#~ msgstr "+ PatternBlock"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "+ Track"
+msgstr "+ Track"
+
+#. js-lingui-explicit-id
+#: src/components/AudioPortal.tsx
+msgid "⏱ Seq"
+msgstr "⏱ Seq"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "⏹ Stop"
+msgstr "⏹ Stop"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "▶ Play"
+msgstr "▶ Play"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "⚠ Restart required for the new path to take effect."
+msgstr "⚠ Restart required for the new path to take effect."
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "✓ Ready"
+msgstr "✓ Ready"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "✓ Saved"
+msgstr "✓ Saved"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "⬇ WAV"
+msgstr "⬇ WAV"
+
+#. js-lingui-explicit-id
+#: src/components/AudioPortal.tsx
+msgid "⬡ Patch"
+msgstr "⬡ Patch"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "0 DUPLICATES"
+msgstr "0 DUPLICATES"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "1 — fastest"
+msgstr "1 — fastest"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "9 — smallest"
+msgstr "9 — smallest"
+
+#~ msgid "About"
+#~ msgstr "About"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Action label"
+msgstr "Action label"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+msgid "Actions"
+msgstr "Actions"
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "Active Tasks"
+msgstr "Active Tasks"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+#: src/components/dms/KanbanView.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Add"
+msgstr "Add"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Add a more detailed description… Supports Markdown."
+msgstr "Add a more detailed description… Supports Markdown."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Add a PatchBlock track in the Sequencer and pick this patch."
+msgstr "Add a PatchBlock track in the Sequencer and pick this patch."
+
+#~ msgid "Add a PatchBlock track in the Sequencer and pick this patch."
+#~ msgstr "Add a PatchBlock track in the Sequencer and pick this patch."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
 msgid "Add an XY Pad block to see it here"
 msgstr "Add an XY Pad block to see it here"
+
+#~ msgid "Add an XY Pad block to see it here"
+#~ msgstr "Add an XY Pad block to see it here"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "Add blocks to see the patch matrix"
+msgstr "Add blocks to see the patch matrix"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Add bookmark"
+msgstr "Add bookmark"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Add card"
+msgstr "Add card"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Add colour"
+msgstr "Add colour"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Add lane"
+msgstr "Add lane"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Add link"
+msgstr "Add link"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+msgid "Add row"
+msgstr "Add row"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Add section"
+msgstr "Add section"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Add state"
+msgstr "Add state"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Add Track"
+msgstr "Add Track"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Add transition"
+msgstr "Add transition"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "All"
+msgstr "All"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Transitions help"
+msgstr "Allowed moves between workflow states."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Analysing palette…"
+msgstr "Analysing palette…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/Sidebar.tsx
+msgid "Analysis"
+msgstr "Analysis"
+
+#~ msgid "Analysis"
+#~ msgstr "Analysis"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Analysis View"
+msgstr "Analysis View"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Analyze"
+msgstr "Analyze"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Analyze Source"
+msgstr "Analyze Source"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchBar.tsx
+msgid "Analyzing Context…"
+msgstr "Analyzing Context…"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Analyzing..."
+msgstr "Analyzing..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Aperture (f/)"
+msgstr "Aperture (f/)"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Application"
+msgstr "Application"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Apply Scan (ONNX Rectification)"
+msgstr "Apply Scan (ONNX Rectification)"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+msgid "Archive"
+msgstr "Archive"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Archive name (no extension)"
+msgstr "Archive name (no extension)"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Archive name is required."
+msgstr "Archive name is required."
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Atomic DataModel ensures dictionary updates and resource loading are safe across multiple concurrent requests using modern C++ memory primitives."
+msgstr "Atomic DataModel ensures dictionary updates and resource loading are safe across multiple concurrent requests using modern C++ memory primitives."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Auto"
+msgstr "Auto"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Auto-rotate"
+msgstr "Auto-rotate"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Auto-Update"
+msgstr "Auto-Update"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Avg Response"
+msgstr "Avg Response"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Awaiting Engine Analysis"
+msgstr "Awaiting Engine Analysis"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Back"
+msgstr "Back"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Background Copy Threshold"
+msgstr "Background Copy Threshold"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Blockers / Revisit Links"
+msgstr "Blockers / Revisit Links"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Blockers & Revisit"
+msgstr "Blockers & Revisit"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Bookmarks"
+msgstr "Bookmarks"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "BPM"
+msgstr "BPM"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Branch Probability"
+msgstr "Branch Probability"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Brand / project styleguide colours saved to this Zone."
+msgstr "Brand / project styleguide colours saved to this Zone."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Browse"
+msgstr "Browse"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Browse patches in the left panel"
+msgstr "Browse patches in the left panel"
+
+#~ msgid "Browse patches in the left panel"
+#~ msgstr "Browse patches in the left panel"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+#: src/components/ThemePanel.tsx
+msgid "Browse…"
+msgstr "Browse…"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Built with LLVM/Clang and specialized SIMD instructions where available, providing raw computational speed that interpreted languages cannot match."
+msgstr "Built with LLVM/Clang and specialized SIMD instructions where available, providing raw computational speed that interpreted languages cannot match."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "Cable transform"
+msgstr "Cable transform"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Camera Make"
+msgstr "Camera Make"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Camera Model"
+msgstr "Camera Model"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#: src/components/collections/ConfirmDialog.tsx
+#: src/components/dms/FileOpDialogs.tsx
+#: src/components/dms/ImportModal.tsx
+#: src/components/dms/KanbanView.tsx
+#: src/components/dms/NotesView.tsx
+#: src/components/dms/WorkflowsPage.tsx
+#: src/components/dms/ZoneDashboard.tsx
+#: src/components/ThemePanel.tsx
+msgid "Cancel"
+msgstr "Cancel"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Cannot jump while playing"
+msgstr "Cannot jump while playing"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Card title…"
+msgstr "Card title…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Category"
+msgstr "Category"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "CHARS"
+msgstr "CHARS"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Check for updates on startup and offer to install them automatically."
+msgstr "Check for updates on startup and offer to install them automatically."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FilePanel.tsx
+msgid "Choose folder"
+msgstr "Choose folder"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Choose the default paper appearance for new documents. Notes and markup previews reuse the same preset so editing and preview feel like the same page."
+msgstr "Choose the default paper appearance for new documents. Notes and markup previews reuse the same preset so editing and preview feel like the same page."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "clamp"
+msgstr "clamp"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FilePanel.tsx
+#: src/components/DocumentPanel.tsx
+msgid "Clear"
+msgstr "Clear"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Clear all steps"
+msgstr "Clear all steps"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Clear Results"
+msgstr "Clear Results"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Click"
+msgstr "Click"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Click + PatternBlock to start patching"
+msgstr "Click + PatternBlock to start patching"
+
+#~ msgid "Click + PatternBlock to start patching"
+#~ msgstr "Click + PatternBlock to start patching"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Click anywhere to create a new note"
+msgstr "Click anywhere to create a new note"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+msgid "Click or Drop to Import"
+msgstr "Click or Drop to Import"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Click to create a new note"
+msgstr "Click to create a new note"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+msgid "Click to edit"
+msgstr "Click to edit"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Click to load · double-click to rename"
+msgstr "Click to load · double-click to rename"
+
+#~ msgid "Click to load · double-click to rename"
+#~ msgstr "Click to load · double-click to rename"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Clipboard not available."
+msgstr "Clipboard not available."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+#: src/components/collections/BookmarksView.tsx
+#: src/components/dms/FileOpDialogs.tsx
+#: src/components/ThemePanel.tsx
+msgid "Close"
+msgstr "Close"
+
+#. js-lingui-explicit-id
+#: src/components/AudioPortal.tsx
+msgid "Close audio editor (Esc)"
+msgstr "Close audio editor (Esc)"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Close dashboard"
+msgstr "Close dashboard"
+
+#. js-lingui-explicit-id
+#: src/components/EditorPortal.tsx
+msgid "Close editor (Esc)"
+msgstr "Close editor (Esc)"
+
+#. js-lingui-explicit-id
+#: src/components/Header.tsx
+msgid "Close Sidebar"
+msgstr "Close Sidebar"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Close to Systray"
+msgstr "Close to Systray"
+
+#. js-lingui-explicit-id
+#: src/components/VideoPortal.tsx
+msgid "Close video editor (Esc)"
+msgstr "Close video editor (Esc)"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully."
+msgstr "Closing the window hides the app to the system tray instead of quitting. Use the tray icon or Quit menu to exit fully."
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Collection name…"
+msgstr "Collection name…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Color"
+msgstr "Color"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Color Palette"
+msgstr "Color Palette"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Color Space"
+msgstr "Color Space"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Colors"
+msgstr "Colors"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Colour Palette"
+msgstr "Colour Palette"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Comments"
+msgstr "Comments"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Compact mode removes all corner rounding."
+msgstr "Compact mode removes all corner rounding."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Compile+Play"
+msgstr "Compile+Play"
+
+#~ msgid "Compile+Play"
+#~ msgstr "Compile+Play"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Compress"
+msgstr "Compress"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Compress Content"
+msgstr "Compress Content"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Compress Files"
+msgstr "Compress Files"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Configuration"
+msgstr "Configuration"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Confirm"
+msgstr "Confirm"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "Connected — click to edit transform, click again to remove"
+msgstr "Connected — click to edit transform, click again to remove"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Content Safety"
+msgstr "Content Safety"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Continue text"
+msgstr "Continue text"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Controls how file selection, navigation and multi-select work in the file browser. Saved immediately — no restart required."
+msgstr "Controls how file selection, navigation and multi-select work in the file browser. Saved immediately — no restart required."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Copied!"
+msgstr "Copied!"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Copy"
+msgstr "Copy"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Copy Files"
+msgstr "Copy Files"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Copy path"
+msgstr "Copy path"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Corner Radius"
+msgstr "Corner Radius"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Could not read patch preset file."
+msgstr "Could not read patch preset file."
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Could not read preset file."
+msgstr "Could not read preset file."
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "CPU Load"
+msgstr "CPU Load"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Create"
+msgstr "Create"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Create Archive"
+msgstr "Create Archive"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "CSD"
+msgstr "CSD"
+
+#. js-lingui-explicit-id
+#: src/components/AudioPortal.tsx
+msgid "Csound Audio Editor"
+msgstr "Csound Audio Editor"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Current state:"
+msgstr "Current state:"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "curve"
+msgstr "curve"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Custom Colours"
+msgstr "Custom Colours"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Danger"
+msgstr "Danger"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Database Entry"
+msgstr "Database Entry"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Date Taken"
+msgstr "Date Taken"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Decode error"
+msgstr "Decode error"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Deduplicator"
+msgstr "Deduplicator"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Deduplicator Mode: Detect"
+msgstr "Deduplicator Mode: Detect"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Deep POS tagging, Lemmatization, and Entity Recognition powered by the C++23 engine. Optimized for low-latency execution and high-concurrency environments."
+msgstr "Deep POS tagging, Lemmatization, and Entity Recognition powered by the C++23 engine. Optimized for low-latency execution and high-concurrency environments."
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Default"
+msgstr "Default"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Default Patch"
+msgstr "Default Patch"
+
+#~ msgid "Default Patch"
+#~ msgstr "Default Patch"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Define states and transitions in the zone settings."
+msgstr "Define states and transitions in the zone settings."
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#: src/components/collections/CollectionListView.tsx
+#: src/components/collections/ConfirmDialog.tsx
+#: src/components/dms/CommandBar.tsx
+#: src/components/dms/FileOpDialogs.tsx
+#: src/components/ThemePanel.tsx
+msgid "Delete"
+msgstr "Delete"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Delete card"
+msgstr "Delete card"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Delete collection"
+msgstr "Delete collection"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Delete Dups"
+msgstr "Delete Dups"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Delete Files"
+msgstr "Delete Files"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+msgid "Delete item"
+msgstr "Delete item"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Delete lane"
+msgstr "Delete lane"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Delete note"
+msgstr "Delete note"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Delete originals after compression"
+msgstr "Delete originals after compression"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Delete patch"
+msgstr "Delete patch"
+
+#~ msgid "Delete patch"
+#~ msgstr "Delete patch"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Density / Font Size"
+msgstr "Density / Font Size"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Description"
+msgstr "Description"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Deselect"
+msgstr "Deselect"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Destination directory"
+msgstr "Destination directory"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Destination directory is required."
+msgstr "Destination directory is required."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Destination path is required."
+msgstr "Destination path is required."
+
+#~ msgid "Details view"
+#~ msgstr "Details view"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Disk Usage"
+msgstr "Disk Usage"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Display"
+msgstr "Display"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Docs indexed"
+msgstr "Docs indexed"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Domain Presets"
+msgstr "Domain Presets"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "done"
+msgstr "done"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Double-click to rename"
+msgstr "Double-click to rename"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "DPI X"
+msgstr "DPI X"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "DPI Y"
+msgstr "DPI Y"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Drag · Scroll · Right-drag"
+msgstr "Drag · Scroll · Right-drag"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+msgid "Drop to choose…"
+msgstr "Drop to choose…"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Duplicates"
+msgstr "Duplicates"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "DUPLICATES FOUND"
+msgstr "DUPLICATES FOUND"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "DUPS"
+msgstr "DUPS"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "e.g. ~/Library/Application Support/Syngrafo/models"
+msgstr "e.g. ~/Library/Application Support/Syngrafo/models"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Edit"
+msgstr "Edit"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Edit preset"
+msgstr "Edit preset"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Edit Workflow"
+msgstr "Edit Workflow"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Edit Zone"
+msgstr "Edit Zone"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Workflow name placeholder"
+msgstr "Editorial workflow"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Empty collection"
+msgstr "Empty collection"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FilePanel.tsx
+msgid "Empty folder"
+msgstr "Empty folder"
+
+#~ msgid "Empty folder"
+#~ msgstr "Empty folder"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Engine Insight"
+msgstr "Engine Insight"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Engine Linked"
+msgstr "Engine Linked"
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "Engine Profiler"
+msgstr "Engine Profiler"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Enter a name for this domain preset:"
+msgstr "Enter a name for this domain preset:"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Enter reason…"
+msgstr "Enter reason…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Entities"
+msgstr "Entities"
+
+#~ msgid "Entities"
+#~ msgstr "Entities"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+msgid "errors"
+msgstr "errors"
+
+#. js-lingui-explicit-id
+#: src/components/AudioPortal.tsx
+#: src/components/EditorPortal.tsx
+#: src/components/VideoPortal.tsx
+msgid "Esc to close"
+msgstr "Esc to close"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "EV Bias"
+msgstr "EV Bias"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "States help"
+msgstr "Exactly one default state is required."
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Examples"
+msgstr "Examples"
+
+# Navigation
+#~ msgid "Explorer"
+#~ msgstr "Explorer"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Exposure"
+msgstr "Exposure"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Extracted Text"
+msgstr "Extracted Text"
+
+#~ msgid "Extracted Text"
+#~ msgstr "Extracted Text"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Extracting entities…"
+msgstr "Extracting entities…"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Failed to add bookmark"
+msgstr "Failed to add bookmark"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Failed to load bookmarks"
+msgstr "Failed to load bookmarks"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Failed to load instances"
+msgstr "Failed to load instances"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Failed to load workflow"
+msgstr "Failed to load workflow"
+
+#. js-lingui-explicit-id
+#: src/components/header/ZoneNavigator.tsx
+msgid "Failed to open zone"
+msgstr "Failed to open zone"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Failed to resolve bookmark"
+msgstr "Failed to resolve bookmark"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Failed to save patch preset."
+msgstr "Failed to save patch preset."
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Failed to save pattern preset."
+msgstr "Failed to save pattern preset."
+
+#. js-lingui-explicit-id
+#: src/components/header/ZoneNavigator.tsx
+msgid "Failed to switch to global"
+msgstr "Failed to switch to global"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Failed to update bookmark"
+msgstr "Failed to update bookmark"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "FastAPI Bridge"
+msgstr "FastAPI Bridge"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Fewer repeats"
+msgstr "Fewer repeats"
+
+#. js-lingui-explicit-id
+#: src/components/VideoPortal.tsx
+msgid "FFmpeg Video Editor"
+msgstr "FFmpeg Video Editor"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "File to Zone"
+msgstr "File to Zone"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Files"
+msgstr "Files"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Files at or above this size start as background copy/move tasks so the file browser stays responsive. 512 MB is the default sweet spot; set this to Always background if you want queued transfers for every copy."
+msgstr "Files at or above this size start as background copy/move tasks so the file browser stays responsive. 512 MB is the default sweet spot; set this to Always background if you want queued transfers for every copy."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Filing..."
+msgstr "Filing..."
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Find Dups"
+msgstr "Find Dups"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Fired"
+msgstr "Fired"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Flash"
+msgstr "Flash"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Focal Length"
+msgstr "Focal Length"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Folder Dashboard"
+msgstr "Folder Dashboard"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Folders"
+msgstr "Folders"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Format"
+msgstr "Format"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Format not supported"
+msgstr "Format not supported"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Fractal Engine"
+msgstr "Fractal Engine"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "free"
+msgstr "free"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "From"
+msgstr "From"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Fullscreen"
+msgstr "Fullscreen"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Gen. Fractal"
+msgstr "Gen. Fractal"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "GEN. WORDS"
+msgstr "GEN. WORDS"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Generation"
+msgstr "Generation"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchBar.tsx
+msgid "Global"
+msgstr "Global"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchBar.tsx
+msgid "Global Index Ready"
+msgstr "Global Index Ready"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "GPS Alt"
+msgstr "GPS Alt"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "GPS Lat"
+msgstr "GPS Lat"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "GPS Lon"
+msgstr "GPS Lon"
+
+#~ msgid "Grid view"
+#~ msgstr "Grid view"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Has description"
+msgstr "Has description"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Heatmap"
+msgstr "Heatmap"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Height"
+msgstr "Height"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Hide grid"
+msgstr "Hide grid"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "High-performance Python bindings using pybind11 provide a seamless bridge between the native C++ core and the modern asynchronous web stack."
+msgstr "High-performance Python bindings using pybind11 provide a seamless bridge between the native C++ core and the modern asynchronous web stack."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Hot Items"
+msgstr "Hot Items"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Hybrid Mode"
+msgstr "Hybrid Mode"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "If file exists"
+msgstr "If file exists"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Ignore Punctuation"
+msgstr "Ignore Punctuation"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Ignore Quotes"
+msgstr "Ignore Quotes"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Image Info"
+msgstr "Image Info"
+
+#~ msgid "Image Info"
+#~ msgstr "Image Info"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Import failed"
+msgstr "Import failed"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+#: src/components/dms/ImportModal.tsx
+msgid "Import to Zone"
+msgstr "Import to Zone"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Importing..."
+msgstr "Importing..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+msgid "Importing…"
+msgstr "Importing…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+msgid "Index"
+msgstr "Index"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+#: src/components/dms/TimelinePage.tsx
+msgid "indexed"
+msgstr "indexed"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/dms/FilePanel.tsx
+msgid "Indexed"
+msgstr "Indexed"
+
+# OCR / processing
+#~ msgid "Indexing…"
+#~ msgstr "Indexing…"
+
+#. js-lingui-explicit-id
+#: src/components/header/ZoneNavigator.tsx
+msgid "Input"
+msgstr "Input"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Input path"
+msgstr "Input path"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Input Source"
+msgstr "Input Source"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Instances by State"
+msgstr "Instances by State"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Integrated multi-category toxicity detection and content safety filters that run locally without sending data to external third-party APIs."
+msgstr "Integrated multi-category toxicity detection and content safety filters that run locally without sending data to external third-party APIs."
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Invoke analysis to stream logs from C++..."
+msgstr "Invoke analysis to stream logs from C++..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "ISO"
+msgstr "ISO"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "item"
+msgstr "item"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "items"
+msgstr "items"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Jump to"
+msgstr "Jump to"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "just now"
+msgstr "just now"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+#: src/components/dms/KanbanView.tsx
+msgid "Kanban"
+msgstr "Kanban"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Keep both"
+msgstr "Keep both"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Key"
+msgstr "Key"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Key Terminology"
+msgstr "Key Terminology"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Keyboard & Input"
+msgstr "Keyboard & Input"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Keywords"
+msgstr "Keywords"
+
+# AnalysisPanel
+#~ msgid "Keywords"
+#~ msgstr "Keywords"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Label"
+msgstr "Label"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Lane"
+msgstr "Lane"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Lane name…"
+msgstr "Lane name…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/Sidebar.tsx
+#: src/components/ThemePanel.tsx
+msgid "Language"
+msgstr "Language"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Lens"
+msgstr "Lens"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Lens Make"
+msgstr "Lens Make"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Level"
+msgstr "Level"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Linguistic Analysis"
+msgstr "Linguistic Analysis"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Linguistic Core"
+msgstr "Linguistic Core"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Linguistic Distribution"
+msgstr "Linguistic Distribution"
+
+#~ msgid "List view"
+#~ msgstr "List view"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Live Preview"
+msgstr "Live Preview"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "LLM Catalog"
+msgstr "LLM Catalog"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "LLM Model Storage"
+msgstr "LLM Model Storage"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Load Patch"
+msgstr "Load Patch"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Load Pattern"
+msgstr "Load Pattern"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Load saved work"
+msgstr "Load saved work"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "loaded"
+msgstr "loaded"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Loaded patch preset"
+msgstr "Loaded patch preset"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Loaded pattern preset"
+msgstr "Loaded pattern preset"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Loading board…"
+msgstr "Loading board…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Loading folder dashboard…"
+msgstr "Loading folder dashboard…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Loading model…"
+msgstr "Loading model…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Loading workflow…"
+msgstr "Loading workflow…"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#: src/components/collections/CollectionListView.tsx
+#: src/components/dms/WorkflowsPage.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Loading…"
+msgstr "Loading…"
+
+#~ msgid "Loading…"
+#~ msgstr "Loading…"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "local copy"
+msgstr "local copy"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Local Execution"
+msgstr "Local Execution"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Loop: OFF"
+msgstr "Loop: OFF"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Loop: ON"
+msgstr "Loop: ON"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Loops from start after last block"
+msgstr "Loops from start after last block"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Manage Bookmarks →"
+msgstr "Manage Bookmarks →"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Manual"
+msgstr "Manual"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Mark as done"
+msgstr "Mark as done"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Mark as todo"
+msgstr "Mark as todo"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Markov Engine"
+msgstr "Markov Engine"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Markov generation output will appear here..."
+msgstr "Markov generation output will appear here..."
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Markov Output"
+msgstr "Markov Output"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Matrix"
+msgstr "Matrix"
+
+#~ msgid "Matrix"
+#~ msgstr "Matrix"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB."
+msgstr "Maximum SVG file size rendered inline. Files above this threshold show a placeholder. Palette-based conversion produces compact output even for large source images — bump this up if your converted SVGs exceed 2 MB."
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "Memory"
+msgstr "Memory"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "MIME"
+msgstr "MIME"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Min Segment Length"
+msgstr "Min Segment Length"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Models"
+msgstr "Models"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Modified"
+msgstr "Modified"
+
+#~ msgid "Modified"
+#~ msgstr "Modified"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "More repeats"
+msgstr "More repeats"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Move"
+msgstr "Move"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+#: src/components/collections/BookmarksView.tsx
+msgid "Move down"
+msgstr "Move down"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Move Files"
+msgstr "Move Files"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+#: src/components/collections/BookmarksView.tsx
+msgid "Move up"
+msgstr "Move up"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+#: src/components/audio/SectionArranger.tsx
+msgid "Mute"
+msgstr "Mute"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "N-Gram Context"
+msgstr "N-Gram Context"
+
+# FileBrowser
+#~ msgid "Name"
+#~ msgstr "Name"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Native Markov Output"
+msgstr "Native Markov Output"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Native Performance"
+msgstr "Native Performance"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Native Stream"
+msgstr "Native Stream"
+
+#~ msgid "Negative"
+#~ msgstr "Negative"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Network error"
+msgstr "Network error"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "New collection"
+msgstr "New collection"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "New Collection"
+msgstr "New Collection"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "New note"
+msgstr "New note"
+
+#~ msgid "New patch name…"
+#~ msgstr "New patch name…"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "New patch name\\u2026"
+msgstr "New patch name\\u2026"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "NLP Engine"
+msgstr "NLP Engine"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "NLP Engine — ONNX Models"
+msgstr "NLP Engine — ONNX Models"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+#: src/components/dms/NotesView.tsx
+msgid "No"
+msgstr "No"
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "No active tasks"
+msgstr "No active tasks"
+
+#. js-lingui-explicit-id
+#: src/components/dms/TimelinePage.tsx
+#: src/components/dms/WorkflowsPage.tsx
+msgid "No active zone"
+msgstr "No active zone"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "No blockers or revisit links for this folder."
+msgstr "No blockers or revisit links for this folder."
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "No bookmarks yet — click + to add one."
+msgstr "No bookmarks yet — click + to add one."
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "No bookmarks yet."
+msgstr "No bookmarks yet."
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "No cards"
+msgstr "No cards"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "No comments yet."
+msgstr "No comments yet."
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "No Core"
+msgstr "No Core"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "No distribution data available"
+msgstr "No distribution data available"
+
+#~ msgid "No document selected"
+#~ msgstr "No document selected"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "No documents in this state."
+msgstr "No documents in this state."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "No events yet."
+msgstr "No events yet."
+
+#. js-lingui-explicit-id
+#: src/components/dms/TimelinePage.tsx
+msgid "No files found"
+msgstr "No files found"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "No flash"
+msgstr "No flash"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "No folder data available"
+msgstr "No folder data available"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FilePanel.tsx
+msgid "No folder selected"
+msgstr "No folder selected"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+msgid "No items"
+msgstr "No items"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "No items match the current filter."
+msgstr "No items match the current filter."
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchResults.tsx
+msgid "No matches found"
+msgstr "No matches found"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "No notes yet."
+msgstr "No notes yet."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "No patch"
+msgstr "No patch"
+
+#~ msgid "No patch"
+#~ msgstr "No patch"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "No patterns yet."
+msgstr "No patterns yet."
+
+#~ msgid "No results"
+#~ msgstr "No results"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+msgid "No selection"
+msgstr "No selection"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "No tags yet."
+msgstr "No tags yet."
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "No technical terms found"
+msgstr "No technical terms found"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "No tracks yet."
+msgstr "No tracks yet."
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "No transitions available from this state."
+msgstr "No transitions available from this state."
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "No transitions yet"
+msgstr "No transitions yet."
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "No workflow defined for this zone"
+msgstr "No workflow defined for this zone"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "No workflow loaded."
+msgstr "No workflow loaded."
+
+#. js-lingui-explicit-id
+#: src/components/header/ZoneNavigator.tsx
+msgid "No zones"
+msgstr "No zones"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Not connected to native host."
+msgstr "Not connected to native host."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Not indexed"
+msgstr "Not indexed"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Note title…"
+msgstr "Note title…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+#: src/components/dms/NotesView.tsx
+msgid "Notes"
+msgstr "Notes"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/BlockCard.tsx
+msgid "OFF"
+msgstr "OFF"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Offline render to WAV"
+msgstr "Offline render to WAV"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Offset"
+msgstr "Offset"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/BlockCard.tsx
+msgid "ON"
+msgstr "ON"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Open a zone first to manage its workflow."
+msgstr "Open a zone first to manage its workflow."
+
+#. js-lingui-explicit-id
+#: src/components/dms/TimelinePage.tsx
+msgid "Open a zone from the header to see its file activity timeline here."
+msgstr "Open a zone from the header to see its file activity timeline here."
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Open a zone to see its bookmarks."
+msgstr "Open a zone to see its bookmarks."
+
+#. js-lingui-explicit-id
+#: src/components/Header.tsx
+msgid "Open Sidebar"
+msgstr "Open Sidebar"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Optional note"
+msgstr "Optional note"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Orientation"
+msgstr "Orientation"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Our engine utilizes lock-free data structures for tokenization and memory-mapped dictionaries to ensure that linguistic processing never becomes the bottleneck in your pipeline."
+msgstr "Our engine utilizes lock-free data structures for tokenization and memory-mapped dictionaries to ensure that linguistic processing never becomes the bottleneck in your pipeline."
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides."
+msgstr "Override individual colour slots. Selecting a theme preset on the Appearance tab resets all overrides."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Overview"
+msgstr "Overview"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Paper"
+msgstr "Paper"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Parent Folder"
+msgstr "Parent Folder"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Patch preset file is not valid JSON."
+msgstr "Patch preset file is not valid JSON."
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Patcher"
+msgstr "Patcher"
+
+# PatchWorkstation
+#~ msgid "Patcher"
+#~ msgstr "Patcher"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "patches"
+msgstr "patches"
+
+#~ msgid "patches"
+#~ msgstr "patches"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Patches"
+msgstr "Patches"
+
+#~ msgid "Patches"
+#~ msgstr "Patches"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Path copied to clipboard."
+msgstr "Path copied to clipboard."
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "path inside root (blank = root)"
+msgstr "path inside root (blank = root)"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Pattern"
+msgstr "Pattern"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Pattern matching results from C++ Deduplication Addon"
+msgstr "Pattern matching results from C++ Deduplication Addon"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+#: src/components/audio/modular/PatchWorkstation.tsx
+#: src/components/audio/SectionArranger.tsx
+msgid "Patterns"
+msgstr "Patterns"
+
+#~ msgid "Patterns"
+#~ msgstr "Patterns"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Pause"
+msgstr "Pause"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Pending analysis..."
+msgstr "Pending analysis..."
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Pending..."
+msgstr "Pending..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Pixel Size"
+msgstr "Pixel Size"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Play"
+msgstr "Play"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Play (Space)"
+msgstr "Play (Space)"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Playback aborted"
+msgstr "Playback aborted"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Playback failed"
+msgstr "Playback failed"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SlidingAudioVisualizer.tsx
+msgid "PLAYING"
+msgstr "PLAYING"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "POS Tagging"
+msgstr "POS Tagging"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "POS Tags"
+msgstr "POS Tags"
+
+#~ msgid "Positive"
+#~ msgstr "Positive"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Post comment"
+msgstr "Post comment"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Posting…"
+msgstr "Posting…"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Preset file is not valid JSON."
+msgstr "Preset file is not valid JSON."
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Press ＋ to create one."
+msgstr "Press ＋ to create one."
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+#: src/components/dms/NotesView.tsx
+msgid "Preview"
+msgstr "Preview"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Primary"
+msgstr "Primary"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Processing"
+msgstr "Processing"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Processing..."
+msgstr "Processing..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Profile"
+msgstr "Profile"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Quick Actions"
+msgstr "Quick Actions"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Radius: None — all rounded corners are suppressed."
+msgstr "Radius: None — all rounded corners are suppressed."
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Raw Stream Data"
+msgstr "Raw Stream Data"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Readability"
+msgstr "Readability"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Real-time Server-Sent Events (SSE) processing allows for handling massive payloads without blocking the UI thread, ensuring a fluid user experience during deep analysis."
+msgstr "Real-time Server-Sent Events (SSE) processing allows for handling massive payloads without blocking the UI thread, ensuring a fluid user experience during deep analysis."
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Reason required"
+msgstr "Reason required"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Reason required to move to"
+msgstr "Reason required to move to"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Recent Files"
+msgstr "Recent Files"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Recursion Depth"
+msgstr "Recursion Depth"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Recursive Markov Generator"
+msgstr "Recursive Markov Generator"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Redundancy Report"
+msgstr "Redundancy Report"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FilePanel.tsx
+msgid "Refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/components/dms/TimelinePage.tsx
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Reload"
+msgstr "Reload"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Reload workflow"
+msgstr "Reload"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Remove"
+msgstr "Remove"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Remove transition"
+msgstr "Remove"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/BlockCard.tsx
+msgid "Remove block"
+msgstr "Remove block"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "Remove pin"
+msgstr "Remove pin"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Remove section"
+msgstr "Remove section"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Rename lane"
+msgstr "Rename lane"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+msgid "Reorder failed"
+msgstr "Reorder failed"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Replace"
+msgstr "Replace"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Reset"
+msgstr "Reset"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Reset camera"
+msgstr "Reset camera"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "RGB Histogram"
+msgstr "RGB Histogram"
+
+# DocumentViewer
+#~ msgid "Run OCR"
+#~ msgstr "Run OCR"
+
+#~ msgid "Running OCR…"
+#~ msgstr "Running OCR…"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Safety & Toxicity"
+msgstr "Safety & Toxicity"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Samples"
+msgstr "Samples"
+
+#. js-lingui-explicit-id
+#: src/components/collections/BookmarksView.tsx
+#: src/components/ThemePanel.tsx
+msgid "Save"
+msgstr "Save"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Save failed"
+msgstr "Save failed"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Save locally"
+msgstr "Save locally"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Save Patch"
+msgstr "Save Patch"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Save Pattern"
+msgstr "Save Pattern"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Save to DB"
+msgstr "Save to DB"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Save to directory"
+msgstr "Save to directory"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Save workflow"
+msgstr "Save workflow"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Saved"
+msgstr "Saved"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Saved patch preset"
+msgstr "Saved patch preset"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Saved pattern preset"
+msgstr "Saved pattern preset"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Saving workflow"
+msgstr "Saving…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Saving…"
+msgstr "Saving…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/TimelinePage.tsx
+msgid "Scanning…"
+msgstr "Scanning…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchBar.tsx
+msgid "Search global index…"
+msgstr "Search global index…"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Search..."
+msgstr "Search..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Searchable"
+msgstr "Searchable"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchBar.tsx
+msgid "Searching global user index"
+msgstr "Searching global user index"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchResults.tsx
+msgid "Searching Index…"
+msgstr "Searching Index…"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Seek"
+msgstr "Seek"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Select a file to see its info and analysis"
+msgstr "Select a file to see its info and analysis"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Select a zone..."
+msgstr "Select a zone..."
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Select which patch this track triggers"
+msgstr "Select which patch this track triggers"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+#: src/components/dms/FilePanel.tsx
+msgid "selected"
+msgstr "selected"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Selected file is not a patch preset."
+msgstr "Selected file is not a patch preset."
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Selected file is not a pattern preset."
+msgstr "Selected file is not a pattern preset."
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Sentences"
+msgstr "Sentences"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/Sidebar.tsx
+msgid "Sentiment"
+msgstr "Sentiment"
+
+#~ msgid "Sentiment"
+#~ msgstr "Sentiment"
+
+#. js-lingui-explicit-id
+#: src/components/header/SystemDropdown.tsx
+#: src/components/Sidebar.tsx
+msgid "Settings"
+msgstr "Settings"
+
+#~ msgid "Settings"
+#~ msgstr "Settings"
+
+#. js-lingui-explicit-id
+#: src/components/dms/CommandBar.tsx
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Share"
+msgstr "Share"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Share File"
+msgstr "Share File"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Show grid"
+msgstr "Show grid"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/dms/FolderDashboard.tsx
+msgid "Size"
+msgstr "Size"
+
+#~ msgid "Size"
+#~ msgstr "Size"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Skip"
+msgstr "Skip"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Skip Words / Domain Tokens"
+msgstr "Skip Words / Domain Tokens"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Snippet"
+msgstr "Snippet"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Software"
+msgstr "Software"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Solid"
+msgstr "Solid"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Solo"
+msgstr "Solo"
+
+#~ msgid "Sort ascending"
+#~ msgstr "Sort ascending"
+
+#~ msgid "Sort descending"
+#~ msgstr "Sort descending"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+msgid "Source"
+msgstr "Source"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchMatrixView.tsx
+msgid "source ╲ dest"
+msgstr "source ╲ dest"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Source Editor"
+msgstr "Source Editor"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Source File"
+msgstr "Source File"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Space play/pause"
+msgstr "Space play/pause"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "SPZ (compressed Gaussian Splat) requires an external decoder.\\nConvert to .splat or .ply with antimatter15/splat tools, then re-open."
+msgstr "SPZ (compressed Gaussian Splat) requires an external decoder.\\nConvert to .splat or .ply with antimatter15/splat tools, then re-open."
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Standard Core"
+msgstr "Standard Core"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Start Import"
+msgstr "Start Import"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Start typing your document for C++ linguistic processing..."
+msgstr "Start typing your document for C++ linguistic processing..."
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Start writing…\\n\\nSupports **markdown**, `inline code`,\\n```ascii\\n┌─────┐\\n│ art │\\n└─────┘\\n```\\nand ![image](path)"
+msgstr "Start writing…\\n\\nSupports **markdown**, `inline code`,\\n```ascii\\n┌─────┐\\n│ art │\\n└─────┘\\n```\\nand ![image](path)"
+
+#. js-lingui-explicit-id
+#: src/components/dms/NotesView.tsx
+msgid "Start writing…\\n\\nSupports = headings, *bold*, _italic_,\\n[source,txt]\\n----\\nASCII art\\n----\\nand image::path[alt]"
+msgstr "Start writing…\\n\\nSupports = headings, *bold*, _italic_,\\n[source,txt]\\n----\\nASCII art\\n----\\nand image::path[alt]"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Startup Time"
+msgstr "Startup Time"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "states"
+msgstr "states"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "States"
+msgstr "States"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "steps"
+msgstr "steps"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "Stop"
+msgstr "Stop"
+
+#~ msgid "Stop"
+#~ msgstr "Stop"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Stop (Space)"
+msgstr "Stop (Space)"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Stop rotation"
+msgstr "Stop rotation"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "Stops after last block"
+msgstr "Stops after last block"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Stream Story"
+msgstr "Stream Story"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Streaming Architecture"
+msgstr "Streaming Architecture"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Streaming from C++"
+msgstr "Streaming from C++"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimelinePage.tsx
+msgid "Studio"
+msgstr "Studio"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "SVG Inline Preview Limit"
+msgstr "SVG Inline Preview Limit"
+
+#. js-lingui-explicit-id
+#: src/components/header/SystemDropdown.tsx
+msgid "System"
+msgstr "System"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FolderDashboard.tsx
+msgid "Tag Cloud"
+msgstr "Tag Cloud"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Target path"
+msgstr "Target path"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ImportModal.tsx
+msgid "Target Zone"
+msgstr "Target Zone"
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Technical Specifications"
+msgstr "Technical Specifications"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Temperature"
+msgstr "Temperature"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Terminal"
+msgstr "Terminal"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Terminology"
+msgstr "Terminology"
+
+#. js-lingui-explicit-id
+#: src/components/Sidebar.tsx
+msgid "Terminology Extraction"
+msgstr "Terminology Extraction"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "The format may not be supported by the system WebView."
+msgstr "The format may not be supported by the system WebView."
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "The NLP Studio is a demonstration of modern C++23 capabilities integrated into a distributed web environment."
+msgstr "The NLP Studio is a demonstration of modern C++23 capabilities integrated into a distributed web environment."
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "The quick brown fox"
+msgstr "The quick brown fox"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+#: src/components/header/SystemDropdown.tsx
+msgid "Theme"
+msgstr "Theme"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Theme · Radius · Density · Colour Overrides · Config · Models"
+msgstr "Theme · Radius · Density · Colour Overrides · Config · Models"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Theme & Settings"
+msgstr "Theme & Settings"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Theme Presets"
+msgstr "Theme Presets"
+
+#. js-lingui-explicit-id
+#: src/components/collections/CollectionListView.tsx
+msgid "This action cannot be undone."
+msgstr "This action cannot be undone."
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Thread-Safe Models"
+msgstr "Thread-Safe Models"
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "Threads"
+msgstr "Threads"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/dms/TimelinePage.tsx
+msgid "Timeline"
+msgstr "Timeline"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "To"
+msgstr "To"
+
+#. js-lingui-explicit-id
+#: src/components/audio/SectionArranger.tsx
+msgid "to add one."
+msgstr "to add one."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "to archive"
+msgstr "to archive"
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "Toggle Engine Profiler"
+msgstr "Toggle Engine Profiler"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Toggle mute"
+msgstr "Toggle mute"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Token Length"
+msgstr "Token Length"
+
+#. js-lingui-explicit-id
+#: src/components/analysis/AnalysisDashboard.tsx
+msgid "Tokens"
+msgstr "Tokens"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "Toolkit"
+msgstr "Toolkit"
+
+#. js-lingui-explicit-id
+#: src/components/header/MarkovDropdown.tsx
+msgid "Top-P Sampling"
+msgstr "Top-P Sampling"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileOpDialogs.tsx
+msgid "Transfers always run in the background."
+msgstr "Transfers always run in the background."
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Transition"
+msgstr "Transition"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Transition failed"
+msgstr "Transition failed"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "transitions"
+msgstr "transitions"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Transitions"
+msgstr "Transitions"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/BlockCard.tsx
+msgid "Trigger"
+msgstr "Trigger"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchResults.tsx
+msgid "Try a simpler keyword or check your index status."
+msgstr "Try a simpler keyword or check your index status."
+
+#~ msgid "Type"
+#~ msgstr "Type"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Typography"
+msgstr "Typography"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "UI language. All catalogs are pre-loaded — switching is instant."
+msgstr "UI language. All catalogs are pre-loaded — switching is instant."
+
+#. js-lingui-explicit-id
+#: src/components/About.tsx
+msgid "Under the Hood"
+msgstr "Under the Hood"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+#: src/components/audio/SectionArranger.tsx
+msgid "Unmute"
+msgstr "Unmute"
+
+#. js-lingui-explicit-id
+#: src/components/audio/AudioTimeline.tsx
+msgid "Unsolo"
+msgstr "Unsolo"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Unsupported 3D format."
+msgstr "Unsupported 3D format."
+
+#. js-lingui-explicit-id
+#: src/components/dms/FilePanel.tsx
+msgid "Up one level (Backspace)"
+msgstr "Up one level (Backspace)"
+
+#. js-lingui-explicit-id
+#: src/components/StatsDashboard.tsx
+msgid "Uptime"
+msgstr "Uptime"
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "Use as Input"
+msgstr "Use as Input"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "used"
+msgstr "used"
+
+#. js-lingui-explicit-id
+#: src/components/dms/VideoPlayer.tsx
+msgid "Volume"
+msgstr "Volume"
+
+#. js-lingui-explicit-id
+#: src/components/ThemePanel.tsx
+msgid "Where GGUF model files are stored. Changes take effect on next launch."
+msgstr "Where GGUF model files are stored. Changes take effect on next launch."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "White Bal."
+msgstr "White Bal."
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Why change state?"
+msgstr "Why change state?"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+msgid "Width"
+msgstr "Width"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ThreeDViewer.tsx
+msgid "Wireframe"
+msgstr "Wireframe"
+
+#. js-lingui-explicit-id
+#: src/components/header/ToolkitDropdown.tsx
+msgid "word1,word2..."
+msgstr "word1,word2..."
+
+#. js-lingui-explicit-id
+#: src/components/DocumentPanel.tsx
+msgid "WORDS"
+msgstr "WORDS"
+
+#. js-lingui-explicit-id
+#: src/components/dms/AnalysisPanel.tsx
+#: src/components/dms/FolderDashboard.tsx
+msgid "Workflow"
+msgstr "Workflow"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Workflow name"
+msgstr "Workflow name"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Workflow Schema"
+msgstr "Workflow Schema"
+
+#. js-lingui-explicit-id
+#: src/components/dms/WorkflowsPage.tsx
+msgid "Workflows"
+msgstr "Workflows"
+
+#. js-lingui-explicit-id
+#: src/components/dms/FileBrowser.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Workspace"
+msgstr "Workspace"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+msgid "Write a comment… Supports Markdown. (Cmd+Enter to post)"
+msgstr "Write a comment… Supports Markdown. (Cmd+Enter to post)"
+
+#. js-lingui-explicit-id
+#: src/components/audio/modular/PatchWorkstation.tsx
+msgid "XY Pads"
+msgstr "XY Pads"
+
+#~ msgid "XY Pads"
+#~ msgstr "XY Pads"
+
+#. js-lingui-explicit-id
+#: src/components/dms/KanbanView.tsx
+#: src/components/dms/NotesView.tsx
+msgid "Yes"
+msgstr "Yes"
+
+#. js-lingui-explicit-id
+#: src/components/dms/SearchBar.tsx
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Zone"
+msgstr "Zone"
+
+#. js-lingui-explicit-id
+#: src/components/dms/ZoneDashboard.tsx
+msgid "Zone Dashboard"
+msgstr "Zone Dashboard"

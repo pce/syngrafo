@@ -17,7 +17,7 @@
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
 import { decodeDocument, encodeDocument } from "../models/project";
 import type { SBlock, SDocument } from "../models/sdm";
-import { ipcRawCall } from "./ipc";
+import { ipcRawCall, parseIpcResult } from "./ipc";
 
 
 const MIME: Record<string, string> = {
@@ -113,14 +113,14 @@ export function createSdocBundle(doc: SDocument, assets: SdocAsset[] = []): Uint
 }
 
 
-/** Collect all unique `asset://` src references from a block tree. */
+/** Collect all unique embedded/local image references from a block tree. */
 function collectAssetRefs(blocks: SBlock[]): string[] {
   const refs = new Set<string>();
   function walk(b: SBlock) {
     // SImgBlock has .src; other blocks may have children
     if (b.type === "img") {
       const src = (b as { src: string }).src;
-      if (src?.startsWith("asset://")) refs.add(src);
+      if (src?.startsWith("asset://") || src?.startsWith("local://")) refs.add(src);
     }
     const children = (b as { children?: SBlock[] }).children;
     if (Array.isArray(children)) children.forEach(walk);
@@ -129,11 +129,51 @@ function collectAssetRefs(blocks: SBlock[]): string[] {
   return [...refs];
 }
 
+function sanitizeFilename(filename: string): string {
+  const cleaned = filename.replace(/[\/\\:*?"<>|]/g, "-").trim();
+  return cleaned || "asset";
+}
+
+function uniqueFilename(base: string, used: Set<string>): string {
+  const dot = base.lastIndexOf(".");
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const ext = dot > 0 ? base.slice(dot) : "";
+  let candidate = base;
+  let seq = 2;
+  while (used.has(candidate)) {
+    candidate = `${stem}-${seq}${ext}`;
+    seq += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
 /** Fetch a blob URL and return its raw bytes. */
 async function blobUrlToBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch blob: ${url}`);
   return new Uint8Array(await res.arrayBuffer());
+}
+
+async function pathToBytes(path: string): Promise<Uint8Array> {
+  const raw = await ipcRawCall("dms_fetch_data_url", path);
+  const dataUrl = parseIpcResult<{ data_url: string }>(raw).data?.data_url;
+  if (!dataUrl) throw new Error(`Could not read asset: ${path}`);
+  return dataUrlToBytes(dataUrl);
+}
+
+function rewriteImageRefs(blocks: SBlock[], mapping: Map<string, string>): SBlock[] {
+  return blocks.map((block) => {
+    const nextSrc = block.type === "img" ? mapping.get(block.src) : undefined;
+    const children = (block as { children?: SBlock[] }).children;
+    const nextChildren = Array.isArray(children) ? rewriteImageRefs(children, mapping) : undefined;
+    if (!nextSrc && nextChildren === children) return block;
+    return {
+      ...block,
+      ...(nextSrc ? { src: nextSrc } : {}),
+      ...(nextChildren ? { children: nextChildren } : {}),
+    } as SBlock;
+  });
 }
 
 
@@ -164,20 +204,42 @@ export async function saveSdocToPath(
   // 2. Fetch raw bytes for each referenced asset
   const assets: SdocAsset[] = [];
   const missingAssets: string[] = [];
+  const remappedRefs = new Map<string, string>();
+  const usedFilenames = new Set<string>();
 
   for (const ref of refs) {
-    const blobUrl = assetBlobs.get(ref);
-    if (!blobUrl) {
-      missingAssets.push(ref);
+    if (ref.startsWith("asset://")) {
+      const blobUrl = assetBlobs.get(ref);
+      if (!blobUrl) {
+        missingAssets.push(ref);
+        continue;
+      }
+      const filename = uniqueFilename(sanitizeFilename(ref.slice("asset://".length)), usedFilenames);
+      const data = await blobUrlToBytes(blobUrl);
+      assets.push({ filename, data });
+      remappedRefs.set(ref, `asset://${filename}`);
       continue;
     }
-    const filename = ref.slice("asset://".length);
-    const data = await blobUrlToBytes(blobUrl);
-    assets.push({ filename, data });
+    if (ref.startsWith("local://")) {
+      const localPath = ref.slice("local://".length);
+      try {
+        const leaf = localPath.split(/[\\/]/).pop() ?? "image";
+        const filename = uniqueFilename(sanitizeFilename(leaf), usedFilenames);
+        const data = await pathToBytes(localPath);
+        assets.push({ filename, data });
+        remappedRefs.set(ref, `asset://${filename}`);
+      } catch {
+        missingAssets.push(ref);
+      }
+    }
   }
 
+  const bundleDoc = remappedRefs.size > 0
+    ? { ...doc, blocks: rewriteImageRefs(doc.blocks, remappedRefs) }
+    : doc;
+
   // 3. Pack into a ZIP
-  const zipBytes = createSdocBundle(doc, assets);
+  const zipBytes = createSdocBundle(bundleDoc, assets);
 
   // 4. Convert to base64 and write via IPC
   const b64 = bytesToBase64(zipBytes);

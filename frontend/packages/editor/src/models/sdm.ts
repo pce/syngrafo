@@ -254,6 +254,18 @@ export const PAGE_SIZE_MM: Record<PageSize, { w: number; h: number }> = {
   legal:  { w: 216,  h: 356  },
 };
 
+export interface SPageGradientStop {
+  color: string;
+  /** 0..100 */
+  position: number;
+}
+
+export interface SPageLinearGradient {
+  type: "linear";
+  angle: number;
+  stops: SPageGradientStop[];
+}
+
 export interface SPageBackground {
   /**
    * CSS color string (hex, rgba, hsl, named).  Defaults to white when absent.
@@ -261,6 +273,7 @@ export interface SPageBackground {
    * Printed via `-webkit-print-color-adjust: exact` so it appears in PDFs.
    */
   color?: string;
+  gradient?: SPageLinearGradient;
 }
 
 export interface SPageConfig {

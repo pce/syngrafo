@@ -1,5 +1,6 @@
 import React from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 import Dropdown from "../ui/Dropdown";
 import Tooltip from "../ui/Tooltip";
@@ -44,12 +45,12 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
   onGenerate,
   onAction,
 }) => {
-  const { _ } = useLingui();
+  useLingui();
   return (
     <Dropdown
-      label={_("Markov Engine")}
+      label={i18n._({ id: "Markov Engine", message: "Markov Engine" })}
       subLabel={
-        isGenerating ? _("Processing...") : selectedModel.replace(/_/g, " ")
+        isGenerating ? i18n._({ id: "Processing...", message: "Processing..." }) : selectedModel.replace(/_/g, " ")
       }
       icon={isGenerating ? "activity" : "sparkles"}
     >
@@ -61,7 +62,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
           className="text-[9px] font-black uppercase tracking-widest"
           style={{ color: "var(--theme-text-muted)" }}
         >
-          {_("Models")}
+          {i18n._({ id: "Models", message: "Models" })}
         </span>
         <div className="mt-2 grid grid-cols-1 gap-1">
           {availableModels.map((m) => (
@@ -87,7 +88,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
       >
         <div className="py-1">
           <Toggle
-            label={_("Hybrid Mode")}
+            label={i18n._({ id: "Hybrid Mode", message: "Hybrid Mode" })}
             checked={genOptions.useHybrid}
             onChange={(val) => setGenOptions((p) => ({ ...p, useHybrid: val }))}
           />
@@ -98,7 +99,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
             className="flex justify-between text-[9px] font-bold"
             style={{ color: "var(--theme-text-muted)" }}
           >
-            <span>{_("Temperature")}</span>
+            <span>{i18n._({ id: "Temperature", message: "Temperature" })}</span>
             <span>{genOptions.temperature}</span>
           </div>
           <input
@@ -126,7 +127,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
             className="flex justify-between text-[9px] font-bold"
             style={{ color: "var(--theme-text-muted)" }}
           >
-            <span>{_("Top-P Sampling")}</span>
+            <span>{i18n._({ id: "Top-P Sampling", message: "Top-P Sampling" })}</span>
             <span>{genOptions.top_p}</span>
           </div>
           <input
@@ -154,7 +155,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
             className="flex justify-between text-[9px] font-bold"
             style={{ color: "var(--theme-text-muted)" }}
           >
-            <span>{_("Token Length")}</span>
+            <span>{i18n._({ id: "Token Length", message: "Token Length" })}</span>
             <span>{genOptions.length}</span>
           </div>
           <input
@@ -179,7 +180,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
             className="flex justify-between text-[9px] font-bold"
             style={{ color: "var(--theme-text-muted)" }}
           >
-            <span>{_("N-Gram Context")}</span>
+            <span>{i18n._({ id: "N-Gram Context", message: "N-Gram Context" })}</span>
             <span>{genOptions.nGram}</span>
           </div>
           <input
@@ -208,7 +209,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
               className="text-[9px] font-black uppercase tracking-widest"
               style={{ color: "var(--theme-text-muted)" }}
             >
-              {_("Fractal Engine")}
+              {i18n._({ id: "Fractal Engine", message: "Fractal Engine" })}
             </span>
           </div>
 
@@ -217,7 +218,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
               className="flex justify-between text-[9px] font-bold"
               style={{ color: "var(--theme-text-muted)" }}
             >
-              <span>{_("Recursion Depth")}</span>
+              <span>{i18n._({ id: "Recursion Depth", message: "Recursion Depth" })}</span>
               <span>{genOptions.fractalDepth}</span>
             </div>
             <input
@@ -245,7 +246,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
               className="flex justify-between text-[9px] font-bold"
               style={{ color: "var(--theme-text-muted)" }}
             >
-              <span>{_("Branch Probability")}</span>
+              <span>{i18n._({ id: "Branch Probability", message: "Branch Probability" })}</span>
               <span>{genOptions.fractalProb}</span>
             </div>
             <input
@@ -276,7 +277,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
             className="text-[9px] font-black uppercase tracking-widest"
             style={{ color: "var(--theme-text-muted)" }}
           >
-            {_("Generation")}
+            {i18n._({ id: "Generation", message: "Generation" })}
           </span>
         </div>
         <button
@@ -285,7 +286,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
           className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:opacity-80 transition-opacity"
           style={{ color: "var(--theme-primary)" }}
         >
-          <Icon name="sparkles" size="sm" /> {_("Stream Story")}
+          <Icon name="sparkles" size="sm" /> {i18n._({ id: "Stream Story", message: "Stream Story" })}
         </button>
         <button
           onClick={() => onGenerate(true, false)}
@@ -293,7 +294,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
           className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:opacity-80 transition-opacity"
           style={{ color: "var(--theme-text)" }}
         >
-          <Icon name="edit" size="sm" /> {_("Continue text")}
+          <Icon name="edit" size="sm" /> {i18n._({ id: "Continue text", message: "Continue text" })}
         </button>
 
         <div
@@ -301,7 +302,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
           style={{ backgroundColor: "var(--theme-border)" }}
         />
 
-        <Tooltip content={_("Recursive Markov Generator")}>
+        <Tooltip content={i18n._({ id: "Recursive Markov Generator", message: "Recursive Markov Generator" })}>
           <button
             onClick={() =>
               onAction("fractal_generator", {
@@ -314,7 +315,7 @@ const MarkovDropdown: React.FC<MarkovDropdownProps> = ({
             className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold flex items-center gap-2 hover:opacity-80 transition-opacity"
             style={{ color: "var(--theme-warning)" }}
           >
-            <Icon name="tree" size="sm" /> {_("Gen. Fractal")}
+            <Icon name="tree" size="sm" /> {i18n._({ id: "Gen. Fractal", message: "Gen. Fractal" })}
           </button>
         </Tooltip>
       </div>

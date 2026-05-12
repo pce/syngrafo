@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { nlp, type StreamChunk, type NLPStreamRequest } from "../services/nlp-service";
 import { markov } from "../services/markov-service";
 import { DocumentModel, type DocumentState } from "../models/document";
@@ -122,7 +123,7 @@ const DocumentPanel = ({
   onAnalysisResultsRef,
   isGenerating,
 }: DocumentPanelProps) => {
-  const { _ } = useLingui();
+  useLingui();
   const [doc, setDoc] = useState<DocumentState>(() =>
     DocumentModel.createInitialState("Analysis Workspace", content),
   );
@@ -368,7 +369,7 @@ const DocumentPanel = ({
                   <input
                     autoFocus
                     type="text"
-                    placeholder={_("Search...")}
+                    placeholder={i18n._({ id: "Search...", message: "Search..." })}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="bg-transparent border-none text-[10px] font-bold  tracking-widest focus:ring-0 p-0 w-full"
@@ -399,10 +400,10 @@ const DocumentPanel = ({
                 style={{ color: "var(--theme-text-muted)" }}
               >
                 {activeTab === "editor"
-                  ? _("Source Editor")
+                  ? i18n._({ id: "Source Editor", message: "Source Editor" })
                   : activeTab === "output"
-                    ? _("Native Markov Output")
-                    : _("Linguistic Analysis")}
+                    ? i18n._({ id: "Native Markov Output", message: "Native Markov Output" })
+                    : i18n._({ id: "Linguistic Analysis", message: "Linguistic Analysis" })}
               </div>
             </div>
           </div>
@@ -410,14 +411,14 @@ const DocumentPanel = ({
             <button
               onClick={handleLoad}
               className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
-              title={_("Load saved work")}
+              title={i18n._({ id: "Load saved work", message: "Load saved work" })}
             >
               <Icon name="import" size="sm" className="text-slate-500" />
             </button>
             <button
               onClick={handleSave}
               className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
-              title={_("Save locally")}
+              title={i18n._({ id: "Save locally", message: "Save locally" })}
             >
               <Icon name="copy" size="sm" className="text-slate-500" />
             </button>
@@ -446,7 +447,7 @@ const DocumentPanel = ({
             }
             onClick={() => setActiveTab("editor")}
           >
-            {_("Input Source")}
+            {i18n._({ id: "Input Source", message: "Input Source" })}
           </button>
           <button
             className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
@@ -464,7 +465,7 @@ const DocumentPanel = ({
             }
             onClick={() => setActiveTab("output")}
           >
-            {_("Markov Output")}
+            {i18n._({ id: "Markov Output", message: "Markov Output" })}
           </button>
           <button
             className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
@@ -482,7 +483,7 @@ const DocumentPanel = ({
             }
             onClick={() => setActiveTab("analysis")}
           >
-            {_("Analysis View")}
+            {i18n._({ id: "Analysis View", message: "Analysis View" })}
           </button>
         </div>
 
@@ -504,7 +505,7 @@ const DocumentPanel = ({
                   onSelect={handleSelection}
                   className="w-full h-full p-6 bg-transparent border-none text-lg leading-relaxed focus:outline-none focus:ring-0 resize-none font-serif placeholder:text-slate-300 dark:placeholder:text-slate-700 overflow-y-auto scrollbar-thin relative z-10"
                   style={{ color: "var(--theme-text)" }}
-                  placeholder={_("Start typing your document for C++ linguistic processing...")}
+                  placeholder={i18n._({ id: "Start typing your document for C++ linguistic processing...", message: "Start typing your document for C++ linguistic processing..." })}
                   spellCheck="false"
                 />
               </div>
@@ -517,8 +518,8 @@ const DocumentPanel = ({
                   style={{ color: "var(--theme-text-muted)" }}
                 >
                   <div className="flex gap-4 items-center">
-                    <span>{stats.wordCount} {_("WORDS")}</span>
-                    <span>{stats.charCount} {_("CHARS")}</span>
+                    <span>{stats.wordCount} {i18n._({ id: "WORDS", message: "WORDS" })}</span>
+                    <span>{stats.charCount} {i18n._({ id: "CHARS", message: "CHARS" })}</span>
                     {selectedText && (
                       <span
                         className="lowercase opacity-80 italic"
@@ -539,13 +540,13 @@ const DocumentPanel = ({
                       style={{ color: "var(--theme-danger)" }}
                     >
                       <Icon name="search" size="xs" />
-                      {highlights.length} {_("DUPLICATES FOUND")}
+                      {highlights.length} {i18n._({ id: "DUPLICATES FOUND", message: "DUPLICATES FOUND" })}
                     </span>
                   ) : (
                     <span
                       style={{ color: "var(--theme-text-muted)", opacity: 0.5 }}
                     >
-                      {_("0 DUPLICATES")}
+                      {i18n._({ id: "0 DUPLICATES", message: "0 DUPLICATES" })}
                     </span>
                   )}
                 </div>
@@ -554,7 +555,7 @@ const DocumentPanel = ({
                     onClick={handleClear}
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
                   >
-                    {_("Clear")}
+                    {i18n._({ id: "Clear", message: "Clear" })}
                   </button>
                   <button
                     onClick={handleProcessText}
@@ -575,7 +576,7 @@ const DocumentPanel = ({
                         : {}
                     }
                   >
-                    {_("Analyze Source")}
+                    {i18n._({ id: "Analyze Source", message: "Analyze Source" })}
                   </button>
                 </div>
               </div>
@@ -587,7 +588,7 @@ const DocumentPanel = ({
               {isGenerating && (
                 <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-indigo-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg">
                   <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                  {_("Streaming from C++")}
+                  {i18n._({ id: "Streaming from C++", message: "Streaming from C++" })}
                 </div>
               )}
               <div className="relative group overflow-hidden rounded-xl border border-transparent focus-within:border-indigo-500/30 transition-colors bg-slate-50/30 dark:bg-slate-900/30 shadow-inner h-80">
@@ -612,7 +613,7 @@ const DocumentPanel = ({
                       highlighter.scrollTop = target.scrollTop;
                     }
                   }}
-                  placeholder={_("Markov generation output will appear here...")}
+                  placeholder={i18n._({ id: "Markov generation output will appear here...", message: "Markov generation output will appear here..." })}
                 />
               </div>
               <div
@@ -623,7 +624,7 @@ const DocumentPanel = ({
                   className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  <span>{(outputContent || "").split(/\s+/).filter(Boolean).length} {_("GEN. WORDS")}</span>
+                  <span>{(outputContent || "").split(/\s+/).filter(Boolean).length} {i18n._({ id: "GEN. WORDS", message: "GEN. WORDS" })}</span>
                   <button
                     onClick={async () => {
                       const text = outputContent || "";
@@ -695,7 +696,7 @@ const DocumentPanel = ({
                     }}
                   >
                     <Icon name="search" size="xs" />
-                    <span>{outputDuplicates} {_("DUPS")}</span>
+                    <span>{outputDuplicates} {i18n._({ id: "DUPS", message: "DUPS" })}</span>
                   </button>
                 </div>
                 <div className="flex gap-2">
@@ -703,13 +704,13 @@ const DocumentPanel = ({
                     onClick={() => setOutputContent("")}
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
                   >
-                    {_("Reset")}
+                    {i18n._({ id: "Reset", message: "Reset" })}
                   </button>
                   <button
                     onClick={() => handleContentChange(outputContent)}
                     className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
                   >
-                    {_("Use as Input")}
+                    {i18n._({ id: "Use as Input", message: "Use as Input" })}
                   </button>
                 </div>
               </div>
@@ -728,7 +729,7 @@ const DocumentPanel = ({
                     className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
                     style={{ color: "var(--theme-text-muted)" }}
                   >
-                    {_("Engine Insight")}
+                    {i18n._({ id: "Engine Insight", message: "Engine Insight" })}
                   </span>
                 </div>
                 <button
@@ -736,7 +737,7 @@ const DocumentPanel = ({
                   className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 transition-colors"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  {_("Clear Results")}
+                  {i18n._({ id: "Clear Results", message: "Clear Results" })}
                 </button>
               </div>
               <div

@@ -8,7 +8,6 @@
  * Delegates to system tools (zip, tar, gzip, bzip2, zstd).
  */
 
-#pragma once
 #include "../dms_handle.hh"
 
 namespace pce::dms {
@@ -70,4 +69,3 @@ inline void register_archive_bindings(saucer::smartview& wv, DMSHandle& /*dms*/,
 }
 
 } // namespace pce::dms
-

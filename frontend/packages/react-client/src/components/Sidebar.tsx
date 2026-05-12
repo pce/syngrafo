@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { nlp, type StreamChunk, type HealthStatus, type NLPStreamRequest } from "../services/nlp-service";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
@@ -22,7 +23,7 @@ interface AnalysisResults {
  * Focuses on real-time C++ engine output and structured dashboard results.
  */
 const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
-  const { _ } = useLingui();
+  useLingui();
   const [activeTab, setActiveTab] = useState<"analysis" | "settings">(
     "analysis",
   );
@@ -193,8 +194,8 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
         }}
       >
         {[
-          { id: "analysis", icon: "activity", label: _("Analysis") },
-            { id: "settings", icon: "settings", label: _("Settings") },
+          { id: "analysis", icon: "activity", label: i18n._({ id: "Analysis", message: "Analysis" }) },
+            { id: "settings", icon: "settings", label: i18n._({ id: "Settings", message: "Settings" }) },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -233,7 +234,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
             <header className="flex justify-between items-center px-1">
               <div className="flex flex-col">
                 <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                  {_("NLP Engine")}
+                  {i18n._({ id: "NLP Engine", message: "NLP Engine" })}
                 </h2>
                 <div
                   className="flex gap-1.5 mt-1.5 p-1 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 w-fit"
@@ -271,7 +272,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                       }
                 }
               >
-                {isStreaming ? _("Processing") : _("Analyze")}
+                {isStreaming ? i18n._({ id: "Processing", message: "Processing" }) : i18n._({ id: "Analyze", message: "Analyze" })}
               </button>
             </header>
 
@@ -294,7 +295,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                     className="font-black text-[9px] uppercase tracking-widest text-slate-400"
                     style={{ color: "var(--theme-text-muted)" }}
                   >
-                    {_("Language")}
+                    {i18n._({ id: "Language", message: "Language" })}
                   </h3>
                   <div
                     className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate"
@@ -302,7 +303,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                   >
                     {results.language
                       ? `${results.language.code.toUpperCase()} (${results.language.confidence}%)`
-                      : _("Pending...")}
+                      : i18n._({ id: "Pending...", message: "Pending..." })}
                   </div>
                 </div>
               </div>
@@ -323,7 +324,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                     className="font-black text-[9px] uppercase tracking-widest text-slate-400"
                     style={{ color: "var(--theme-text-muted)" }}
                   >
-                    {_("Sentiment")}
+                    {i18n._({ id: "Sentiment", message: "Sentiment" })}
                   </h3>
                   <div
                     className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate"
@@ -331,7 +332,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                   >
                     {results.sentiment
                       ? `${results.sentiment.label.toUpperCase()} (${results.sentiment.score.toFixed(2)})`
-                      : _("Pending...")}
+                      : i18n._({ id: "Pending...", message: "Pending..." })}
                   </div>
                 </div>
               </div>
@@ -353,7 +354,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                       className="font-black text-[9px] uppercase tracking-widest text-slate-400"
                       style={{ color: "var(--theme-text-muted)" }}
                     >
-                      {_("Terminology")}
+                      {i18n._({ id: "Terminology", message: "Terminology" })}
                     </h3>
                     <div
                       className="text-[10px] font-bold text-slate-600 dark:text-slate-300 mt-1 flex flex-wrap gap-1"
@@ -369,13 +370,13 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                           </span>
                         ))
                       ) : isStreaming ? (
-                        <span className="opacity-50 italic">{_("Analyzing...")}</span>
+                        <span className="opacity-50 italic">{i18n._({ id: "Analyzing...", message: "Analyzing..." })}</span>
                       ) : results.language ? (
                         <span className="opacity-40 italic">
-                          {_("No technical terms found")}
+                          {i18n._({ id: "No technical terms found", message: "No technical terms found" })}
                         </span>
                       ) : (
-                        _("Pending...")
+                        i18n._({ id: "Pending...", message: "Pending..." })
                       )}
                     </div>
                   </div>
@@ -401,13 +402,13 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                       className="font-black text-[9px] uppercase tracking-widest text-slate-400"
                       style={{ color: "var(--theme-text-muted)" }}
                     >
-                      {_("POS Tags")}
+                      {i18n._({ id: "POS Tags", message: "POS Tags" })}
                     </h3>
                     <div
                       className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-1 line-clamp-2"
                       style={{ color: "var(--theme-text-muted)" }}
                     >
-                      {results.posSummary || _("Pending analysis...")}
+                      {results.posSummary || i18n._({ id: "Pending analysis...", message: "Pending analysis..." })}
                     </div>
                   </div>
                 </div>
@@ -420,7 +421,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
                   className="text-[9px] font-black uppercase tracking-widest text-slate-400"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  {_("Native Stream")}
+                  {i18n._({ id: "Native Stream", message: "Native Stream" })}
                 </h3>
                 {isStreaming && (
                   <div
@@ -432,7 +433,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
               <textarea
                 readOnly
                 value={
-                  streamLog || _("Invoke analysis to stream logs from C++...")
+                  streamLog || i18n._({ id: "Invoke analysis to stream logs from C++...", message: "Invoke analysis to stream logs from C++..." })
                 }
                 className="w-full h-40 bg-slate-950 text-blue-400/90 p-4 rounded-2xl font-mono text-[10px] leading-relaxed border border-slate-800 focus:outline-none resize-none scrollbar-thin scrollbar-thumb-slate-800"
                 style={{
@@ -449,17 +450,17 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
         {activeTab === "settings" && (
           <div className="space-y-6 animate-in slide-in-from-right duration-300">
             <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-              {_("Configuration")}
+              {i18n._({ id: "Configuration", message: "Configuration" })}
               </h2>
             <div className="space-y-3">
               {([
-                { id: "posTagging" as const, label: _("POS Tagging"), icon: "activity" as IconName },
+                { id: "posTagging" as const, label: i18n._({ id: "POS Tagging", message: "POS Tagging" }), icon: "activity" as IconName },
                 {
                   id: "terminology" as const,
-                  label: _("Terminology Extraction"),
+                  label: i18n._({ id: "Terminology Extraction", message: "Terminology Extraction" }),
                   icon: "sparkles" as IconName,
                 },
-                { id: "safety" as const, label: _("Content Safety"), icon: "safety" as IconName },
+                { id: "safety" as const, label: i18n._({ id: "Content Safety", message: "Content Safety" }), icon: "safety" as IconName },
               ] satisfies Array<{ id: keyof typeof config; label: string; icon: IconName }>).map((item) => (
                 <label
                   key={item.id}
@@ -527,7 +528,7 @@ const Sidebar: React.FC<SidebarProps> = ({ documentContent = "" }) => {
           className={`text-[8px] font-black uppercase ${health.engine_ready ? "text-emerald-500" : "text-rose-500"}`}
         >
           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-          <span>{health.engine_ready ? _("Engine Linked") : _("No Core")}</span>
+          <span>{health.engine_ready ? i18n._({ id: "Engine Linked", message: "Engine Linked" }) : i18n._({ id: "No Core", message: "No Core" })}</span>
         </div>
       </footer>
     </div>

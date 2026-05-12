@@ -13,6 +13,8 @@
 .about
 --
 A local-first system for transforming files into structured, searchable, and interactive data.
+
+Document State Machine.
 --
 
 
@@ -230,7 +232,7 @@ auto rows = db.from("dms_zones")
 ----
 
 
-While the Migration offers StaticFileSources they are intentionally compile-time in Code
+// While the Migration offers StaticFileSources they are intentionally compile-time in Code
 
 
 

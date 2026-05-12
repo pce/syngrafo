@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "../Icon";
 import {
   CopyMoveDialog,
@@ -83,7 +84,7 @@ const CommandBar: React.FC<CommandBarProps> = ({
   activePanel,
   onRefresh,
 }) => {
-  const { _ } = useLingui();
+  useLingui();
   const [activeOp, setActiveOp] = useState<ActiveOp>(null);
 
   const active = activePanel === "left" ? leftPanel : rightPanel;
@@ -176,11 +177,11 @@ const CommandBar: React.FC<CommandBarProps> = ({
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-primary)] shrink-0" />
               <span className="text-[9px] font-bold text-[var(--theme-text)]">
-                {count}{" "}{_("selected")}
+                {count}{" "}{i18n._({ id: "selected", message: "selected" })}
               </span>
             </>
           ) : (
-            <span className="text-[9px] text-[var(--theme-text-muted)]">{_("No selection")}</span>
+            <span className="text-[9px] text-[var(--theme-text-muted)]">{i18n._({ id: "No selection", message: "No selection" })}</span>
           )}
         </div>
 
@@ -201,21 +202,21 @@ const CommandBar: React.FC<CommandBarProps> = ({
         <div className="flex-1" />
 
         <CmdBtn
-          label={_("Copy")}
+          label={i18n._({ id: "Copy", message: "Copy" })}
           shortcut="F5"
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-blue-500/10 hover:border-blue-400/30 hover:text-blue-500"
           onClick={() => setActiveOp("copy")}
         />
         <CmdBtn
-          label={_("Move")}
+          label={i18n._({ id: "Move", message: "Move" })}
           shortcut="F6"
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-amber-500/10 hover:border-amber-400/30 hover:text-amber-500"
           onClick={() => setActiveOp("move")}
         />
         <CmdBtn
-          label={_("Delete")}
+          label={i18n._({ id: "Delete", message: "Delete" })}
           shortcut="F8"
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-rose-500/10 hover:border-rose-400/30 hover:text-rose-500"
@@ -225,19 +226,19 @@ const CommandBar: React.FC<CommandBarProps> = ({
         <div className="h-4 w-px bg-[var(--theme-border)] shrink-0" />
 
         <CmdBtn
-          label={_("Share")}
+          label={i18n._({ id: "Share", message: "Share" })}
           disabled={!hasSelection || count > 1}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-violet-500/10 hover:border-violet-400/30 hover:text-violet-500"
           onClick={() => setActiveOp("share")}
         />
         <CmdBtn
-          label={_("Compress")}
+          label={i18n._({ id: "Compress", message: "Compress" })}
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-emerald-500/10 hover:border-emerald-400/30 hover:text-emerald-500"
           onClick={() => setActiveOp("compress")}
         />
         <CmdBtn
-          label={_("Archive")}
+          label={i18n._({ id: "Archive", message: "Archive" })}
           disabled={!hasSelection}
           accent="text-[var(--theme-text)] bg-[var(--theme-surface)] hover:bg-cyan-500/10 hover:border-cyan-400/30 hover:text-cyan-500"
           onClick={() => setActiveOp("archive")}

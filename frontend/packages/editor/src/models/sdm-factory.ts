@@ -24,14 +24,14 @@ export function createDocument(meta?: Partial<SDocMeta>): SDocument {
     $schema: "syngrafo/1",
     id: crypto.randomUUID(),
     meta: {
-      title: "Untitled",
+      title: "",
       created_at: now,
       updated_at: now,
       ...meta,
     },
     page: { size: "a4", orientation: "portrait", margin: "md" },
     styles: {},
-    blocks: [],
+    blocks: [createBlock("p")],
   };
 }
 

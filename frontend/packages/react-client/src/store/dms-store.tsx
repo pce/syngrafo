@@ -33,6 +33,9 @@ export interface DmsState {
   /** Absolute path of the directory currently shown in the file browser. */
   currentPath:      string;
 
+  /** Explicit folder context used by folder-centric dashboards and widgets. */
+  selectedDirectory:string | null;
+
   /** Absolute path of the file the user has clicked/selected. */
   selectedPath:     string | null;
 
@@ -83,6 +86,7 @@ export interface DmsState {
 const initialState: DmsState = {
   zone:            null,
   currentPath:     "",
+  selectedDirectory: null,
   selectedPath:    null,
   entries:         [],
   viewerPath:      null,
@@ -106,6 +110,7 @@ export type DmsAction =
   | { type: "SET_ZONE";            zone:     Zone | null         }
   | { type: "SET_ZONES";           zones:    Zone[]              }
   | { type: "SET_PATH";            path:     string              }
+  | { type: "SET_SELECTED_DIRECTORY"; path:  string | null       }
   | { type: "SET_ENTRIES";         entries:  FsEntry[]           }
   | { type: "SELECT_FILE";         path:     string | null       }
   | { type: "SET_VIEWER";          path:     string; content: string }
@@ -135,6 +140,12 @@ function reducer(state: DmsState, action: DmsAction): DmsState {
         // so the user sees their documents immediately.
         // Clear path when leaving a zone — user picks a folder via "Select Inbox".
         currentPath:  action.zone ? action.zone.in_path : "",
+        selectedDirectory: action.zone ? action.zone.in_path : null,
+        selectedPath: null,
+        viewerPath: null,
+        viewerContent: null,
+        metadata: null,
+        fileStats: null,
         isGlobalMode: action.zone === null,
         entries:      [],
         error:        null,
@@ -150,13 +161,30 @@ function reducer(state: DmsState, action: DmsAction): DmsState {
         zone: action.isGlobal ? null : state.zone,
         // When switching back to global input mode, clear path so user picks their inbox.
         currentPath: action.isGlobal ? "" : (state.zone ? state.zone.out_path : state.currentPath),
+        selectedDirectory: action.isGlobal ? null : (state.zone ? state.zone.out_path : state.currentPath),
       };
 
     case "SET_ZONES":
       return { ...state, zones: action.zones };
 
     case "SET_PATH":
-      return { ...state, currentPath: action.path };
+      return {
+        ...state,
+        currentPath: action.path,
+        selectedDirectory: action.path,
+        selectedPath: null,
+        viewerPath: null,
+        viewerContent: null,
+        metadata: null,
+        fileStats: null,
+        error: null,
+      };
+
+    case "SET_SELECTED_DIRECTORY":
+      return {
+        ...state,
+        selectedDirectory: action.path,
+      };
 
     case "SET_ENTRIES":
       return { ...state, entries: action.entries };

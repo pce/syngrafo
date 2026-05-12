@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLingui } from "@lingui/react";
+import { i18n } from "@/i18n";
 import { Icon } from "./Icon";
 
 interface EngineStats {
@@ -20,7 +21,7 @@ interface EngineStats {
  * Refactored to handle its own visibility state.
  */
 const StatsDashboard: React.FC = () => {
-  const { _ } = useLingui();
+  useLingui();
   const [isOpen, setIsOpen] = useState(false);
   const [stats, setStats] = useState<EngineStats | null>(null);
   const [error, setError] = useState<boolean>(false);
@@ -66,7 +67,7 @@ const StatsDashboard: React.FC = () => {
             ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
             : "bg-slate-100 dark:bg-slate-800 text-indigo-600 hover:bg-slate-200 dark:hover:bg-slate-700"
         }`}
-        title={_("Toggle Engine Profiler")}
+        title={i18n._({ id: "Toggle Engine Profiler", message: "Toggle Engine Profiler" })}
       >
         <Icon name="activity" size="sm" />
       </button>
@@ -88,7 +89,7 @@ const StatsDashboard: React.FC = () => {
               style={{ color: "var(--theme-text-muted)" }}
             >
               <Icon name="activity" size="sm" />
-              {_("Engine Profiler")}
+              {i18n._({ id: "Engine Profiler", message: "Engine Profiler" })}
             </h4>
             <div
               className={`w-2 h-2 rounded-full ${error ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
@@ -102,7 +103,7 @@ const StatsDashboard: React.FC = () => {
                   className="text-[10px] font-bold uppercase tracking-tighter"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  {_("CPU Load")}
+                  {i18n._({ id: "CPU Load", message: "CPU Load" })}
                 </span>
                 <span
                   className="text-xs font-black"
@@ -137,7 +138,7 @@ const StatsDashboard: React.FC = () => {
                   className="text-[9px] font-bold uppercase block mb-0.5"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  {_("Memory")}
+                  {i18n._({ id: "Memory", message: "Memory" })}
                 </span>
                 <div
                   className="text-xs font-black"
@@ -157,7 +158,7 @@ const StatsDashboard: React.FC = () => {
                   className="text-[9px] font-bold uppercase block mb-0.5"
                   style={{ color: "var(--theme-text-muted)" }}
                 >
-                  {_("Threads")}
+                  {i18n._({ id: "Threads", message: "Threads" })}
                 </span>
                 <div
                   className="text-xs font-black"
@@ -177,7 +178,7 @@ const StatsDashboard: React.FC = () => {
                 style={{ color: "var(--theme-text-muted)" }}
               >
                 <Icon name="list" size="xs" />
-                <span>{_("Active Tasks")} ({stats.active_tasks?.length || 0})</span>
+                <span>{i18n._({ id: "Active Tasks", message: "Active Tasks" })} ({stats.active_tasks?.length || 0})</span>
               </h5>
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 scrollbar-thin">
                 {stats.active_tasks && stats.active_tasks.length > 0 ? (
@@ -219,7 +220,7 @@ const StatsDashboard: React.FC = () => {
                     className="text-[9px] font-medium italic text-center py-2"
                     style={{ color: "var(--theme-text-muted)" }}
                   >
-                    {_("No active tasks")}
+                    {i18n._({ id: "No active tasks", message: "No active tasks" })}
                   </div>
                 )}
               </div>
@@ -233,7 +234,7 @@ const StatsDashboard: React.FC = () => {
                 className="text-[9px] font-bold uppercase"
                 style={{ color: "var(--theme-text-muted)" }}
               >
-                {_("Uptime")}
+                {i18n._({ id: "Uptime", message: "Uptime" })}
               </span>
               <span
                 className="text-[10px] font-mono font-medium"
