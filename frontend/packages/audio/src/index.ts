@@ -4,6 +4,9 @@ export type { EngineState, CsoundEngineOptions } from './csound/CsoundEngine.ts'
 export { useCsound }                from './csound/useCsound.ts';
 export type { UseCsoundReturn }     from './csound/useCsound.ts';
 
+export { useCsoundSequencer }       from './csound/useCsoundSequencer.ts';
+export type { CsoundSequencerHandle } from './csound/useCsoundSequencer.ts';
+
 export { makeCsd, CSD_HEADER, CSD_FOOTER, SCORE_HEADER, SCORE_FOOTER }
                                     from './csound/csd/base.ts';
 export { makeOfflineCsd }           from './csound/csd/base.ts';

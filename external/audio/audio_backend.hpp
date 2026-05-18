@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <expected>
 #include <csignal>
+#include <cstdlib>
 
 #ifdef SGF_WITH_AUDIO
 #  include <csound/csound.hpp>
@@ -59,6 +60,20 @@ export_wav(const std::string& csd_text, const std::filesystem::path& output_path
         // RAII guard: saves SIGINT/SIGTERM before Csound installs its own and
         // restores them on all exit paths (normal return, early return, throw).
         SignalGuard sig_guard;
+
+        // Silence "Error opening plugin directory '...Opcodes64'" on macOS when
+        // Csound is brew-linked and the framework plugin path doesn't exist.
+        // Setting these to empty tells Csound to skip the system plugin scan;
+        // built-in opcodes (compiled into libcsound64) are unaffected.
+#if defined(_WIN32)
+        ::_putenv_s("OPCODEDIR64",  "");
+        ::_putenv_s("OPCODE6DIR64", "");
+        ::_putenv_s("OPCODEDIR",    "");
+#else
+        ::setenv("OPCODEDIR64",  "", /*overwrite=*/1);
+        ::setenv("OPCODE6DIR64", "", 1);
+        ::setenv("OPCODEDIR",    "", 1);
+#endif
 
         Csound cs;
 
@@ -116,6 +131,17 @@ validate_csd(const std::string& csd_text)
     try {
         // RAII guard: same as export_wav — restores handlers on all exit paths.
         SignalGuard sig_guard;
+
+        // Suppress plugin-directory warnings (same rationale as export_wav).
+#if defined(_WIN32)
+        ::_putenv_s("OPCODEDIR64",  "");
+        ::_putenv_s("OPCODE6DIR64", "");
+        ::_putenv_s("OPCODEDIR",    "");
+#else
+        ::setenv("OPCODEDIR64",  "", /*overwrite=*/1);
+        ::setenv("OPCODE6DIR64", "", 1);
+        ::setenv("OPCODEDIR",    "", 1);
+#endif
 
         Csound cs;
         cs.SetOption("-n");

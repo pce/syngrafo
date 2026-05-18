@@ -22,6 +22,7 @@ extern "C" {
 #  include <libavutil/opt.h>
 #  include <libswscale/swscale.h>
 }
+#include <mutex>  // for std::once_flag / std::call_once
 #endif
 #include <algorithm>
 #include <array>
@@ -48,6 +49,14 @@ struct FrameData {
     double timestamp_sec = 0.0;
 };
 
+/** Suppress FFmpeg info/warning log noise (deprecated pixel format, unknown
+ *  profile, missing accelerated colorspace conversion, etc.).
+ *  AV_LOG_ERROR is still printed so real decode failures remain visible. */
+inline void init_ffmpeg_log() {
+    static std::once_flag flag;
+    std::call_once(flag, [] { av_log_set_level(AV_LOG_ERROR); });
+}
+
 /**
  * Get media information for a video file using libavformat.
  * Never spawns a subprocess.
@@ -58,6 +67,7 @@ get_media_info(const std::filesystem::path& path)
 #ifndef SGF_WITH_VIDEO
     return std::unexpected("Video backend not compiled (SGF_WITH_VIDEO=OFF)");
 #else
+    init_ffmpeg_log();
     AVFormatContext* fmt_ctx = nullptr;
     if (avformat_open_input(&fmt_ctx, path.c_str(), nullptr, nullptr) < 0)
         return std::unexpected("Cannot open file: " + path.string());
@@ -110,6 +120,7 @@ decode_frame(const std::filesystem::path& path, int frame_number, double fps)
 #ifndef SGF_WITH_VIDEO
     return std::unexpected("Video backend not compiled (SGF_WITH_VIDEO=OFF)");
 #else
+    init_ffmpeg_log();
     AVFormatContext* fmt_ctx = nullptr;
     if (avformat_open_input(&fmt_ctx, path.c_str(), nullptr, nullptr) < 0)
         return std::unexpected("Cannot open: " + path.string());

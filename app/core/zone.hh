@@ -13,7 +13,7 @@
  *   Zone z{
  *       .name            = "invoices",
  *       .in_path         = "/home/user/Documents/Invoices",
- *       .out_path        = "/home/user/.papiere/zones/invoices",
+ *       .out_path        = "/home/user/.syngrafo/zones/invoices",
  *       .encrypted       = true,
  *       .taxonomy_domain = "Finance",
  *   };

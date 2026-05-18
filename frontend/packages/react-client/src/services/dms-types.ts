@@ -196,7 +196,7 @@ export interface FolderDashboardData {
 
 /** A Zone is a named project workspace.
  *  `in_path`  = source folder (user's original documents)
- *  `out_path` = workspace folder (Papiere index + processed files)
+ *  `out_path` = workspace folder (Syngrafo index + processed files)
  */
 export interface Zone {
   in_path:         string;
